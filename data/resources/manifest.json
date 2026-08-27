@@ -1,0 +1,92 @@
+{
+  "folders": [
+    {
+      "id": "45802ab2-b607-4180-b8ea-c28ecfb1b841",
+      "name": "Branding",
+      "parentId": null,
+      "createdAt": "2026-08-24T17:43:34.008Z"
+    }
+  ],
+  "files": [
+    {
+      "id": "db4a4b58-3724-401b-9c04-b30504d6d10b",
+      "title": "Guía Exclusiva para Padres.pdf",
+      "description": "Free PDF Given as a gift by Kommo salesbot",
+      "tags": [
+        "Kommo"
+      ],
+      "folderId": null,
+      "originalName": "Guía Exclusiva para Padres.pdf",
+      "storedName": "391da6a0-0258-444b-a9f2-863430569425.pdf",
+      "mimeType": "application/pdf",
+      "size": 2555105,
+      "createdAt": "2026-08-24T17:41:52.045Z",
+      "updatedAt": "2026-08-24T17:43:39.972Z"
+    },
+    {
+      "id": "f7fc2b71-a312-497b-9c2f-ac31890638c7",
+      "title": "Short Demo LET.mp4",
+      "description": "",
+      "tags": [],
+      "folderId": null,
+      "originalName": "Short Demo LET.mp4",
+      "storedName": "b5b68345-7b03-4e0b-a08c-ff16cc5e045f.mp4",
+      "mimeType": "video/mp4",
+      "size": 15843084,
+      "createdAt": "2026-08-24T17:42:51.723Z",
+      "updatedAt": "2026-08-24T17:42:51.723Z"
+    },
+    {
+      "id": "eec4d91d-bc82-4aea-915a-cca81ca977c8",
+      "title": "New FB and WP Cover.png",
+      "description": "",
+      "tags": [],
+      "folderId": "45802ab2-b607-4180-b8ea-c28ecfb1b841",
+      "originalName": "New FB and WP Cover IMG (2).png",
+      "storedName": "807b8dd9-c2fc-4937-a285-06b0448ddba9.png",
+      "mimeType": "image/png",
+      "size": 71120,
+      "createdAt": "2026-08-24T17:43:52.487Z",
+      "updatedAt": "2026-08-24T17:44:06.301Z"
+    },
+    {
+      "id": "419a5237-13a9-42a5-8335-34af64fc9f71",
+      "title": "30.png",
+      "description": "",
+      "tags": [],
+      "folderId": "45802ab2-b607-4180-b8ea-c28ecfb1b841",
+      "originalName": "30.png",
+      "storedName": "ca7ce891-162b-4258-bd61-14ee44040631.png",
+      "mimeType": "image/png",
+      "size": 136875,
+      "createdAt": "2026-08-24T17:44:41.737Z",
+      "updatedAt": "2026-08-24T17:44:43.588Z"
+    },
+    {
+      "id": "4bba1e18-0fb1-4f00-9335-2d1825e5f823",
+      "title": "31.png",
+      "description": "",
+      "tags": [],
+      "folderId": "45802ab2-b607-4180-b8ea-c28ecfb1b841",
+      "originalName": "31.png",
+      "storedName": "31dd67a5-b3ed-4c77-9426-a47ec1be3bbc.png",
+      "mimeType": "image/png",
+      "size": 135085,
+      "createdAt": "2026-08-24T17:44:41.739Z",
+      "updatedAt": "2026-08-24T17:44:43.075Z"
+    },
+    {
+      "id": "fb99abd7-c647-4150-aa89-7a9d30433e9d",
+      "title": "Bluey Dubbed by Students (Official Movie).mp4",
+      "description": "",
+      "tags": [],
+      "folderId": null,
+      "originalName": "Bluey Dubbed by Students (Official Movie).mp4",
+      "storedName": "df24b4e1-6c29-4a0d-b0e8-61b268c831f7.mp4",
+      "mimeType": "video/mp4",
+      "size": 66143483,
+      "createdAt": "2026-08-24T17:48:02.737Z",
+      "updatedAt": "2026-08-24T17:48:02.737Z"
+    }
+  ]
+}

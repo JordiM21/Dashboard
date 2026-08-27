@@ -1,0 +1,1286 @@
+:root {
+  --cream: #faf6f0;
+  --cream-end: #f6efe6;
+  --cake: #f3e5d8;
+  --cake-dark: #e8d2ba;
+  --accent: #d98c5f;
+  --accent-dark: #c06b3d;
+  --ink: #3a2e28;
+  --ink-soft: #7a6a5e;
+  --line: #e9ddce;
+  --white: #ffffff;
+  --success: #6fae7c;
+  --warning: #e0a83e;
+  --danger: #d96060;
+  --orange: #c9702f;
+  --nav-bg: rgba(255, 255, 255, 0.75);
+  --radius-lg: 22px;
+  --radius-md: 16px;
+  --radius-sm: 10px;
+  --shadow: 0 8px 24px rgba(58, 46, 40, 0.08);
+  --shadow-hover: 0 14px 32px rgba(58, 46, 40, 0.14);
+
+  /* Kanban column backgrounds — soft/cream-muted, distinct per stage */
+  --col-todo: #eeece7;
+  --col-in-progress: #e2ecf5;
+  --col-paused: #f7e6d2;
+  --col-done: #e2f0e3;
+}
+
+:root[data-theme="dark"] {
+  --cream: #0a1220;
+  --cream-end: #0d1a30;
+  --cake: #142238;
+  --cake-dark: #1c3050;
+  --accent: #e2975f;
+  --accent-dark: #edac7a;
+  --ink: #e9eef7;
+  --ink-soft: #94a6c4;
+  --line: #22314c;
+  --white: #101c33;
+  --success: #5fbf7e;
+  --warning: #e5b34c;
+  --danger: #e2685f;
+  --orange: #e79a52;
+  --nav-bg: rgba(16, 28, 51, 0.75);
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-hover: 0 14px 34px rgba(0, 0, 0, 0.55);
+
+  --col-todo: #182338;
+  --col-in-progress: #16283f;
+  --col-paused: #2a2438;
+  --col-done: #15281f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --cream: #0a1220;
+    --cream-end: #0d1a30;
+    --cake: #142238;
+    --cake-dark: #1c3050;
+    --accent: #e2975f;
+    --accent-dark: #edac7a;
+    --ink: #e9eef7;
+    --ink-soft: #94a6c4;
+    --line: #22314c;
+    --white: #101c33;
+    --success: #5fbf7e;
+    --warning: #e5b34c;
+    --danger: #e2685f;
+    --orange: #e79a52;
+    --nav-bg: rgba(16, 28, 51, 0.75);
+    --shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    --shadow-hover: 0 14px 34px rgba(0, 0, 0, 0.55);
+
+    --col-todo: #182338;
+    --col-in-progress: #16283f;
+    --col-paused: #2a2438;
+    --col-done: #15281f;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  /* Safety net against any single element (a library-internal sizing quirk,
+     a stray wide table, etc.) pushing the whole document wider than the
+     viewport — every page here is designed to fit within it, so a
+     horizontal scrollbar is always a bug, never something intentionally
+     relied on. */
+  overflow-x: hidden;
+}
+
+body {
+  background: linear-gradient(180deg, var(--cream) 0%, var(--cream-end) 100%);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+}
+
+#app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ---------- Floating tab nav ---------- */
+
+#floating-nav {
+  position: sticky;
+  top: 16px;
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  margin: 16px auto 0;
+  width: 100%;
+}
+
+.nav-pill {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--nav-bg);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px;
+  box-shadow: var(--shadow);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.nav-tab {
+  padding: 9px 18px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  transition: color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+  white-space: nowrap;
+}
+
+.nav-tab:hover {
+  color: var(--ink);
+}
+
+.nav-tab.active {
+  background: var(--accent);
+  color: var(--white);
+  box-shadow: 0 4px 12px rgba(217, 140, 95, 0.35);
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 16px;
+  cursor: pointer;
+  transition: color 0.2s ease, background-color 0.2s ease;
+  margin-left: 2px;
+}
+
+.theme-toggle:hover {
+  color: var(--ink);
+  background: var(--cake);
+}
+
+/* ---------- Nav customization ---------- */
+
+.nav-pill-mobile {
+  display: none;
+}
+
+.nav-customize {
+  position: relative;
+  display: inline-flex;
+}
+
+.nav-customize-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  min-width: 190px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-hover);
+  padding: 10px;
+  z-index: 60;
+  animation: fadeIn 0.15s ease both;
+}
+
+.nav-customize-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  padding: 4px 8px 8px;
+}
+
+.nav-customize-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.nav-customize-row:hover {
+  background: var(--cream);
+}
+
+.nav-customize-row input {
+  accent-color: var(--accent);
+}
+
+/* Mobile compact nav: hamburger + slide-down sheet instead of the full pill */
+
+@media (max-width: 760px) {
+  #floating-nav {
+    top: 10px;
+    padding: 0 12px;
+  }
+
+  .nav-pill-desktop {
+    display: none;
+  }
+
+  .nav-pill-mobile {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    max-width: 480px;
+    gap: 4px;
+  }
+
+  .nav-mobile-brand {
+    font-weight: 700;
+    font-size: 14px;
+    padding: 8px 12px;
+    color: var(--ink);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .nav-mobile-sheet {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 12px;
+    right: 12px;
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-hover);
+    padding: 10px;
+    z-index: 60;
+    animation: fadeIn 0.18s ease both;
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+
+  .nav-mobile-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--ink-soft);
+  }
+
+  .nav-mobile-item.active {
+    background: var(--accent);
+    color: var(--white);
+  }
+
+  .nav-mobile-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--ink-soft);
+    padding-bottom: 2px;
+  }
+
+  .nav-mobile-divider {
+    height: 1px;
+    background: var(--line);
+    margin: 8px 4px;
+  }
+
+  .nav-mobile-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    font-size: 14px;
+    color: var(--ink);
+  }
+
+  .nav-mobile-checkbox input {
+    accent-color: var(--accent);
+  }
+
+  .page {
+    padding: 20px 16px 60px;
+  }
+
+  .page-title {
+    font-size: 22px;
+  }
+
+  .kanban {
+    grid-template-columns: minmax(240px, 1fr);
+  }
+
+  .grid-kpis,
+  .grid-cards,
+  .grid-content {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 980px) {
+  .nav-pill-desktop {
+    gap: 2px;
+  }
+
+  .nav-tab {
+    padding: 9px 12px;
+    font-size: 13px;
+  }
+}
+
+/* ---------- Page layout ---------- */
+
+.page {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 32px 24px 80px;
+  width: 100%;
+  animation: fadeIn 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.skeleton {
+  border-radius: var(--radius-md);
+  background: var(--cake);
+  animation: pulse 1.3s ease-in-out infinite;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.page-title {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.page-subtitle {
+  color: var(--ink-soft);
+  font-size: 14px;
+  margin-top: 2px;
+}
+
+.auth-loader {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---------- Cards ---------- */
+
+.card {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.3s ease, border-color 0.3s ease;
+  /* A table wider than its card (common on narrow screens) scrolls inside
+     the card instead of overflowing the page. */
+  overflow-x: auto;
+}
+
+/* Clean, thin, theme-matched scrollbars wherever content scrolls — tables
+   inside .card, and the .modal body itself. */
+.card,
+.modal {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+.card::-webkit-scrollbar,
+.modal::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.card::-webkit-scrollbar-track,
+.modal::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.card::-webkit-scrollbar-thumb,
+.modal::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 999px;
+}
+
+.card::-webkit-scrollbar-thumb:hover,
+.modal::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-soft);
+}
+
+.card:hover {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: var(--shadow-hover);
+}
+
+/* Teaching sidebar's Weekly Plans cards sit in a narrow, overflow-auto
+   column — the scale(1.01) above grows them just past the container's
+   width on hover, which was forcing a horizontal scrollbar. Keep the
+   affordance, drop the growth. */
+.plan-card:hover {
+  transform: none;
+  box-shadow: var(--shadow-hover);
+}
+
+.card-pad {
+  padding: 20px 22px;
+}
+
+/* Curriculum Board subtopic chips — hover only lights up while the chip is
+   actually clickable (paintbrush active or Edit Syllabus on), via the
+   .interactive modifier, so it doesn't imply an action is available when
+   clicking would be a no-op. */
+.subtopic-chip.interactive:hover {
+  background: var(--cake) !important;
+}
+
+/* ---------- Buttons ---------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  border-radius: 999px;
+  padding: 9px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.btn:hover {
+  transform: scale(1.03);
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--white);
+  box-shadow: 0 4px 14px rgba(217, 140, 95, 0.35);
+}
+
+.btn-primary:hover {
+  background: var(--accent-dark);
+}
+
+.btn-secondary {
+  background: var(--cake);
+  color: var(--ink);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--ink-soft);
+  border: 1px solid var(--line);
+}
+
+.btn-danger {
+  background: #fbe6e6;
+  color: var(--danger);
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+/* ---------- Grids ---------- */
+
+.grid {
+  display: grid;
+  gap: 18px;
+}
+
+.grid-kpis {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.grid-cards {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+/* Uniform-height student cards — grid's default row-stretch only equalizes
+   height within the same row, so a name-heavy or note-heavy card in an
+   earlier row could still leave the Edit/Delete buttons sitting at
+   different vertical positions card to card. Flex column + margin-top:auto
+   on the button row pins the footer to the bottom of every card
+   regardless of how much (optional) content sits above it. */
+.student-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 280px;
+}
+
+.student-card-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.student-card-notes {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Higher specificity than the later `.modal-actions` rule (which sets its
+   own margin-top) so this wins regardless of stylesheet order. */
+.student-card .modal-actions {
+  margin-top: auto;
+  padding-top: 14px;
+}
+
+.grid-content {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+/* ---------- KPI card ---------- */
+
+.kpi-card {
+  padding: 20px 22px;
+}
+
+.kpi-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.kpi-label .badge {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.kpi-value {
+  font-size: 30px;
+  font-weight: 700;
+  margin-top: 6px;
+  letter-spacing: -0.02em;
+}
+
+.kpi-delta {
+  font-size: 13px;
+  margin-top: 6px;
+  font-weight: 600;
+}
+
+.kpi-delta.up {
+  color: var(--success);
+}
+
+.kpi-delta.down {
+  color: var(--danger);
+}
+
+/* ---------- Toggle ---------- */
+
+.view-toggle {
+  display: inline-flex;
+  background: var(--cake);
+  border-radius: 999px;
+  padding: 4px;
+  gap: 2px;
+}
+
+.view-toggle button {
+  border: none;
+  background: transparent;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.view-toggle button.active {
+  background: var(--white);
+  color: var(--ink);
+  box-shadow: 0 2px 6px rgba(58, 46, 40, 0.12);
+}
+
+/* ---------- Table ---------- */
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.data-table th {
+  text-align: left;
+  padding: 10px 14px;
+  color: var(--ink-soft);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-bottom: 1px solid var(--line);
+}
+
+.data-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table tr:hover td {
+  background: var(--cream);
+}
+
+/* ---------- Tags / badges ---------- */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap; /* an emoji + label (e.g. "🔁 Recurring") must never wrap onto two lines in a tight table cell */
+}
+
+.badge-active,
+.badge-done,
+.badge-info {
+  background: #e6f4e8;
+  color: var(--success);
+}
+
+.badge-inactive,
+.badge-paused {
+  background: #eee7de;
+  color: var(--ink-soft);
+}
+
+.badge-warning,
+.badge-blocked {
+  background: #fbf1de;
+  color: var(--warning);
+}
+
+.badge-critical,
+.badge-urgent,
+.badge-error {
+  background: #fbe6e6;
+  color: var(--danger);
+}
+
+.badge-low {
+  background: var(--cake);
+  color: var(--ink-soft);
+}
+
+.badge-medium {
+  background: #fbf1de;
+  color: var(--warning);
+}
+
+.badge-high {
+  background: #fbead9;
+  color: var(--orange);
+}
+
+.badge-source-manual {
+  background: var(--cake);
+  color: var(--ink-soft);
+}
+
+.badge-source-stripe {
+  background: rgba(99, 91, 255, 0.14);
+  color: #635bff;
+}
+
+.badge-source-recurring {
+  background: rgba(217, 140, 95, 0.16);
+  color: var(--accent-dark);
+}
+
+.tag {
+  display: inline-flex;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--cake);
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* ---------- Filter bar ---------- */
+
+.filter-bar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.filter-bar input[type="text"],
+.filter-bar select {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 9px 14px;
+  font-size: 14px;
+  background: var(--white);
+  color: var(--ink);
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+}
+
+.filter-bar input[type="text"]:focus,
+.filter-bar select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ---------- Kanban ---------- */
+
+.kanban {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(240px, 1fr));
+  gap: 16px;
+  overflow-x: auto;
+}
+
+.kanban-col {
+  background: var(--cake);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  min-height: 200px;
+  transition: background-color 0.3s ease, outline-color 0.15s ease;
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+}
+
+.kanban-col-todo {
+  background: var(--col-todo);
+}
+
+.kanban-col-in-progress {
+  background: var(--col-in-progress);
+}
+
+.kanban-col-paused {
+  background: var(--col-paused);
+}
+
+.kanban-col-done {
+  background: var(--col-done);
+}
+
+.kanban-col-drop-target {
+  outline-color: var(--accent);
+}
+
+.kanban-col-title {
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 12px;
+  padding: 0 4px;
+}
+
+.kanban-card {
+  background: var(--white);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  margin-bottom: 10px;
+  box-shadow: var(--shadow);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease, background-color 0.3s ease;
+  cursor: grab;
+}
+
+.kanban-card:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: var(--shadow-hover);
+}
+
+.kanban-card:active {
+  cursor: grabbing;
+}
+
+.kanban-card-dragging {
+  opacity: 0.4;
+}
+
+.progress-bar {
+  height: 6px;
+  background: var(--cake);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+/* ---------- Content grid ---------- */
+
+.content-card {
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.content-cover {
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  background: var(--cake);
+}
+
+/* ---------- Resources ---------- */
+
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-bottom: 14px;
+  font-size: 14px;
+}
+
+.breadcrumb-sep {
+  color: var(--ink-soft);
+  margin: 0 4px;
+}
+
+.breadcrumb-item {
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-weight: 600;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.breadcrumb-item:hover {
+  background: var(--cake);
+  color: var(--ink);
+}
+
+.breadcrumb-item.active {
+  color: var(--ink);
+  background: var(--cake);
+}
+
+.size-slider {
+  width: 90px;
+  accent-color: var(--accent);
+}
+
+.resource-dropzone {
+  position: relative;
+  border-radius: var(--radius-lg);
+  transition: background-color 0.15s ease, outline-color 0.15s ease;
+  outline: 2px dashed transparent;
+  outline-offset: 6px;
+  min-height: 120px;
+}
+
+.resource-dropzone-active {
+  outline-color: var(--accent);
+  background: rgba(217, 140, 95, 0.06);
+}
+
+.resource-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--tile-size, 150px), 1fr));
+  gap: 16px;
+}
+
+.resource-tile {
+  position: relative;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.resource-tile:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-hover);
+}
+
+.resource-tile-folder {
+  background: var(--cake);
+}
+
+.resource-tile-drop {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.resource-tile-thumb {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--cream);
+  margin-bottom: 8px;
+}
+
+.resource-tile-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.resource-tile-icon {
+  font-size: calc(var(--tile-size, 150px) * 0.32);
+}
+
+.resource-tile-title {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resource-tile-meta {
+  font-size: 11px;
+  color: var(--ink-soft);
+  margin-top: 2px;
+}
+
+.resource-tile-tags {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.resource-tile-delete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(0, 0, 0, 0.15);
+  color: var(--white);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.resource-tile-folder:hover .resource-tile-delete {
+  display: flex;
+}
+
+/* ---------- Modal ---------- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(58, 46, 40, 0.35);
+  backdrop-filter: blur(3px);
+  display: flex;
+  padding: 20px;
+  z-index: 100;
+  animation: fadeIn 0.2s ease both;
+  overflow-y: auto; /* Allows scrolling the backdrop if the modal overflows */
+}
+
+.modal {
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-hover);
+  width: 100%;
+  max-width: 560px;
+  max-height: 86vh;
+  overflow-y: auto; /* content taller than 86vh scrolls inside the rounded box instead of spilling out of it */
+  margin: auto; /* Centers the modal in both directions safely */
+  padding: 26px;
+}
+
+.modal-title {
+  font-size: 19px;
+  font-weight: 700;
+  margin-bottom: 18px;
+}
+
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.form-row label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.form-row input,
+.form-row select,
+.form-row textarea {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  background: var(--cream);
+  color: var(--ink);
+}
+
+.form-row input:focus,
+.form-row select:focus,
+.form-row textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  background: var(--white);
+}
+
+.form-row.checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+/* ---------- Empty / error states ---------- */
+
+.state-box {
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-lg);
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.state-box.error {
+  border-color: #f0c8c8;
+  background: #fdf3f3;
+  color: var(--danger);
+}
+
+.state-box-title {
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+.state-box.error .state-box-title {
+  color: var(--danger);
+}
+
+.state-box code {
+  background: rgba(58, 46, 40, 0.06);
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+/* ---------- Section title ---------- */
+
+.section-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 30px 0 14px;
+}
+
+.section-title:first-child {
+  margin-top: 0;
+}
+
+/* ---------- Meta calendar ---------- */
+
+.meta-calendar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.meta-calendar-nav-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.meta-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+}
+
+.meta-calendar-weekday {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  text-align: center;
+  padding-bottom: 4px;
+}
+
+.meta-calendar-cell {
+  min-height: 108px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.meta-calendar-cell:hover {
+  border-color: var(--accent);
+}
+
+.meta-calendar-cell-outside {
+  opacity: 0.4;
+}
+
+.meta-calendar-cell-today {
+  border-color: var(--accent);
+  background: rgba(217, 140, 95, 0.08);
+}
+
+.meta-calendar-date {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.meta-calendar-post {
+  font-size: 11px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: var(--cake);
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.meta-calendar-post-facebook {
+  border-left: 3px solid #4267b2;
+}
+
+.meta-calendar-post-instagram {
+  border-left: 3px solid #c13584;
+}
+
+.meta-calendar-post-failed {
+  border-left: 3px solid var(--danger);
+}
+
+.meta-calendar-post-published {
+  opacity: 0.65;
+}
+
+@media (max-width: 900px) {
+  .meta-calendar-grid {
+    grid-template-columns: repeat(7, minmax(70px, 1fr));
+    overflow-x: auto;
+  }
+}
+
+/* Teaching view's Screen Share mode sets Excalidraw's zenModeEnabled to get
+   its cleaner chrome (no menu, no stats, no collaborator avatars) — but
+   Excalidraw's own zen mode also slides the Stroke/Background/Fill/Opacity
+   panel (.selected-shape-actions) off-screen via `transform:
+   translate(-999px, 0)` whenever a shape/tool is selected (see its
+   `.zen-mode-transition.transition-left` rule), which is a real editing
+   capability, not just chrome — a teacher mid-lesson still needs to change
+   colors while presenting. Only that one panel is exempted; the rest of
+   zen mode's cleanup (menu, stats, collaborators) is untouched. */
+.excalidraw .selected-shape-actions.zen-mode-transition.transition-left {
+  transform: translate(0, 0) !important;
+}

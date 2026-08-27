@@ -1,0 +1,13 @@
+rules_version = '2';
+
+// Mirrors firestore.rules: any signed-in user can read/write. All actual
+// uploads/downloads/deletes go through app/api/resources/** (firebase-admin,
+// which bypasses these rules) — this only matters if something ever reads
+// Storage directly with the client SDK, which nothing in this app does yet.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

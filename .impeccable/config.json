@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "layout-transition",
+        "value": "*",
+        "files": [
+          "components/TeachingView.tsx"
+        ],
+        "createdAt": "2026-08-26T14:58:45.655Z",
+        "reason": "pre-existing Teacher Notes collapse toggle, not touched this turn; grid-template-rows/width animate a rare manual click on unknown-height content, documented inline as a deliberate accordion trick"
+      }
+    ]
+  }
+}

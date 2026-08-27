@@ -1,0 +1,40 @@
+{
+  "name": "my-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbo",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "backfill:stripe": "tsx scripts/backfillStripeTransactions.ts",
+    "migrate:resources": "tsx scripts/migrateResourcesToFirebase.ts",
+    "migrate:markdown": "tsx scripts/migrateMarkdownToFirebase.ts",
+    "seed:test-students": "tsx scripts/seedTestStudents.ts"
+  },
+  "dependencies": {
+    "@excalidraw/excalidraw": "^0.18.1",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@opentelemetry/api": "^1.9.1",
+    "canvas-confetti": "^1.9.4",
+    "firebase": "^10.13.1",
+    "firebase-admin": "^12.4.0",
+    "gray-matter": "^4.0.3",
+    "next": "14.2.35",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^9.0.1",
+    "recharts": "^2.12.7",
+    "remark-gfm": "^4.0.0",
+    "stripe": "^22.5.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/canvas-confetti": "^1.9.0",
+    "@types/node": "^20.14.15",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "tsx": "^4.19.1",
+    "typescript": "^5.5.4"
+  }
+}
