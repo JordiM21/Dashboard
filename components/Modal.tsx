@@ -7,10 +7,13 @@ export default function Modal({
   title,
   onClose,
   children,
+  maxWidth,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  /** Overrides the default 560px cap — the resource visualizer needs more room for markdown/text editing and PDF/preview panes. */
+  maxWidth?: number;
 }) {
   const [mounted, setMounted] = useState(false);
 
@@ -23,7 +26,7 @@ export default function Modal({
 
   return createPortal(
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={maxWidth ? { maxWidth } : undefined}>
         <div className="modal-title">{title}</div>
         {children}
       </div>

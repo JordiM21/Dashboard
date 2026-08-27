@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
+import LoadingLabel from "@/components/LoadingLabel";
 
 function friendlyAuthError(code: string | undefined): string {
   switch (code) {
@@ -81,7 +82,7 @@ export default function LoginPage() {
           disabled={submitting}
           style={{ width: "100%", justifyContent: "center", marginTop: 4 }}
         >
-          {submitting ? "Signing in…" : "Sign In"}
+          <LoadingLabel loading={submitting}>Sign In</LoadingLabel>
         </button>
       </form>
     </main>

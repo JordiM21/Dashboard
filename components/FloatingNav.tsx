@@ -9,6 +9,24 @@ import { ALL_NAV_TABS, DEFAULT_VISIBLE_TAB_IDS, NAV_STORAGE_KEY } from "@/lib/na
 
 type Theme = "light" | "dark";
 
+// Warms a tab's JS chunk as soon as the user shows intent to visit it
+// (hover/focus/touch — before the actual click), instead of waiting for
+// navigation to start the download. Teaching is by far the heaviest route
+// (Excalidraw drags in mermaid/cytoscape/d3/rough.js), so this is what
+// turns its multi-second first-compile into a wait that mostly happens
+// while the mouse is still moving toward the tab, not after the click.
+// Next dedupes the underlying import() itself, so calling this more than
+// once (re-hovering, focus then click) costs nothing extra.
+const TAB_PRELOADERS: Partial<Record<string, () => void>> = {
+  teaching: () => {
+    void import("@/components/TeachingView");
+  },
+};
+
+function preloadTab(id: string) {
+  TAB_PRELOADERS[id]?.();
+}
+
 export default function FloatingNav() {
   const pathname = usePathname();
   const [theme, setTheme] = useState<Theme | null>(null);
@@ -74,6 +92,9 @@ export default function FloatingNav() {
             key={tab.id}
             href={tab.href}
             className={`nav-tab${pathname?.startsWith(tab.href) ? " active" : ""}`}
+            onMouseEnter={() => preloadTab(tab.id)}
+            onFocus={() => preloadTab(tab.id)}
+            onTouchStart={() => preloadTab(tab.id)}
           >
             {tab.label}
           </Link>
@@ -144,6 +165,7 @@ export default function FloatingNav() {
               href={tab.href}
               className={`nav-mobile-item${pathname?.startsWith(tab.href) ? " active" : ""}`}
               onClick={() => setMobileOpen(false)}
+              onTouchStart={() => preloadTab(tab.id)}
             >
               <span>{tab.icon}</span> {tab.label}
             </Link>

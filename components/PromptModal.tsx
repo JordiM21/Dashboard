@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Modal from "@/components/Modal";
+import LoadingLabel from "@/components/LoadingLabel";
 
 /** Single-field text prompt — replaces window.prompt() with the app's own modal styling. Pass `onDelete` to also offer a destructive action (e.g. clearing a topic). */
 export default function PromptModal({
@@ -69,7 +70,7 @@ export default function PromptModal({
             Cancel
           </button>
           <button className="btn btn-primary" onClick={submit} disabled={saving || !value.trim()}>
-            {saving ? "Saving…" : confirmLabel}
+            <LoadingLabel loading={saving}>{confirmLabel}</LoadingLabel>
           </button>
         </div>
       </div>

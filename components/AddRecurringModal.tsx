@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Modal from "@/components/Modal";
+import LoadingLabel from "@/components/LoadingLabel";
 import { authFetch } from "@/lib/firebase/authFetch";
 
 interface FormState {
@@ -173,7 +174,7 @@ export default function AddRecurringModal({ onClose, onCreated }: { onClose: () 
           Cancel
         </button>
         <button className="btn btn-primary" onClick={submit} disabled={submitting}>
-          {submitting ? "Saving…" : "Add Recurring Payment"}
+          <LoadingLabel loading={submitting}>Add Recurring Payment</LoadingLabel>
         </button>
       </div>
     </Modal>

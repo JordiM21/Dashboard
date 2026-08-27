@@ -6,6 +6,8 @@ import Modal from "@/components/Modal";
 import ViewToggle from "@/components/ViewToggle";
 import LiveBadge from "@/components/LiveBadge";
 import ResourceDetailModal from "@/components/ResourceDetailModal";
+import CreateResourceModal from "@/components/CreateResourceModal";
+import LoadingLabel from "@/components/LoadingLabel";
 import { FetchFailedState, EmptyState } from "@/components/StateBox";
 import { useFirestoreCollection } from "@/lib/firebase/useFirestoreCollection";
 import { authFetch } from "@/lib/firebase/authFetch";
@@ -18,7 +20,13 @@ type DragPayload = { kind: "file" | "folder"; id: string };
 
 const DRAG_MIME = "application/x-resource-drag";
 
-export default function ResourcesPage() {
+/**
+ * Files, folders, images, video, PDFs, markdown notes, and text files —
+ * backed by Firebase Storage. Lives full-width inside the Teaching view's
+ * "Resources" tab (see TeachingView.tsx) — there's no standalone /resources
+ * route anymore, this is the only place it's used.
+ */
+export default function ResourcesBrowser() {
   const {
     data: foldersData,
     error: foldersError,
@@ -39,6 +47,7 @@ export default function ResourcesPage() {
   const [tileSize, setTileSize] = useState(150);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
   const [openFile, setOpenFile] = useState<ResourceFile | null>(null);
   const [dragOverTarget, setDragOverTarget] = useState<string | "up" | null>(null);
   const [osDragActive, setOsDragActive] = useState(false);
@@ -73,7 +82,7 @@ export default function ResourcesPage() {
 
   const childFiles = useMemo(() => {
     let list = files.filter((f) => f.folderId === currentFolderId);
-    if (typeFilter !== "all") list = list.filter((f) => fileCategory(f.mimeType) === typeFilter);
+    if (typeFilter !== "all") list = list.filter((f) => fileCategory(f.mimeType, f.originalName) === typeFilter);
     if (tagFilter !== "all") list = list.filter((f) => f.tags.includes(tagFilter));
     if (search) {
       const q = search.toLowerCase();
@@ -96,7 +105,7 @@ export default function ResourcesPage() {
         sorted.sort((a, b) => b.size - a.size);
         break;
       case "type":
-        sorted.sort((a, b) => fileCategory(a.mimeType).localeCompare(fileCategory(b.mimeType)));
+        sorted.sort((a, b) => fileCategory(a.mimeType, a.originalName).localeCompare(fileCategory(b.mimeType, b.originalName)));
         break;
     }
     return sorted;
@@ -185,27 +194,24 @@ export default function ResourcesPage() {
   }
 
   return (
-    <main className="page">
-      <div className="page-header">
-        <div>
-          <div className="page-title">Resources</div>
-          <div className="page-subtitle">Files, folders, images, and video — backed by Firebase Storage, available on any device</div>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn btn-secondary" onClick={() => setNewFolderOpen(true)}>
-            + New Folder
-          </button>
-          <button className="btn btn-primary" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-            {uploading ? "Uploading…" : "+ Upload"}
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            style={{ display: "none" }}
-            onChange={(e) => e.target.files && uploadFiles(e.target.files)}
-          />
-        </div>
+    <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 12 }}>
+        <button className="btn btn-secondary" onClick={() => setNewFolderOpen(true)}>
+          + New Folder
+        </button>
+        <button className="btn btn-secondary" onClick={() => setCreateOpen(true)}>
+          + Create
+        </button>
+        <button className="btn btn-primary" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+          <LoadingLabel loading={uploading}>+ Upload</LoadingLabel>
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          style={{ display: "none" }}
+          onChange={(e) => e.target.files && uploadFiles(e.target.files)}
+        />
       </div>
 
       {error && <FetchFailedState message={error} />}
@@ -258,6 +264,9 @@ export default function ResourcesPage() {
               <option value="all">All types</option>
               <option value="image">Images</option>
               <option value="video">Videos</option>
+              <option value="pdf">PDFs</option>
+              <option value="markdown">Markdown</option>
+              <option value="text">Text</option>
               <option value="document">Documents</option>
               <option value="other">Other</option>
             </select>
@@ -365,10 +374,10 @@ export default function ResourcesPage() {
                     onClick={() => setOpenFile(file)}
                   >
                     <div className="resource-tile-thumb">
-                      {fileCategory(file.mimeType) === "image" ? (
+                      {fileCategory(file.mimeType, file.originalName) === "image" ? (
                         <img src={`/api/resources/files/${file.id}/content`} alt={file.title} loading="lazy" />
                       ) : (
-                        <span className="resource-tile-icon">{fileIcon(fileCategory(file.mimeType))}</span>
+                        <span className="resource-tile-icon">{fileIcon(fileCategory(file.mimeType, file.originalName))}</span>
                       )}
                     </div>
                     <div className="resource-tile-title">{file.title}</div>
@@ -426,9 +435,9 @@ export default function ResourcesPage() {
                         onDragStart={(e) => e.dataTransfer.setData(DRAG_MIME, JSON.stringify({ kind: "file", id: file.id }))}
                       >
                         <td>
-                          {fileIcon(fileCategory(file.mimeType))} {file.title}
+                          {fileIcon(fileCategory(file.mimeType, file.originalName))} {file.title}
                         </td>
-                        <td style={{ textTransform: "capitalize" }}>{fileCategory(file.mimeType)}</td>
+                        <td style={{ textTransform: "capitalize" }}>{fileCategory(file.mimeType, file.originalName)}</td>
                         <td>
                           {file.tags.map((t) => (
                             <span key={t} className="tag" style={{ marginRight: 4 }}>
@@ -470,6 +479,17 @@ export default function ResourcesPage() {
         </Modal>
       )}
 
+      {createOpen && (
+        <CreateResourceModal
+          folderId={currentFolderId}
+          onClose={() => setCreateOpen(false)}
+          onCreated={(file) => {
+            setCreateOpen(false);
+            setOpenFile(file);
+          }}
+        />
+      )}
+
       {openFile && (
         <ResourceDetailModal
           file={openFile}
@@ -478,6 +498,6 @@ export default function ResourcesPage() {
           onDelete={() => deleteFileItem(openFile.id)}
         />
       )}
-    </main>
+    </div>
   );
 }

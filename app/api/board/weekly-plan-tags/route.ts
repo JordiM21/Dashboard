@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { listWeeklyPlanFolders, createWeeklyPlanFolder } from "@/lib/firebase/weeklyPlans";
+import { listWeeklyPlanTags, createWeeklyPlanTag } from "@/lib/firebase/weeklyPlans";
 import { requireAuth, UnauthorizedError } from "@/lib/firebase/verifyAuth";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +9,7 @@ function unauthorized(err: unknown) {
   return NextResponse.json({ error: "unauthorized", message: err instanceof Error ? err.message : "Unauthorized" }, { status: 401 });
 }
 
-/** Every weekly-plan folder, in display order — the Teaching sidebar's "Weekly Plans" queue sections. */
+/** Every weekly-plan tag — the tag picker's options list. */
 export async function GET(req: NextRequest) {
   try {
     await requireAuth(req);
@@ -18,14 +18,14 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const folders = await listWeeklyPlanFolders();
-    return NextResponse.json({ folders });
+    const tags = await listWeeklyPlanTags();
+    return NextResponse.json({ tags });
   } catch (err) {
     return NextResponse.json({ error: "read_failed", message: err instanceof Error ? err.message : "Unknown error" }, { status: 502 });
   }
 }
 
-/** The sidebar's "+ Add Folder" / "+ subfolder" buttons — body is `{ name, parentId?, color? }`. */
+/** The tag picker's "+ new tag" — body is `{ name, color }`. Tags are created here first, then attached to plans by id (never freeform text). */
 export async function POST(req: NextRequest) {
   try {
     await requireAuth(req);
@@ -33,15 +33,14 @@ export async function POST(req: NextRequest) {
     return unauthorized(err);
   }
 
-  const body = (await req.json().catch(() => null)) as { name?: unknown; parentId?: unknown; color?: unknown } | null;
+  const body = (await req.json().catch(() => null)) as { name?: unknown; color?: unknown } | null;
   const name = typeof body?.name === "string" ? body.name.trim() : "";
-  if (!name) return NextResponse.json({ error: "invalid_request", message: "name is required." }, { status: 400 });
-  const parentId = typeof body?.parentId === "string" ? body.parentId : null;
-  const color = typeof body?.color === "string" ? body.color : null;
+  const color = typeof body?.color === "string" ? body.color : "";
+  if (!name || !color) return NextResponse.json({ error: "invalid_request", message: "name and color are required." }, { status: 400 });
 
   try {
-    const folder = await createWeeklyPlanFolder(name, parentId, color);
-    return NextResponse.json(folder, { status: 201 });
+    const tag = await createWeeklyPlanTag(name, color);
+    return NextResponse.json(tag, { status: 201 });
   } catch (err) {
     return NextResponse.json({ error: "write_failed", message: err instanceof Error ? err.message : "Unknown error" }, { status: 502 });
   }

@@ -1,10 +1,14 @@
-export type FileCategory = "image" | "video" | "document" | "other";
+export type FileCategory = "image" | "video" | "pdf" | "markdown" | "text" | "document" | "other";
 
-export function fileCategory(mimeType: string): FileCategory {
+/** Categorizes by file extension first — browsers report inconsistent (or empty) mimeType for .md depending on OS, so the extension is the reliable signal for the types this app can view/edit inline. */
+export function fileCategory(mimeType: string, originalName = ""): FileCategory {
+  const ext = originalName.split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "md" || ext === "markdown") return "markdown";
+  if (mimeType === "application/pdf" || ext === "pdf") return "pdf";
   if (mimeType.startsWith("image/")) return "image";
   if (mimeType.startsWith("video/")) return "video";
+  if (ext === "txt" || mimeType === "text/plain") return "text";
   if (
-    mimeType === "application/pdf" ||
     mimeType.startsWith("text/") ||
     mimeType.includes("word") ||
     mimeType.includes("document") ||
@@ -22,6 +26,12 @@ export function fileIcon(category: FileCategory): string {
       return "🖼️";
     case "video":
       return "🎬";
+    case "pdf":
+      return "📕";
+    case "markdown":
+      return "📝";
+    case "text":
+      return "📄";
     case "document":
       return "📄";
     default:

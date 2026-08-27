@@ -1,5 +1,7 @@
 "use client";
 
+import LoadingLabel from "@/components/LoadingLabel";
+
 function timeAgo(date: Date | null) {
   if (!date) return "—";
   const seconds = Math.round((Date.now() - date.getTime()) / 1000);
@@ -21,8 +23,8 @@ export default function LiveBadge({ lastUpdated, loading }: { lastUpdated: Date 
           display: "inline-block",
         }}
       />
-      <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>
-        {loading ? "Connecting…" : `Live — updated ${timeAgo(lastUpdated)}`}
+      <span style={{ fontSize: 13, color: "var(--ink-soft)", position: "relative" }}>
+        <LoadingLabel loading={loading}>{`Live — updated ${timeAgo(lastUpdated)}`}</LoadingLabel>
       </span>
     </div>
   );

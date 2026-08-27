@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = (await req.json().catch(() => null)) as
-    | { groupId?: unknown; date?: unknown; topic?: unknown; teacherNotes?: unknown; emojis?: unknown }
+    | { groupId?: unknown; date?: unknown; topic?: unknown; teacherNotes?: unknown; emojis?: unknown; tagIds?: unknown }
     | null;
 
   const groupId = typeof body?.groupId === "string" ? body.groupId.trim() : "";
@@ -45,9 +45,10 @@ export async function POST(req: NextRequest) {
   }
   const teacherNotes = typeof body?.teacherNotes === "string" ? body.teacherNotes : "";
   const emojis = Array.isArray(body?.emojis) ? body.emojis.filter((e): e is string => typeof e === "string") : [];
+  const tagIds = Array.isArray(body?.tagIds) ? body.tagIds.filter((t): t is string => typeof t === "string") : [];
 
   try {
-    const plan = await createWeeklyPlan({ groupId, date, topic, teacherNotes, emojis });
+    const plan = await createWeeklyPlan({ groupId, date, topic, teacherNotes, emojis, tagIds });
     return NextResponse.json(plan, { status: 201 });
   } catch (err) {
     return NextResponse.json({ error: "write_failed", message: err instanceof Error ? err.message : "Unknown error" }, { status: 502 });

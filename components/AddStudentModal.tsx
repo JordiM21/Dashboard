@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Modal from "@/components/Modal";
+import LoadingLabel from "@/components/LoadingLabel";
 import { authFetch } from "@/lib/firebase/authFetch";
 import { resizeImageFile } from "@/lib/imageResize";
 import type { Student } from "@/lib/types";
@@ -341,7 +342,7 @@ export default function AddStudentModal({
           Cancel
         </button>
         <button className="btn btn-primary" onClick={submit} disabled={submitting || optimizingPhoto}>
-          {submitting ? "Saving…" : editing ? "Save Changes" : "Add Student"}
+          <LoadingLabel loading={submitting}>{editing ? "Save Changes" : "Add Student"}</LoadingLabel>
         </button>
       </div>
     </Modal>

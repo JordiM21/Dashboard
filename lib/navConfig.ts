@@ -13,7 +13,6 @@ export const ALL_NAV_TABS: NavTab[] = [
   { id: "kommo", href: "/kommo", label: "Kommo", icon: "📈" },
   { id: "meta", href: "/meta", label: "Meta", icon: "📣" },
   { id: "projects", href: "/projects", label: "Projects", icon: "🗂️" },
-  { id: "resources", href: "/resources", label: "Resources", icon: "📁" },
   { id: "content", href: "/content", label: "Content", icon: "🖼️" },
   { id: "agents", href: "/agents", label: "Agents", icon: "🤖" },
 ];

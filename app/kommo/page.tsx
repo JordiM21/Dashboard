@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import KpiCard from "@/components/KpiCard";
 import ViewToggle from "@/components/ViewToggle";
+import LoadingLabel from "@/components/LoadingLabel";
 import { EmptyState, FetchFailedState } from "@/components/StateBox";
 import { authFetch } from "@/lib/firebase/authFetch";
 import { formatDateDMY } from "@/lib/dateUtils";
@@ -148,7 +149,7 @@ export default function KommoPage() {
           <div className="page-subtitle">Every lead, stage, and tag across your Kommo pipelines</div>
         </div>
         <button className="btn btn-secondary" onClick={load} disabled={loading}>
-          {loading ? "Refreshing…" : "↻ Refresh"}
+          <LoadingLabel loading={loading}>↻ Refresh</LoadingLabel>
         </button>
       </div>
 

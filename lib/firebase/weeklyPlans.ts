@@ -2,7 +2,7 @@ import { FieldValue, Timestamp, type DocumentData, type QueryDocumentSnapshot } 
 import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
 import { getAdminDb } from "./admin";
-import type { WeeklyPlanDoc, WeeklyPlanFolderDoc } from "@/lib/types";
+import type { WeeklyPlanDoc, WeeklyPlanFolderDoc, WeeklyPlanTagDoc } from "@/lib/types";
 
 /**
  * Server-only Firestore CRUD for `weeklyPlans` — the manually-created lesson
@@ -32,6 +32,7 @@ function planFromDoc(doc: QueryDocumentSnapshot<DocumentData>): WeeklyPlanDoc {
     emojis: Array.isArray(data.emojis) ? data.emojis.filter((e: unknown): e is string => typeof e === "string") : [],
     order: typeof data.order === "number" ? data.order : undefined,
     folderId: typeof data.folderId === "string" ? data.folderId : "",
+    tagIds: Array.isArray(data.tagIds) ? data.tagIds.filter((t: unknown): t is string => typeof t === "string") : [],
     createdAt: tsToIso(data.createdAt),
     updatedAt: tsToIso(data.updatedAt),
   };
@@ -68,6 +69,7 @@ export async function createWeeklyPlan(data: {
   topic: string;
   teacherNotes: string;
   emojis: string[];
+  tagIds?: string[];
 }): Promise<WeeklyPlanDoc> {
   const fileName = `${data.date}-${slugifyTopic(data.topic)}.excalidraw`;
   const excalidrawPath = path.posix.join(LESSONS_ROOT, data.groupId, fileName);
@@ -85,6 +87,7 @@ export async function createWeeklyPlan(data: {
     teacherNotes: data.teacherNotes,
     emojis: data.emojis,
     folderId: "",
+    tagIds: data.tagIds ?? [],
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   });
@@ -92,10 +95,10 @@ export async function createWeeklyPlan(data: {
   return planFromDoc(doc as QueryDocumentSnapshot<DocumentData>);
 }
 
-/** Patches a plan's `order`, `teacherNotes`, and/or `folderId` — the sidebar's drag-reorder/drag-to-folder and the Teacher Notes panel's save, respectively. Never touches groupId/date/topic/excalidrawPath (a plan's identity and its file on disk are fixed at creation). */
+/** Patches a plan's `order`, `teacherNotes`, `folderId`, and/or `tagIds` — the sidebar's drag-reorder/drag-to-folder, the Teacher Notes panel's save, and the tag picker, respectively. Never touches groupId/date/topic/excalidrawPath (a plan's identity and its file on disk are fixed at creation). */
 export async function updateWeeklyPlan(
   id: string,
-  updates: { order?: number; teacherNotes?: string; folderId?: string }
+  updates: { order?: number; teacherNotes?: string; folderId?: string; tagIds?: string[] }
 ): Promise<WeeklyPlanDoc | null> {
   const ref = getAdminDb().collection(WEEKLY_PLANS).doc(id);
   const existing = await ref.get();
@@ -130,16 +133,23 @@ export async function writeWeeklyPlanBoard(plan: WeeklyPlanDoc, scene: unknown):
 }
 
 // ---------------------------------------------------------------------------
-// Weekly plan folders — purely organizational grouping for the sidebar's
-// "Weekly Plans" queue. Drag a plan onto a folder to file it there (see
-// updateWeeklyPlan's folderId above); no rename/delete yet, just create.
+// Weekly plan folders — organizational tree for the sidebar's "Weekly Plans"
+// queue (nestable via parentId, colorable via a preset/custom hex, Obsidian
+// vault-style). Drag a plan onto a folder to file it there (see
+// updateWeeklyPlan's folderId above); drag a folder onto another to nest it.
 // ---------------------------------------------------------------------------
 
 const WEEKLY_PLAN_FOLDERS = "weeklyPlanFolders";
 
 function folderFromDoc(doc: QueryDocumentSnapshot<DocumentData>): WeeklyPlanFolderDoc {
   const data = doc.data();
-  return { id: doc.id, name: typeof data.name === "string" ? data.name : "", order: typeof data.order === "number" ? data.order : 0 };
+  return {
+    id: doc.id,
+    name: typeof data.name === "string" ? data.name : "",
+    order: typeof data.order === "number" ? data.order : 0,
+    parentId: typeof data.parentId === "string" ? data.parentId : null,
+    color: typeof data.color === "string" ? data.color : null,
+  };
 }
 
 export async function listWeeklyPlanFolders(): Promise<WeeklyPlanFolderDoc[]> {
@@ -147,11 +157,115 @@ export async function listWeeklyPlanFolders(): Promise<WeeklyPlanFolderDoc[]> {
   return snap.docs.map((doc) => folderFromDoc(doc as QueryDocumentSnapshot<DocumentData>));
 }
 
-/** Appends a new folder after the current last one — the sidebar's "+ Add Folder" button. */
-export async function createWeeklyPlanFolder(name: string): Promise<WeeklyPlanFolderDoc> {
+/** Appends a new folder after the current last one — the sidebar's "+ Add Folder" button (and each folder header's "+ subfolder" button, via parentId). */
+export async function createWeeklyPlanFolder(name: string, parentId: string | null = null, color: string | null = null): Promise<WeeklyPlanFolderDoc> {
   const existing = await listWeeklyPlanFolders();
   const ref = getAdminDb().collection(WEEKLY_PLAN_FOLDERS).doc();
-  const data = { name, order: existing.length };
+  const data = { name, order: existing.length, parentId, color };
   await ref.set(data);
   return { id: ref.id, ...data };
+}
+
+/** Returns false if the folder doesn't exist, or if moving it into `parentId` would nest it inside itself/a descendant. */
+export async function updateWeeklyPlanFolder(
+  id: string,
+  updates: { name?: string; parentId?: string | null; color?: string | null }
+): Promise<boolean> {
+  const db = getAdminDb();
+  const ref = db.collection(WEEKLY_PLAN_FOLDERS).doc(id);
+  const existing = await ref.get();
+  if (!existing.exists) return false;
+
+  const patch: Record<string, unknown> = {};
+  if (updates.name !== undefined) patch.name = updates.name;
+  if (updates.color !== undefined) patch.color = updates.color;
+
+  if (updates.parentId !== undefined) {
+    const allFolders = await listWeeklyPlanFolders();
+    let cursor = updates.parentId;
+    while (cursor) {
+      if (cursor === id) return false;
+      cursor = allFolders.find((f) => f.id === cursor)?.parentId ?? null;
+    }
+    patch.parentId = updates.parentId;
+  }
+
+  await ref.update(patch);
+  return true;
+}
+
+/** Recursively deletes a folder and its subfolders. Plans inside are unfiled (folderId ""), never deleted — a lesson plan is real work, not disposable folder metadata. */
+export async function deleteWeeklyPlanFolder(id: string): Promise<boolean> {
+  const db = getAdminDb();
+  const allFolders = await listWeeklyPlanFolders();
+  if (!allFolders.some((f) => f.id === id)) return false;
+
+  const toDelete = new Set<string>([id]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const f of allFolders) {
+      if (f.parentId && toDelete.has(f.parentId) && !toDelete.has(f.id)) {
+        toDelete.add(f.id);
+        grew = true;
+      }
+    }
+  }
+
+  const plansSnap = await db.collection(WEEKLY_PLANS).where("folderId", "in", Array.from(toDelete).slice(0, 30)).get();
+  const batch = db.batch();
+  for (const doc of plansSnap.docs) batch.update(doc.ref, { folderId: "", updatedAt: FieldValue.serverTimestamp() });
+  for (const folderId of toDelete) batch.delete(db.collection(WEEKLY_PLAN_FOLDERS).doc(folderId));
+  await batch.commit();
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Weekly plan tags — reusable, created-first entities (not freeform text).
+// Attached to a plan by id via WeeklyPlanDoc.tagIds; the tag picker creates
+// one here before it can be selected.
+// ---------------------------------------------------------------------------
+
+const WEEKLY_PLAN_TAGS = "weeklyPlanTags";
+
+function tagFromDoc(doc: QueryDocumentSnapshot<DocumentData>): WeeklyPlanTagDoc {
+  const data = doc.data();
+  return { id: doc.id, name: typeof data.name === "string" ? data.name : "", color: typeof data.color === "string" ? data.color : "" };
+}
+
+export async function listWeeklyPlanTags(): Promise<WeeklyPlanTagDoc[]> {
+  const snap = await getAdminDb().collection(WEEKLY_PLAN_TAGS).orderBy("name").get();
+  return snap.docs.map((doc) => tagFromDoc(doc as QueryDocumentSnapshot<DocumentData>));
+}
+
+export async function createWeeklyPlanTag(name: string, color: string): Promise<WeeklyPlanTagDoc> {
+  const ref = getAdminDb().collection(WEEKLY_PLAN_TAGS).doc();
+  await ref.set({ name, color });
+  return { id: ref.id, name, color };
+}
+
+export async function updateWeeklyPlanTag(id: string, updates: { name?: string; color?: string }): Promise<boolean> {
+  const ref = getAdminDb().collection(WEEKLY_PLAN_TAGS).doc(id);
+  const existing = await ref.get();
+  if (!existing.exists) return false;
+  await ref.update(updates);
+  return true;
+}
+
+/** Deletes the tag and strips it from every plan that carries it. */
+export async function deleteWeeklyPlanTag(id: string): Promise<boolean> {
+  const db = getAdminDb();
+  const ref = db.collection(WEEKLY_PLAN_TAGS).doc(id);
+  const existing = await ref.get();
+  if (!existing.exists) return false;
+
+  const plansSnap = await db.collection(WEEKLY_PLANS).where("tagIds", "array-contains", id).get();
+  const batch = db.batch();
+  for (const doc of plansSnap.docs) {
+    const tagIds = (doc.data().tagIds as string[] | undefined) ?? [];
+    batch.update(doc.ref, { tagIds: tagIds.filter((t) => t !== id), updatedAt: FieldValue.serverTimestamp() });
+  }
+  batch.delete(ref);
+  await batch.commit();
+  return true;
 }

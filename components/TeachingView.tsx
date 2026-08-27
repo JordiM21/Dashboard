@@ -1,20 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { BinaryFileData } from "@excalidraw/excalidraw/types";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import ExcalidrawBoard, { type ExcalidrawImperativeAPI } from "@/components/ExcalidrawBoard";
 import GamificationBar from "@/components/GamificationBar";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import NewLessonModal from "@/components/NewLessonModal";
 import PromptModal from "@/components/PromptModal";
+import FolderEditModal from "@/components/FolderEditModal";
+import TagPicker from "@/components/TagPicker";
+import ResourcesBrowser from "@/components/ResourcesBrowser";
+import LoadingLabel from "@/components/LoadingLabel";
+import Spinner from "@/components/Spinner";
 import { EmptyState, FetchFailedState } from "@/components/StateBox";
 import { authFetch } from "@/lib/firebase/authFetch";
 import { closeAudioContext } from "@/lib/soundEffects";
 import { localDateIso } from "@/lib/dateUtils";
-import type { GroupDoc, LessonFile, WeeklyPlanDoc, WeeklyPlanFolderDoc } from "@/lib/types";
+import type { GroupDoc, WeeklyPlanDoc, WeeklyPlanFolderDoc, WeeklyPlanTagDoc } from "@/lib/types";
 
 type Mode = "standard" | "present";
-type SidebarTab = "saved" | "weekly";
+type SidebarTab = "resources" | "weekly";
 
 /** How long to wait after the last edit before autosaving — long enough that continuous dragging doesn't fire a PUT on every frame, short enough that switching lessons or closing the tab rarely loses more than a moment's work. */
 const AUTOSAVE_DEBOUNCE_MS = 800;
@@ -56,9 +60,6 @@ export default function TeachingView() {
     };
   }, []);
 
-  const [lessons, setLessons] = useState<LessonFile[] | null>(null);
-  const [lessonsError, setLessonsError] = useState<string | null>(null);
-  const [currentLesson, setCurrentLesson] = useState<LessonFile | null>(null);
   const [loadingLesson, setLoadingLesson] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -89,10 +90,16 @@ export default function TeachingView() {
   const [hudOpen, setHudOpen] = useState(true);
   const [newLessonOpen, setNewLessonOpen] = useState(false);
   const [dragPlanId, setDragPlanId] = useState<string | null>(null);
-  const [dropPlanId, setDropPlanId] = useState<string | null>(null);
+  const [dragFolderId, setDragFolderId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [folders, setFolders] = useState<WeeklyPlanFolderDoc[] | null>(null);
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
-  const [addFolderOpen, setAddFolderOpen] = useState(false);
+  // `undefined` = modal closed; `null` = creating a root folder; a folder id
+  // = creating a subfolder under that folder ("+" on its header).
+  const [addFolderParent, setAddFolderParent] = useState<string | null | undefined>(undefined);
+  const [editingFolder, setEditingFolder] = useState<WeeklyPlanFolderDoc | null>(null);
+  const [tags, setTags] = useState<WeeklyPlanTagDoc[]>([]);
+  const [tagFilter, setTagFilter] = useState<string>("all");
 
   // Tab toggles the Teacher Notes panel — only while there's a panel to
   // toggle, and only when focus isn't already in a form control (so normal
@@ -113,23 +120,13 @@ export default function TeachingView() {
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [savedFlash, setSavedFlash] = useState(false);
   const [dirty, setDirty] = useState(false);
 
-  const [uploading, setUploading] = useState(false);
-  const [renamingId, setRenamingId] = useState<string | null>(null);
-  const [renameValue, setRenameValue] = useState("");
-
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Mirrors of state, read from callbacks (autosave debounce, the unmount
-  // flush) that must always see the *current* lesson/dirty flag rather than
+  // Mirror of state, read from callbacks (autosave debounce, the unmount
+  // flush) that must always see the *current* plan/dirty flag rather than
   // whatever was captured in a stale closure when they were first created.
-  const currentLessonRef = useRef<LessonFile | null>(null);
-  useEffect(() => {
-    currentLessonRef.current = currentLesson;
-  }, [currentLesson]);
   const currentWeeklyPlanRef = useRef<WeeklyPlanDoc | null>(null);
   useEffect(() => {
     currentWeeklyPlanRef.current = currentWeeklyPlan;
@@ -141,20 +138,6 @@ export default function TeachingView() {
 
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoOpenedRef = useRef(false);
-
-  const loadLessons = useCallback(() => {
-    setLessonsError(null);
-    authFetch("/api/teaching/lessons")
-      .then(async (res) => {
-        const body = await res.json();
-        if (!res.ok) throw new Error(body.message ?? `Request failed with ${res.status}`);
-        return body as { lessons: LessonFile[] };
-      })
-      .then((body) => setLessons(body.lessons))
-      .catch((err) => setLessonsError(err.message));
-  }, []);
-
-  useEffect(loadLessons, [loadLessons]);
 
   const loadWeeklyPlans = useCallback(() => {
     setWeeklyError(null);
@@ -172,7 +155,7 @@ export default function TeachingView() {
 
   // Open the first available Weekly Plan automatically on arrival — once
   // only, so it doesn't fight with you switching to a different file (or to
-  // the "Saved" tab) afterward.
+  // the "Resources" tab) afterward.
   useEffect(() => {
     if (autoOpenedRef.current) return;
     if (!weeklyPlans || weeklyPlans.length === 0) return;
@@ -193,6 +176,19 @@ export default function TeachingView() {
 
   useEffect(loadFolders, [loadFolders]);
 
+  const loadTags = useCallback(() => {
+    authFetch("/api/board/weekly-plan-tags")
+      .then(async (res) => {
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.message ?? `Request failed with ${res.status}`);
+        return body as { tags: WeeklyPlanTagDoc[] };
+      })
+      .then((body) => setTags(body.tags))
+      .catch(() => {});
+  }, []);
+
+  useEffect(loadTags, [loadTags]);
+
   // Group placements — the same `groups` collection the Students > Curriculum
   // Board reads, just surfaced here too so "+ New Lesson" and each sidebar
   // card's current-level line don't need their own copy of that data.
@@ -207,10 +203,8 @@ export default function TeachingView() {
       .catch(() => {});
   }, []);
 
-  /** Which URL a save should PUT to right now — a Firestore lesson, or (for a manually-created weekly plan) the on-disk file it was loaded from. Null when nothing loaded can be saved to. */
+  /** Which URL a save should PUT to right now — the current weekly plan's on-disk `.excalidraw` file. Null when nothing loaded can be saved to. */
   function currentSaveUrl(): string | null {
-    const lesson = currentLessonRef.current;
-    if (lesson) return `/api/teaching/lessons/${lesson.id}/content`;
     const plan = currentWeeklyPlanRef.current;
     if (plan) return `/api/board/weekly-plans/${plan.id}/board`;
     return null;
@@ -241,8 +235,6 @@ export default function TeachingView() {
         throw new Error(body.message ?? `Request failed with ${res.status}`);
       }
       setDirty(false);
-      setSavedFlash(true);
-      setTimeout(() => setSavedFlash(false), 1500);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -319,50 +311,12 @@ export default function TeachingView() {
     });
   }
 
-  /** Autosaves the outgoing lesson (if dirty) before loading a new one — no more "discard changes?" prompt needed. */
+  /** Autosaves the outgoing plan (if dirty) before loading a new one — no more "discard changes?" prompt needed. */
   async function flushBeforeSwitch() {
     if (dirtyRef.current) await performSave();
   }
 
-  async function openLesson(lesson: LessonFile) {
-    await flushBeforeSwitch();
-
-    setLoadingLesson(true);
-    setLoadError(null);
-    try {
-      const res = await authFetch(`/api/teaching/lessons/${lesson.id}/content`);
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message ?? `Request failed with ${res.status}`);
-
-      const scene = body.scene as { elements?: unknown[]; appState?: Record<string, unknown>; files?: Record<string, BinaryFileData> };
-      // resetScene first — updateScene's appState param only *patches* the
-      // fields you pass (Pick<AppState, K>), it doesn't clear everything
-      // else. Without this, stray leftover state (scroll position, a
-      // half-drawn selection, etc.) from whatever was open before could
-      // carry over and make the switch look like it did nothing, especially
-      // between two boards that already look visually similar.
-      apiRef.current?.resetScene();
-      apiRef.current?.updateScene({
-        elements: (scene.elements ?? []) as any,
-        appState: (scene.appState ?? {}) as any,
-      });
-      const files = Object.values(scene.files ?? {});
-      if (files.length) apiRef.current?.addFiles(files);
-      apiRef.current?.scrollToContent();
-
-      setCurrentLesson(lesson);
-      setCurrentWeeklyPlan(null);
-      setTeacherNotes("");
-      setNotesDirty(false);
-      setDirty(false);
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : "Failed to load lesson");
-    } finally {
-      setLoadingLesson(false);
-    }
-  }
-
-  /** Loads a manually-created weekly plan's board off disk. No Firestore LessonFile id (currentLesson stays null), but autosave/Save still work — they write back to the same on-disk `.excalidraw` file via the weekly-plan board route (see currentSaveUrl). */
+  /** Loads a weekly plan's board off disk — autosave/Save write back to the same on-disk `.excalidraw` file via the weekly-plan board route (see currentSaveUrl). */
   async function openWeeklyPlan(plan: WeeklyPlanDoc) {
     await flushBeforeSwitch();
 
@@ -381,7 +335,6 @@ export default function TeachingView() {
       });
       apiRef.current?.scrollToContent();
 
-      setCurrentLesson(null);
       setCurrentWeeklyPlan(plan);
       setTeacherNotes(plan.teacherNotes);
       setNotesDirty(false);
@@ -429,15 +382,11 @@ export default function TeachingView() {
     if (!plan) return;
     setLoggingStatus(status);
     try {
-      const res = await authFetch(`/api/board/groups/${plan.groupId}/history`, {
+      await authFetch(`/api/board/groups/${plan.groupId}/history`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ date: localDateIso(), topic: plan.topic, status, teacherNotes }),
       });
-      if (res.ok) {
-        setSavedFlash(true);
-        setTimeout(() => setSavedFlash(false), 1500);
-      }
     } finally {
       setLoggingStatus(null);
     }
@@ -480,85 +429,54 @@ export default function TeachingView() {
     }).catch(() => {});
   }
 
+  /** Creates a folder — `parentId` null for a root folder, a folder id for a subfolder ("+" on that folder's header). */
   async function createFolder(name: string) {
     const res = await authFetch("/api/board/weekly-plan-folders", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, parentId: addFolderParent ?? null }),
     });
     if (res.ok) {
       loadFolders();
-      setAddFolderOpen(false);
+      setAddFolderParent(undefined);
     }
   }
 
-  async function createBlankLesson() {
-    const title = window.prompt("Name this lesson:", "New Lesson");
-    if (!title?.trim()) return;
-    await flushBeforeSwitch();
-
-    const res = await authFetch("/api/teaching/lessons", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: title.trim() }),
-    });
-    if (!res.ok) return;
-    const lesson = (await res.json()) as LessonFile;
-    loadLessons();
-    apiRef.current?.resetScene();
-    setTeacherNotes("");
-    setNotesDirty(false);
-    setCurrentLesson(lesson);
-    setCurrentWeeklyPlan(null);
-    setDirty(false);
-  }
-
-  async function importFile(file: File) {
-    await flushBeforeSwitch();
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("title", file.name.replace(/\.(excalidraw|json)$/i, ""));
-      const res = await authFetch("/api/teaching/lessons", { method: "POST", body: formData });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message ?? `Import failed with ${res.status}`);
-      loadLessons();
-      await openLesson(body as LessonFile);
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : "Import failed");
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  }
-
-  async function renameLesson(id: string) {
-    if (!renameValue.trim()) {
-      setRenamingId(null);
-      return;
-    }
-    await authFetch(`/api/teaching/lessons/${id}`, {
+  async function saveFolder(id: string, updates: { name: string; color: string | null }) {
+    const res = await authFetch(`/api/board/weekly-plan-folders/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: renameValue.trim() }),
+      body: JSON.stringify(updates),
     });
-    setRenamingId(null);
-    loadLessons();
-    if (currentLesson?.id === id) setCurrentLesson({ ...currentLesson, title: renameValue.trim() });
+    if (res.ok) {
+      loadFolders();
+      setEditingFolder(null);
+    }
   }
 
-  async function deleteLesson(lesson: LessonFile) {
-    if (!window.confirm(`Delete "${lesson.title}"? This can't be undone.`)) return;
-    await authFetch(`/api/teaching/lessons/${lesson.id}`, { method: "DELETE" });
-    if (currentLesson?.id === lesson.id) setCurrentLesson(null);
-    loadLessons();
+  async function deleteFolder(id: string) {
+    await authFetch(`/api/board/weekly-plan-folders/${id}`, { method: "DELETE" });
+    loadFolders();
+    loadWeeklyPlans();
+    setEditingFolder(null);
   }
 
-  /** One draggable card in the "Weekly Plans" sidebar — shared by every folder section and "Unfiled" so the drag/drop wiring only lives in one place. */
+  /** Drags a folder header onto another folder header (or the free/root area) — nests it there. */
+  async function moveFolderToFolder(folderId: string, parentId: string | null) {
+    if (folderId === parentId) return;
+    setFolders((prev) => prev?.map((f) => (f.id === folderId ? { ...f, parentId } : f)) ?? prev);
+    await authFetch(`/api/board/weekly-plan-folders/${folderId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ parentId }),
+    }).catch(() => {});
+  }
+
+  /** One draggable card in the "Weekly Plans" sidebar — shared by the folder tree and the free/unfiled list so the drag/drop wiring only lives in one place. Topic is the headline (what you're teaching); group is the gray subtitle underneath. */
   function renderPlanCard(plan: WeeklyPlanDoc) {
     const isActive = currentWeeklyPlan?.id === plan.id;
     const group = (groups ?? []).find((g) => g.id === plan.groupId);
+    const planTags = tags.filter((t) => plan.tagIds.includes(t.id));
     return (
       <div
         key={plan.id}
@@ -569,18 +487,18 @@ export default function TeachingView() {
         }}
         onDragEnd={() => {
           setDragPlanId(null);
-          setDropPlanId(null);
+          setDropTargetId(null);
         }}
         onDragOver={(e) => {
           e.preventDefault();
-          if (dragPlanId && dragPlanId !== plan.id) setDropPlanId(plan.id);
+          if (dragPlanId && dragPlanId !== plan.id) setDropTargetId(plan.id);
         }}
-        onDragLeave={() => setDropPlanId((cur) => (cur === plan.id ? null : cur))}
+        onDragLeave={() => setDropTargetId((cur) => (cur === plan.id ? null : cur))}
         onDrop={(e) => {
           e.preventDefault();
           if (dragPlanId) reorderWeeklyPlans(dragPlanId, plan.id);
           setDragPlanId(null);
-          setDropPlanId(null);
+          setDropTargetId(null);
         }}
         onClick={() => openWeeklyPlan(plan)}
         className="card plan-card"
@@ -588,74 +506,152 @@ export default function TeachingView() {
           padding: "10px 12px",
           cursor: "grab",
           background: isActive ? "var(--cake)" : "var(--white)",
-          borderColor: dropPlanId === plan.id ? "var(--accent)" : isActive ? "var(--accent)" : undefined,
+          borderColor: dropTargetId === plan.id ? "var(--accent)" : isActive ? "var(--accent)" : undefined,
           borderWidth: isActive ? 2 : 1,
-          borderStyle: dropPlanId === plan.id ? "dashed" : "solid",
+          borderStyle: dropTargetId === plan.id ? "dashed" : "solid",
           opacity: dragPlanId === plan.id ? 0.5 : 1,
         }}
       >
         <div style={{ fontWeight: 700, fontSize: 14 }}>
-          {plan.emojis.join(" ")} {group?.name ?? plan.groupId}
+          {plan.emojis.join(" ")} {plan.topic}
         </div>
-        <div style={{ fontSize: 12.5, color: "var(--ink-soft)", marginTop: 2 }}>{plan.topic}</div>
+        <div style={{ fontSize: 12.5, color: "var(--ink-soft)", marginTop: 2 }}>{group?.name ?? plan.groupId}</div>
+        {planTags.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 5 }}>
+            {planTags.map((t) => (
+              <span key={t.id} style={{ fontSize: 10.5, padding: "1px 7px", borderRadius: 999, background: t.color, color: "#fff" }}>
+                {t.name}
+              </span>
+            ))}
+          </div>
+        )}
         <div style={{ fontSize: 11.5, color: "var(--ink-soft)", marginTop: 4 }}>{plan.date}</div>
       </div>
     );
   }
 
+  /** Every plan matching the active tag filter — feeds both the folder tree and the free/unfiled list below it. */
+  const visiblePlans = useMemo(
+    () => (tagFilter === "all" ? (weeklyPlans ?? []) : (weeklyPlans ?? []).filter((p) => p.tagIds.includes(tagFilter))),
+    [weeklyPlans, tagFilter]
+  );
+
+  /** True if the active plan lives directly in this folder, or in any of its (nested) subfolders — drives the collapsed-folder "active inside" dot. */
+  function folderHasActive(folderId: string): boolean {
+    if ((weeklyPlans ?? []).some((p) => p.folderId === folderId && p.id === currentWeeklyPlan?.id)) return true;
+    return (folders ?? []).some((f) => f.parentId === folderId && folderHasActive(f.id));
+  }
+
+  const iconBtnStyle: CSSProperties = {
+    background: "rgba(255,255,255,0.22)",
+    border: "none",
+    borderRadius: 5,
+    color: "#fff",
+    fontSize: 11,
+    lineHeight: 1,
+    padding: "3px 6px",
+    cursor: "pointer",
+    flexShrink: 0,
+  };
+
   /**
-   * A folder (or "Unfiled", folderId "") section header in the sidebar —
-   * also a drop target: dragging a plan card onto it files/unfiles the
-   * plan. Clicking it (a plain click, not a drag) toggles the section
-   * collapsed. When collapsed and the active plan lives inside, the header
-   * gets an outline so it's still obvious where the open file is.
+   * One folder in the Obsidian-vault-style tree — bigger, colored (preset
+   * or custom), editable (rename/recolor/delete via the ✎ icon), and
+   * nestable to any depth via drag-and-drop (drag a folder header onto
+   * another to reparent it) or the "+" subfolder button. Recurses into its
+   * own children, then lists its plans (already tag-filtered).
    */
-  function renderFolderHeader(folderId: string, label: string, collapsed: boolean, hasActiveInside: boolean) {
-    const isDropTarget = dragPlanId !== null && dropPlanId === `folder:${folderId}`;
+  function renderFolderNode(folder: WeeklyPlanFolderDoc, depth: number) {
+    const children = (folders ?? []).filter((f) => f.parentId === folder.id).sort((a, b) => a.order - b.order);
+    const plansInFolder = visiblePlans.filter((p) => p.folderId === folder.id);
+    const collapsed = collapsedFolders.has(folder.id);
+    const hasActiveInside = folderHasActive(folder.id);
+    const isDropTarget = dropTargetId === `folder:${folder.id}`;
+
     return (
-      <div
-        onClick={() =>
-          setCollapsedFolders((prev) => {
-            const next = new Set(prev);
-            if (next.has(folderId)) next.delete(folderId);
-            else next.add(folderId);
-            return next;
-          })
-        }
-        onDragOver={(e) => {
-          e.preventDefault();
-          if (dragPlanId) setDropPlanId(`folder:${folderId}`);
-        }}
-        onDragLeave={() => setDropPlanId((cur) => (cur === `folder:${folderId}` ? null : cur))}
-        onDrop={(e) => {
-          e.preventDefault();
-          if (dragPlanId) moveToFolder(dragPlanId, folderId);
-          setDragPlanId(null);
-          setDropPlanId(null);
-        }}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 4,
-          fontSize: 11,
-          fontWeight: 700,
-          color: "var(--ink-soft)",
-          padding: "4px 6px",
-          borderRadius: "var(--radius-sm)",
-          cursor: "pointer",
-          background: isDropTarget ? "var(--cake)" : "transparent",
-          border: isDropTarget
-            ? "1px dashed var(--accent)"
-            : collapsed && hasActiveInside
-              ? "1px solid var(--accent)"
-              : "1px solid transparent",
-        }}
-      >
-        <span style={{ display: "inline-block", transition: "transform 0.15s ease", transform: collapsed ? "rotate(-90deg)" : "none" }}>
-          ▾
-        </span>
-        📁 {label.toUpperCase()}
-        {collapsed && hasActiveInside && <span title="Active file is inside this collapsed folder">●</span>}
+      <div key={folder.id} style={{ display: "flex", flexDirection: "column", gap: 6, marginLeft: depth * 14 }}>
+        <div
+          draggable
+          onDragStart={(e) => {
+            e.dataTransfer.effectAllowed = "move";
+            setDragFolderId(folder.id);
+          }}
+          onDragEnd={() => {
+            setDragFolderId(null);
+            setDropTargetId(null);
+          }}
+          onClick={() =>
+            setCollapsedFolders((prev) => {
+              const next = new Set(prev);
+              if (next.has(folder.id)) next.delete(folder.id);
+              else next.add(folder.id);
+              return next;
+            })
+          }
+          onDragOver={(e) => {
+            e.preventDefault();
+            if (dragPlanId || (dragFolderId && dragFolderId !== folder.id)) setDropTargetId(`folder:${folder.id}`);
+          }}
+          onDragLeave={() => setDropTargetId((cur) => (cur === `folder:${folder.id}` ? null : cur))}
+          onDrop={(e) => {
+            e.preventDefault();
+            if (dragPlanId) moveToFolder(dragPlanId, folder.id);
+            else if (dragFolderId && dragFolderId !== folder.id) moveFolderToFolder(dragFolderId, folder.id);
+            setDragPlanId(null);
+            setDragFolderId(null);
+            setDropTargetId(null);
+          }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            fontSize: 12.5,
+            fontWeight: 700,
+            color: "#fff",
+            padding: "9px 12px",
+            borderRadius: "var(--radius-sm)",
+            cursor: "grab",
+            background: folder.color ?? "var(--cake-dark)",
+            boxShadow: isDropTarget || (collapsed && hasActiveInside) ? "0 0 0 2px var(--accent)" : "none",
+            opacity: dragFolderId === folder.id ? 0.5 : 1,
+          }}
+        >
+          <span style={{ display: "inline-block", transition: "transform 0.15s ease", transform: collapsed ? "rotate(-90deg)" : "none" }}>
+            ▾
+          </span>
+          <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            📁 {folder.name.toUpperCase()}
+          </span>
+          {hasActiveInside && <span title="Active file is inside this folder">●</span>}
+          <button
+            type="button"
+            title="New subfolder"
+            style={iconBtnStyle}
+            onClick={(e) => {
+              e.stopPropagation();
+              setAddFolderParent(folder.id);
+            }}
+          >
+            +
+          </button>
+          <button
+            type="button"
+            title="Edit folder"
+            style={iconBtnStyle}
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditingFolder(folder);
+            }}
+          >
+            ✎
+          </button>
+        </div>
+        {!collapsed && (children.length > 0 || plansInFolder.length > 0) && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingLeft: 8 }}>
+            {children.map((c) => renderFolderNode(c, depth + 1))}
+            {plansInFolder.map(renderPlanCard)}
+          </div>
+        )}
       </div>
     );
   }
@@ -711,22 +707,24 @@ export default function TeachingView() {
             <div>
               <div className="page-title">Teaching</div>
               <div className="page-subtitle">
-                {currentLesson
-                  ? currentLesson.title
-                  : currentWeeklyPlan
-                    ? `${(groups ?? []).find((g) => g.id === currentWeeklyPlan.groupId)?.name ?? currentWeeklyPlan.groupId} · ${currentWeeklyPlan.topic} · ${currentWeeklyPlan.date}`
-                    : "Pick a lesson, or start a new whiteboard"}
-                {dirty && <span style={{ color: "var(--warning)" }}> · unsaved changes</span>}
-                {savedFlash && <span style={{ color: "var(--success)" }}> · Saved</span>}
+                {currentWeeklyPlan
+                  ? `${(groups ?? []).find((g) => g.id === currentWeeklyPlan.groupId)?.name ?? currentWeeklyPlan.groupId} · ${currentWeeklyPlan.topic} · ${currentWeeklyPlan.date}`
+                  : "Pick a lesson, or start a new whiteboard"}
               </div>
             </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn btn-secondary" onClick={() => setSidebarOpen((o) => !o)}>
-                {sidebarOpen ? "Hide Sidebar" : "Show Sidebar"}
-              </button>
-              <button className="btn btn-secondary" onClick={performSave} disabled={(!currentLesson && !currentWeeklyPlan) || saving}>
-                {saving ? "Saving…" : "Save"}
-              </button>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {/* Autosave already covers every edit (debounced + on blur) —
+                  no manual Save button, and no permanent "unsaved
+                  changes"/"Saved" text either, both used to change on every
+                  keystroke and read as flickery. This is the only save
+                  feedback left: a faint spinner, present only for the
+                  moment a save is actually in flight. */}
+              {saving && <Spinner size={18} style={{ opacity: 0.4 }} />}
+              {sidebarTab === "weekly" && (
+                <button className="btn btn-secondary" onClick={() => setSidebarOpen((o) => !o)}>
+                  {sidebarOpen ? "Hide Sidebar" : "Show Sidebar"}
+                </button>
+              )}
               <button className="btn btn-primary" onClick={() => setMode("present")}>
                 🖥️ Screen Share Mode
               </button>
@@ -735,6 +733,56 @@ export default function TeachingView() {
 
           {saveError && <FetchFailedState message={saveError} />}
           {loadError && <FetchFailedState message={loadError} />}
+
+          {/* Segmented control — a recessed track (--cake) with a raised, shadowed pill for the active tab, same pattern as an iOS/macOS segmented toggle. Lives above the sidebar/canvas split (not inside the 260px sidebar) so it stays reachable even when the "Resources" tab takes over the full width below. */}
+          <div
+            style={{
+              display: "inline-flex",
+              gap: 2,
+              padding: 3,
+              marginBottom: 12,
+              background: "var(--cake)",
+              borderRadius: "var(--radius-sm)",
+              width: 260,
+            }}
+          >
+            {(
+              [
+                { key: "weekly", label: "Weekly Plans" },
+                { key: "resources", label: "Resources" },
+              ] as const
+            ).map(({ key, label }) => {
+              const active = sidebarTab === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setSidebarTab(key)}
+                  style={{
+                    flex: 1,
+                    border: "none",
+                    borderRadius: "calc(var(--radius-sm) - 3px)",
+                    padding: "6px 8px",
+                    fontSize: 13,
+                    cursor: "pointer",
+                    transition: "background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease",
+                    background: active ? "var(--white)" : "transparent",
+                    boxShadow: active ? "var(--shadow)" : "none",
+                    color: active ? "var(--ink)" : "var(--ink-soft)",
+                    fontWeight: active ? 600 : 400,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!active) e.currentTarget.style.color = "var(--ink)";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!active) e.currentTarget.style.color = "var(--ink-soft)";
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
         </>
       )}
 
@@ -742,207 +790,93 @@ export default function TeachingView() {
         style={
           presenting
             ? { position: "fixed", inset: 0, zIndex: 10000, background: "#fff", overflow: "hidden" }
-            : { display: "flex", flex: 1, gap: 14, minHeight: 0, minWidth: 0, overflow: "hidden" }
+            : { display: "flex", flex: 1, gap: 14, minHeight: 0, minWidth: 0, overflow: "hidden", position: "relative" }
         }
       >
-        {!presenting && sidebarOpen && (
-          <ErrorBoundary label="the lessons sidebar">
+        {!presenting && sidebarTab === "resources" && (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 6,
+              background: "var(--cream)",
+              overflowY: "auto",
+              padding: "2px 2px 16px",
+            }}
+          >
+            <ErrorBoundary label="Resources">
+              <ResourcesBrowser />
+            </ErrorBoundary>
+          </div>
+        )}
+
+        {!presenting && sidebarTab === "weekly" && sidebarOpen && (
+          <ErrorBoundary label="the Weekly Plans sidebar">
             <div
               className="card card-pad"
               style={{ width: 260, flexShrink: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}
             >
-              {/* Segmented control — a recessed track (--cake) with a raised, shadowed pill for the active tab, same pattern as an iOS/macOS segmented toggle. Built from this app's own theme tokens (not literal grays) so it stays correct in dark mode automatically. */}
-              <div
-                style={{
-                  display: "flex",
-                  gap: 2,
-                  padding: 3,
-                  marginBottom: 12,
-                  background: "var(--cake)",
-                  borderRadius: "var(--radius-sm)",
-                }}
-              >
-                {(
-                  [
-                    { key: "weekly", label: "Weekly Plans" },
-                    { key: "saved", label: "Saved" },
-                  ] as const
-                ).map(({ key, label }) => {
-                  const active = sidebarTab === key;
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setSidebarTab(key)}
-                      style={{
-                        flex: 1,
-                        border: "none",
-                        borderRadius: "calc(var(--radius-sm) - 3px)",
-                        padding: "6px 8px",
-                        fontSize: 13,
-                        cursor: "pointer",
-                        transition: "background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease",
-                        background: active ? "var(--white)" : "transparent",
-                        boxShadow: active ? "var(--shadow)" : "none",
-                        color: active ? "var(--ink)" : "var(--ink-soft)",
-                        fontWeight: active ? 600 : 400,
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!active) e.currentTarget.style.color = "var(--ink)";
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!active) e.currentTarget.style.color = "var(--ink-soft)";
-                      }}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
+              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                <button className="btn btn-secondary btn-sm" style={{ flex: 1 }} onClick={() => setNewLessonOpen(true)}>
+                  + New Lesson
+                </button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setAddFolderParent(null)} title="Add Folder">
+                  + 📁
+                </button>
               </div>
 
-              {sidebarTab === "weekly" ? (
-                <>
-                  <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                    <button className="btn btn-secondary btn-sm" style={{ flex: 1 }} onClick={() => setNewLessonOpen(true)}>
-                      + New Lesson
-                    </button>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setAddFolderOpen(true)} title="Add Folder">
-                      + 📁
-                    </button>
-                  </div>
-
-                  {weeklyError && <FetchFailedState message={weeklyError} />}
-                  {!weeklyError && weeklyPlans && weeklyPlans.length === 0 && (
-                    <EmptyState title="No lesson plans yet" hint='Click "+ New Lesson" above to create one.' />
-                  )}
-                  <div style={{ overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: 14 }}>
-                    {(folders ?? []).map((folder) => {
-                      const plansInFolder = (weeklyPlans ?? []).filter((p) => p.folderId === folder.id);
-                      const collapsed = collapsedFolders.has(folder.id);
-                      const hasActiveInside = plansInFolder.some((p) => p.id === currentWeeklyPlan?.id);
-                      return (
-                        <div key={folder.id} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                          {renderFolderHeader(folder.id, folder.name, collapsed, hasActiveInside)}
-                          {!collapsed && plansInFolder.map(renderPlanCard)}
-                        </div>
-                      );
-                    })}
-
-                    {/* "Unfiled" only shows as a labeled section once folders exist — with none yet, a bare list is plenty. */}
-                    {folders && folders.length > 0 ? (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                        {(() => {
-                          const unfiled = (weeklyPlans ?? []).filter((p) => !folders.some((f) => f.id === p.folderId));
-                          const collapsed = collapsedFolders.has("");
-                          const hasActiveInside = unfiled.some((p) => p.id === currentWeeklyPlan?.id);
-                          return (
-                            <>
-                              {renderFolderHeader("", "Unfiled", collapsed, hasActiveInside)}
-                              {!collapsed && unfiled.map(renderPlanCard)}
-                            </>
-                          );
-                        })()}
-                      </div>
-                    ) : (
-                      (weeklyPlans ?? []).map(renderPlanCard)
-                    )}
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                    <button className="btn btn-secondary btn-sm" style={{ flex: 1 }} onClick={createBlankLesson}>
-                      + New
-                    </button>
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      style={{ flex: 1 }}
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploading}
-                    >
-                      {uploading ? "Importing…" : "Import"}
-                    </button>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".excalidraw,.json,application/json"
-                      style={{ display: "none" }}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) importFile(file);
-                      }}
-                    />
-                  </div>
-
-                  {lessonsError && <FetchFailedState message={lessonsError} />}
-                  {!lessonsError && lessons && lessons.length === 0 && (
-                    <EmptyState title="No lessons yet" hint="Import a .excalidraw file or start a new one." />
-                  )}
-
-                  <div style={{ overflowY: "auto", flex: 1 }}>
-                {(lessons ?? []).map((lesson) => (
-                  <div
-                    key={lesson.id}
-                    style={{
-                      padding: "8px 10px",
-                      borderRadius: "var(--radius-sm)",
-                      background: currentLesson?.id === lesson.id ? "var(--cake)" : "transparent",
-                      cursor: "pointer",
-                      marginBottom: 4,
-                    }}
-                  >
-                    {renamingId === lesson.id ? (
-                      <input
-                        autoFocus
-                        value={renameValue}
-                        onChange={(e) => setRenameValue(e.target.value)}
-                        onBlur={() => renameLesson(lesson.id)}
-                        onKeyDown={(e) => e.key === "Enter" && renameLesson(lesson.id)}
-                        style={{ width: "100%", fontSize: 13 }}
-                      />
-                    ) : (
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
-                        <span
-                          onClick={() => openLesson(lesson)}
-                          style={{
-                            flex: 1,
-                            minWidth: 0,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                            fontSize: 13,
-                            fontWeight: currentLesson?.id === lesson.id ? 700 : 400,
-                          }}
-                          title={lesson.title}
-                        >
-                          {lesson.title}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRenamingId(lesson.id);
-                            setRenameValue(lesson.title);
-                          }}
-                          title="Rename"
-                          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-soft)", padding: 2 }}
-                        >
-                          ✎
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => deleteLesson(lesson)}
-                          title="Delete"
-                          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--danger)", padding: 2 }}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-                  </div>
-                </>
+              {tags.length > 0 && (
+                <select
+                  value={tagFilter}
+                  onChange={(e) => setTagFilter(e.target.value)}
+                  style={{ marginBottom: 10, fontSize: 12.5, padding: "6px 8px" }}
+                >
+                  <option value="all">Filter by tag: All</option>
+                  {tags.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
               )}
+
+              {weeklyError && <FetchFailedState message={weeklyError} />}
+              {!weeklyError && weeklyPlans && weeklyPlans.length === 0 && (
+                <EmptyState title="No lesson plans yet" hint='Click "+ New Lesson" above to create one.' />
+              )}
+              <div style={{ overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: 10 }}>
+                {(folders ?? [])
+                  .filter((f) => f.parentId === null)
+                  .sort((a, b) => a.order - b.order)
+                  .map((folder) => renderFolderNode(folder, 0))}
+
+                {/* Plans not filed in any folder — no header, just the free-standing cards (also a drop target: dragging a plan or folder here unfiles/un-nests it). */}
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (dragPlanId || dragFolderId) setDropTargetId("root");
+                  }}
+                  onDragLeave={() => setDropTargetId((cur) => (cur === "root" ? null : cur))}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (dragPlanId) moveToFolder(dragPlanId, "");
+                    else if (dragFolderId) moveFolderToFolder(dragFolderId, null);
+                    setDragPlanId(null);
+                    setDragFolderId(null);
+                    setDropTargetId(null);
+                  }}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 10,
+                    borderRadius: "var(--radius-sm)",
+                    outline: dropTargetId === "root" ? "1px dashed var(--accent)" : "none",
+                    outlineOffset: 2,
+                  }}
+                >
+                  {visiblePlans.filter((p) => !(folders ?? []).some((f) => f.id === p.folderId)).map(renderPlanCard)}
+                </div>
+              </div>
             </div>
           </ErrorBoundary>
         )}
@@ -1082,12 +1016,31 @@ export default function TeachingView() {
                     />
 
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <span style={{ fontSize: 11.5, color: "var(--ink-soft)" }}>
-                        {savingNotes ? "Saving…" : notesDirty ? "Unsaved changes" : "Saved"}
+                      <span style={{ fontSize: 11.5, color: "var(--ink-soft)", position: "relative", minWidth: 16 }}>
+                        <LoadingLabel loading={savingNotes}>{notesDirty ? "Unsaved changes" : "Saved"}</LoadingLabel>
                       </span>
                       <button className="btn btn-ghost btn-sm" onClick={saveNotes} disabled={!notesDirty || savingNotes}>
                         Save
                       </button>
+                    </div>
+
+                    <div style={{ borderTop: "1px solid var(--line)", paddingTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+                      <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--ink-soft)", letterSpacing: "0.03em" }}>TAGS</div>
+                      <TagPicker
+                        tags={tags}
+                        selectedIds={currentWeeklyPlan.tagIds}
+                        onTagCreated={(tag) => setTags((prev) => [...prev, tag])}
+                        onChange={(tagIds) => {
+                          const plan = currentWeeklyPlan;
+                          setCurrentWeeklyPlan({ ...plan, tagIds });
+                          setWeeklyPlans((prev) => prev?.map((p) => (p.id === plan.id ? { ...p, tagIds } : p)) ?? prev);
+                          authFetch(`/api/board/weekly-plans/${plan.id}`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ tagIds }),
+                          }).catch(() => {});
+                        }}
+                      />
                     </div>
 
                     <div style={{ borderTop: "1px solid var(--line)", paddingTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -1101,7 +1054,7 @@ export default function TeachingView() {
                           onClick={() => logCompletion("Mastered")}
                           disabled={loggingStatus !== null}
                         >
-                          {loggingStatus === "Mastered" ? "Logging…" : "✅ Mastered"}
+                          <LoadingLabel loading={loggingStatus === "Mastered"}>✅ Mastered</LoadingLabel>
                         </button>
                         <button
                           className="btn btn-secondary btn-sm"
@@ -1109,7 +1062,7 @@ export default function TeachingView() {
                           onClick={() => logCompletion("Review Pending")}
                           disabled={loggingStatus !== null}
                         >
-                          {loggingStatus === "Review Pending" ? "Logging…" : "🔁 Needs Review"}
+                          <LoadingLabel loading={loggingStatus === "Review Pending"}>🔁 Needs Review</LoadingLabel>
                         </button>
                       </div>
                     </div>
@@ -1149,16 +1102,30 @@ export default function TeachingView() {
       </div>
 
       {newLessonOpen && (
-        <NewLessonModal groups={groups ?? []} onClose={() => setNewLessonOpen(false)} onCreated={onLessonCreated} />
+        <NewLessonModal
+          groups={groups ?? []}
+          tags={tags}
+          onTagCreated={(tag) => setTags((prev) => [...prev, tag])}
+          onClose={() => setNewLessonOpen(false)}
+          onCreated={onLessonCreated}
+        />
       )}
-      {addFolderOpen && (
+      {addFolderParent !== undefined && (
         <PromptModal
-          title="New Folder"
+          title={addFolderParent ? "New Subfolder" : "New Folder"}
           label="Folder name"
           placeholder="e.g. Term 1"
           confirmLabel="Create"
-          onCancel={() => setAddFolderOpen(false)}
+          onCancel={() => setAddFolderParent(undefined)}
           onSubmit={createFolder}
+        />
+      )}
+      {editingFolder && (
+        <FolderEditModal
+          folder={editingFolder}
+          onClose={() => setEditingFolder(null)}
+          onSave={(updates) => saveFolder(editingFolder.id, updates)}
+          onDelete={() => deleteFolder(editingFolder.id)}
         />
       )}
     </main>

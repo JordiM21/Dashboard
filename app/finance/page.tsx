@@ -18,6 +18,7 @@ import ViewToggle from "@/components/ViewToggle";
 import AddTransactionModal from "@/components/AddTransactionModal";
 import AddRecurringModal from "@/components/AddRecurringModal";
 import ConfirmModal from "@/components/ConfirmModal";
+import LoadingLabel from "@/components/LoadingLabel";
 import { FetchFailedState, EmptyState } from "@/components/StateBox";
 import { useFirestoreCollection } from "@/lib/firebase/useFirestoreCollection";
 import { authFetch } from "@/lib/firebase/authFetch";
@@ -365,7 +366,7 @@ export default function FinancePage() {
       <h2 className="section-title">Recurring Payments</h2>
       <div className="filter-bar">
         <button className="btn btn-secondary btn-sm" onClick={runRecurringNow} disabled={runningRecurring}>
-          {runningRecurring ? "Running…" : "▶ Run due payments now"}
+          <LoadingLabel loading={runningRecurring}>▶ Run due payments now</LoadingLabel>
         </button>
         {recurringRunMessage && (
           <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>{recurringRunMessage}</span>

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Modal from "@/components/Modal";
+import LoadingLabel from "@/components/LoadingLabel";
 import { authFetch } from "@/lib/firebase/authFetch";
 import { useFirestoreCollection } from "@/lib/firebase/useFirestoreCollection";
 import { localDateIso, addMonths } from "@/lib/dateUtils";
@@ -149,7 +150,7 @@ export default function AddHistoryModal({
             Cancel
           </button>
           <button className="btn btn-primary" onClick={save} disabled={saving || !topic}>
-            {saving ? "Saving…" : entry ? "Save Changes" : "Add to History"}
+            <LoadingLabel loading={saving}>{entry ? "Save Changes" : "Add to History"}</LoadingLabel>
           </button>
         </div>
       </div>

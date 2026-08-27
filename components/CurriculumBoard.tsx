@@ -6,6 +6,7 @@ import { useFirestoreCollection } from "@/lib/firebase/useFirestoreCollection";
 import { FetchFailedState, EmptyState } from "@/components/StateBox";
 import PromptModal from "@/components/PromptModal";
 import AddHistoryModal from "@/components/AddHistoryModal";
+import LoadingLabel from "@/components/LoadingLabel";
 import type { CurriculumLevelDoc, GroupDocWithRecall, GroupHistoryEntry } from "@/lib/types";
 
 /** Which prompt-style modal (if any) is currently open — one shared PromptModal instance covers all three, plus AddHistoryModal for backfilling a group's past topics. */
@@ -408,7 +409,9 @@ export default function CurriculumBoard() {
                       onClick={() => generateParentReport(g)}
                       disabled={reportingGroupId === g.id}
                     >
-                      {reportingGroupId === g.id ? "Generating…" : reportFlashGroupId === g.id ? "Copied! 📋" : "📋 Generate Parent Report"}
+                      <LoadingLabel loading={reportingGroupId === g.id}>
+                        {reportFlashGroupId === g.id ? "Copied! 📋" : "📋 Generate Parent Report"}
+                      </LoadingLabel>
                     </button>
                     <button className="btn btn-ghost btn-sm" onClick={() => setActiveModal({ kind: "addHistory", group: g })}>
                       + Add Past Topic
@@ -644,7 +647,7 @@ export default function CurriculumBoard() {
             disabled={addingLevel}
             style={{ width: "100%", justifyContent: "center", marginTop: 8 }}
           >
-            {addingLevel ? "Adding…" : "+ Add New Level"}
+            <LoadingLabel loading={addingLevel}>+ Add New Level</LoadingLabel>
           </button>
         )}
       </section>

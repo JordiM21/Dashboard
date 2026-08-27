@@ -8,6 +8,7 @@ import ViewToggle from "@/components/ViewToggle";
 import Modal from "@/components/Modal";
 import MetaCalendar from "@/components/MetaCalendar";
 import ScheduleMetaPostModal from "@/components/ScheduleMetaPostModal";
+import LoadingLabel from "@/components/LoadingLabel";
 import { EmptyState, FetchFailedState } from "@/components/StateBox";
 import { useFirestoreCollection } from "@/lib/firebase/useFirestoreCollection";
 import { authFetch } from "@/lib/firebase/authFetch";
@@ -749,7 +750,7 @@ function CommentsTab() {
           Hidden only
         </label>
         <button className="btn btn-secondary btn-sm" onClick={reload} disabled={loading}>
-          {loading ? "Refreshing…" : "↻ Refresh"}
+          <LoadingLabel loading={loading}>↻ Refresh</LoadingLabel>
         </button>
       </div>
 
@@ -934,7 +935,7 @@ function CalendarTab() {
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button className="btn btn-secondary" onClick={publishDuePosts} disabled={publishingAll}>
-            {publishingAll ? "Publishing…" : "Publish due posts"}
+            <LoadingLabel loading={publishingAll}>Publish due posts</LoadingLabel>
           </button>
           <button className="btn btn-primary" onClick={() => setModalDate(new Date().toISOString().slice(0, 10))}>
             + New Post

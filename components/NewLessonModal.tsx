@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Modal from "@/components/Modal";
+import TagPicker from "@/components/TagPicker";
+import LoadingLabel from "@/components/LoadingLabel";
 import { authFetch } from "@/lib/firebase/authFetch";
 import { useFirestoreCollection } from "@/lib/firebase/useFirestoreCollection";
 import { localDateIso } from "@/lib/dateUtils";
-import type { CurriculumLevelDoc, GroupDoc, WeeklyPlanDoc } from "@/lib/types";
+import type { CurriculumLevelDoc, GroupDoc, WeeklyPlanDoc, WeeklyPlanTagDoc } from "@/lib/types";
 
 // A small fixed picker, not a full emoji keyboard — plenty for tagging a
 // lesson plan's mood/topic at a glance in the sidebar queue.
@@ -13,10 +15,14 @@ const EMOJI_CHOICES = ["📚", "🎨", "🎲", "🗣️", "✏️", "🎧", "�
 
 export default function NewLessonModal({
   groups,
+  tags,
+  onTagCreated,
   onClose,
   onCreated,
 }: {
   groups: GroupDoc[];
+  tags: WeeklyPlanTagDoc[];
+  onTagCreated: (tag: WeeklyPlanTagDoc) => void;
   onClose: () => void;
   onCreated: (plan: WeeklyPlanDoc) => void;
 }) {
@@ -25,6 +31,7 @@ export default function NewLessonModal({
   const [date, setDate] = useState(localDateIso());
   const [topic, setTopic] = useState("");
   const [emojis, setEmojis] = useState<string[]>([]);
+  const [tagIds, setTagIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,7 +58,7 @@ export default function NewLessonModal({
       const res = await authFetch("/api/board/weekly-plans", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ groupId, date, topic: topic.trim(), teacherNotes: "", emojis }),
+        body: JSON.stringify({ groupId, date, topic: topic.trim(), teacherNotes: "", emojis, tagIds }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.message ?? `Request failed with ${res.status}`);
@@ -140,12 +147,17 @@ export default function NewLessonModal({
         </div>
       </div>
 
+      <div className="form-row">
+        <label>Tags</label>
+        <TagPicker tags={tags} selectedIds={tagIds} onChange={setTagIds} onTagCreated={onTagCreated} />
+      </div>
+
       <div className="modal-actions">
         <button className="btn btn-ghost" onClick={onClose} disabled={saving}>
           Cancel
         </button>
         <button className="btn btn-primary" onClick={save} disabled={saving || groups.length === 0}>
-          {saving ? "Creating…" : "Create Lesson"}
+          <LoadingLabel loading={saving}>Create Lesson</LoadingLabel>
         </button>
       </div>
     </Modal>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Modal from "@/components/Modal";
+import LoadingLabel from "@/components/LoadingLabel";
 import { authFetch } from "@/lib/firebase/authFetch";
 import type { ScheduledMetaPost } from "@/lib/types";
 
@@ -248,7 +249,9 @@ export default function ScheduleMetaPostModal({
           )}
           {editable && (
             <button className="btn btn-primary" onClick={save} disabled={submitting}>
-              {submitting ? "Saving…" : isPastOrNow && !editing ? "Post Now" : editing ? "Save Changes" : "Schedule"}
+              <LoadingLabel loading={submitting}>
+                {isPastOrNow && !editing ? "Post Now" : editing ? "Save Changes" : "Schedule"}
+              </LoadingLabel>
             </button>
           )}
         </div>

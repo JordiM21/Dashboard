@@ -349,22 +349,6 @@ export interface ResourcesManifest {
   files: ResourceFile[];
 }
 
-/**
- * Firestore `lessonFiles` document shape — one Excalidraw whiteboard
- * lesson. The actual `.excalidraw` JSON (elements/appState/files) lives in
- * Firebase Storage at `storagePath`, same split as ResourceFile — Firestore
- * holds metadata only, so an image-heavy whiteboard never risks Firestore's
- * 1MiB document size cap. See lib/teaching.ts.
- */
-export interface LessonFile {
-  id: string;
-  title: string;
-  storagePath: string; // e.g. "lessons/{id}/{id}.excalidraw"
-  size: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
 // ---------------------------------------------------------------------------
 // Curriculum Board — curriculum, groups,
 // groups/{id}/history, and weeklyPlans all live directly in Firestore now,
@@ -434,14 +418,26 @@ export interface WeeklyPlanDoc {
   // undefined) means unfiled, so every doc always has a plain string here
   // and Firestore writes never need to special-case a missing field.
   folderId: string;
+  // Which `weeklyPlanTags` doc ids this plan carries — always an array
+  // (never undefined), same "no missing field" convention as folderId.
+  tagIds: string[];
   createdAt?: string;
   updatedAt?: string;
 }
 
-/** Firestore `weeklyPlanFolders` document shape — a folder in the Teaching sidebar's "Weekly Plans" queue, purely organizational (drag a plan onto one to file it there). */
+/** Firestore `weeklyPlanFolders` document shape — a folder in the Teaching sidebar's "Weekly Plans" queue. Nestable (parentId, Obsidian-vault-style tree) and colorable (preset palette or a custom hex, null = default neutral). */
 export interface WeeklyPlanFolderDoc {
   id: string;
   name: string;
   order: number;
+  parentId: string | null;
+  color: string | null;
+}
+
+/** Firestore `weeklyPlanTags` document shape — a reusable tag a weekly plan can carry. Created once via the tag picker's "+ new tag", then attached to plans by id (WeeklyPlanDoc.tagIds) — never freeform text. */
+export interface WeeklyPlanTagDoc {
+  id: string;
+  name: string;
+  color: string;
 }
 
