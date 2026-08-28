@@ -11,6 +11,7 @@ import type {
   RecurringTransaction,
   ScheduledMetaPost,
   MetaAudienceSnapshotRecord,
+  GameDoc,
 } from "@/lib/types";
 
 /**
@@ -28,6 +29,7 @@ const STUDENTS = "students";
 const TRANSACTIONS = "transactions";
 const LESSONS = "lessons";
 const PROJECTS = "projects";
+const GAMES = "games";
 const CONTENT = "content";
 const AGENTS = "agents";
 const RECURRING_TRANSACTIONS = "recurringTransactions";
@@ -258,6 +260,41 @@ export async function updateProject(id: string, updates: Partial<Project>): Prom
 
 export async function deleteProject(id: string): Promise<boolean> {
   const ref = getAdminDb().collection(PROJECTS).doc(id);
+  const existing = await ref.get();
+  if (!existing.exists) return false;
+  await ref.delete();
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Games
+// ---------------------------------------------------------------------------
+
+export async function listGames(): Promise<GameDoc[]> {
+  const snap = await getAdminDb().collection(GAMES).orderBy("createdAt", "desc").get();
+  return snap.docs.map((doc) => fromDoc<GameDoc>(doc));
+}
+
+export async function createGame(data: Omit<GameDoc, "id" | "createdAt" | "updatedAt">): Promise<GameDoc> {
+  const ref = getAdminDb().collection(GAMES).doc();
+  await ref.set({ ...data, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+  const doc = await ref.get();
+  return fromDoc<GameDoc>(doc as QueryDocumentSnapshot<DocumentData>);
+}
+
+export async function updateGame(id: string, updates: Partial<GameDoc>): Promise<GameDoc | null> {
+  const ref = getAdminDb().collection(GAMES).doc(id);
+  const existing = await ref.get();
+  if (!existing.exists) return null;
+
+  const { id: _ignoredId, createdAt: _ignoredCreatedAt, ...safeUpdates } = updates;
+  await ref.update({ ...safeUpdates, updatedAt: FieldValue.serverTimestamp() });
+  const doc = await ref.get();
+  return fromDoc<GameDoc>(doc as QueryDocumentSnapshot<DocumentData>);
+}
+
+export async function deleteGame(id: string): Promise<boolean> {
+  const ref = getAdminDb().collection(GAMES).doc(id);
   const existing = await ref.get();
   if (!existing.exists) return false;
   await ref.delete();

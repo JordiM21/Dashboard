@@ -6,6 +6,7 @@ export interface Project {
   field: string;
   status: "To Do" | "In Progress" | "Paused" | "Done";
   progress: number; // 0-100
+  icon?: string; // single emoji chosen by the user
   content: string; // free-text notes
   createdAt?: string;
   updatedAt?: string;
@@ -365,6 +366,10 @@ export interface CurriculumLevelDoc {
   title: string; // e.g. "Right Now"
   subtopics: string[];
   emoji: string;
+  // A custom color override for this level's card/badge — null (the
+  // default) means "use the stage's auto-cycled color", same as every
+  // level did before this field existed.
+  color: string | null;
 }
 
 /** Firestore `groups` document shape — a teaching group's current place in the curriculum. Moved by dragging its pill onto a level/subtopic on the Curriculum Board, which just PATCHes currentLevel/currentTopic. */
@@ -439,5 +444,113 @@ export interface WeeklyPlanTagDoc {
   id: string;
   name: string;
   color: string;
+}
+
+// ---------------------------------------------------------------------------
+// Games — interactive classroom activities. One `GameDoc` per game, in the
+// `games` Firestore collection. Only the field matching `type` is populated;
+// a flat optional field per type (rather than a generic `data: unknown` or a
+// discriminated union) keeps every game's shape simple and directly typed
+// without cast gymnastics, matching the existing flat-optional-field
+// convention (e.g. ScheduledMetaPost.publishedIds).
+// ---------------------------------------------------------------------------
+
+export type GameType =
+  | "memory-cards"
+  | "fill-in-the-gaps"
+  | "match-word-image"
+  | "hangman"
+  | "sort-categories"
+  | "spelling-bee";
+
+/** One Memory Cards item — duplicated into two face-down cards at play time. */
+export interface MemoryCardsItem {
+  id: string;
+  kind: "text" | "image";
+  value: string; // text to show, or an image URL/path
+}
+export interface MemoryCardsData {
+  items: MemoryCardsItem[];
+}
+
+/** One Fill in the Gaps sentence — `text` contains "___" as the blank marker. */
+export interface FillGapsSentence {
+  id: string;
+  text: string;
+  answer: string;
+}
+export interface FillGapsData {
+  sentences: FillGapsSentence[]; // word bank at play time = shuffled list of every sentence's answer
+}
+
+/** One Match Word ↔ Image pair. */
+export interface MatchPair {
+  id: string;
+  word: string;
+  image: string; // URL/path
+}
+export interface MatchWordImageData {
+  pairs: MatchPair[];
+}
+
+/** One Hangman word, played in list order. */
+export interface HangmanWord {
+  id: string;
+  word: string;
+  hint?: string;
+}
+export interface HangmanData {
+  words: HangmanWord[];
+}
+
+/** One bin a Sort into Categories item can be dragged into. */
+export interface SortCategory {
+  id: string;
+  name: string;
+}
+/** One sortable item — kind mirrors MemoryCardsItem (text or image), plus which category it belongs to. */
+export interface SortItem {
+  id: string;
+  kind: "text" | "image";
+  value: string;
+  categoryId: string;
+}
+export interface SortCategoriesData {
+  categories: SortCategory[];
+  items: SortItem[]; // word bank at play time = every item, shuffled
+}
+
+/**
+ * One Spelling Bee word. `audioUrl` points at `/api/games/{gameId}/audio/{wordId}`
+ * (a signed-URL redirect over Firebase Storage — see that route) once a clip
+ * has been recorded or uploaded; absent until then, in which case the
+ * player just skips the "play sound" step.
+ */
+export interface SpellingWord {
+  id: string;
+  word: string;
+  hint?: string;
+  audioUrl?: string;
+}
+export interface SpellingBeeData {
+  words: SpellingWord[];
+}
+
+/** Firestore `games` document shape. */
+export interface GameDoc {
+  id: string;
+  type: GameType;
+  title: string;
+  description: string;
+  tags: string[];
+  cover: string; // URL/path, same convention as ContentItem.cover
+  memoryCards?: MemoryCardsData;
+  fillGaps?: FillGapsData;
+  matchWordImage?: MatchWordImageData;
+  hangman?: HangmanData;
+  sortCategories?: SortCategoriesData;
+  spellingBee?: SpellingBeeData;
+  createdAt?: string;
+  updatedAt?: string;
 }
 

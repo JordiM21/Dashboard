@@ -1,5 +1,5 @@
 import { FieldValue, Timestamp, type DocumentData, type QueryDocumentSnapshot } from "firebase-admin/firestore";
-import { mkdir, readFile, writeFile } from "fs/promises";
+import { mkdir, readFile, writeFile, unlink, rename } from "fs/promises";
 import path from "path";
 import { getAdminDb } from "./admin";
 import type { WeeklyPlanDoc, WeeklyPlanFolderDoc, WeeklyPlanTagDoc } from "@/lib/types";
@@ -95,15 +95,32 @@ export async function createWeeklyPlan(data: {
   return planFromDoc(doc as QueryDocumentSnapshot<DocumentData>);
 }
 
-/** Patches a plan's `order`, `teacherNotes`, `folderId`, and/or `tagIds` — the sidebar's drag-reorder/drag-to-folder, the Teacher Notes panel's save, and the tag picker, respectively. Never touches groupId/date/topic/excalidrawPath (a plan's identity and its file on disk are fixed at creation). */
+/** Patches a plan's `order`, `teacherNotes`, `folderId`, `tagIds`, and/or its `groupId`/`date`/`topic`/`emojis` (the Edit Lesson modal). Changing group/date/topic moves the on-disk `.excalidraw` file to match its new slug (same convention as createWeeklyPlan) rather than leaving it stranded at the old name. */
 export async function updateWeeklyPlan(
   id: string,
-  updates: { order?: number; teacherNotes?: string; folderId?: string; tagIds?: string[] }
+  updates: { order?: number; teacherNotes?: string; folderId?: string; tagIds?: string[]; groupId?: string; date?: string; topic?: string; emojis?: string[] }
 ): Promise<WeeklyPlanDoc | null> {
   const ref = getAdminDb().collection(WEEKLY_PLANS).doc(id);
   const existing = await ref.get();
   if (!existing.exists) return null;
-  await ref.update({ ...updates, updatedAt: FieldValue.serverTimestamp() });
+  const plan = planFromDoc(existing as QueryDocumentSnapshot<DocumentData>);
+
+  const patch: Record<string, unknown> = { ...updates, updatedAt: FieldValue.serverTimestamp() };
+
+  if (updates.groupId !== undefined || updates.date !== undefined || updates.topic !== undefined) {
+    const groupId = updates.groupId ?? plan.groupId;
+    const date = updates.date ?? plan.date;
+    const topic = updates.topic ?? plan.topic;
+    const newPath = path.posix.join(LESSONS_ROOT, groupId, `${date}-${slugifyTopic(topic)}.excalidraw`);
+    if (newPath !== plan.excalidrawPath) {
+      const newAbsolute = path.join(process.cwd(), newPath);
+      await mkdir(path.dirname(newAbsolute), { recursive: true });
+      await rename(resolveBoardPath(plan), newAbsolute);
+      patch.excalidrawPath = newPath;
+    }
+  }
+
+  await ref.update(patch);
   const doc = await ref.get();
   return planFromDoc(doc as QueryDocumentSnapshot<DocumentData>);
 }
@@ -130,6 +147,22 @@ export async function readWeeklyPlanBoard(plan: WeeklyPlanDoc): Promise<unknown>
 
 export async function writeWeeklyPlanBoard(plan: WeeklyPlanDoc, scene: unknown): Promise<void> {
   await writeFile(resolveBoardPath(plan), JSON.stringify(scene), "utf-8");
+}
+
+/** Deletes a plan's Firestore doc and its on-disk `.excalidraw` file — the sidebar's 🗑️ button. The file delete is best-effort: a doc whose file is already missing (or whose path fails resolveBoardPath's guard) still finishes deleting the doc rather than leaving an orphaned entry the user can't remove. */
+export async function deleteWeeklyPlan(id: string): Promise<boolean> {
+  const ref = getAdminDb().collection(WEEKLY_PLANS).doc(id);
+  const existing = await ref.get();
+  if (!existing.exists) return false;
+  const plan = planFromDoc(existing as QueryDocumentSnapshot<DocumentData>);
+
+  try {
+    await unlink(resolveBoardPath(plan));
+  } catch {
+    // already gone, or the path was invalid — either way, still remove the doc below.
+  }
+  await ref.delete();
+  return true;
 }
 
 // ---------------------------------------------------------------------------

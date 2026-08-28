@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
     field: frontmatter.field ?? "",
     status: frontmatter.status ?? "To Do",
     progress: frontmatter.progress ?? 0,
+    icon: frontmatter.icon ?? "",
     content: content ?? "",
   });
   return NextResponse.json(project, { status: 201 });

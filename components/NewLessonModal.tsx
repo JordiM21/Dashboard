@@ -16,22 +16,25 @@ const EMOJI_CHOICES = ["📚", "🎨", "🎲", "🗣️", "✏️", "🎧", "�
 export default function NewLessonModal({
   groups,
   tags,
+  editPlan,
   onTagCreated,
   onClose,
   onCreated,
 }: {
   groups: GroupDoc[];
   tags: WeeklyPlanTagDoc[];
+  /** When set, the modal edits this existing plan (PATCH) instead of creating a new one (POST) — same form, "Edit Lesson" title/button. */
+  editPlan?: WeeklyPlanDoc;
   onTagCreated: (tag: WeeklyPlanTagDoc) => void;
   onClose: () => void;
   onCreated: (plan: WeeklyPlanDoc) => void;
 }) {
   const { data: levels } = useFirestoreCollection<CurriculumLevelDoc>("curriculum", { orderByField: "levelNumber" });
-  const [groupId, setGroupId] = useState(groups[0]?.id ?? "");
-  const [date, setDate] = useState(localDateIso());
-  const [topic, setTopic] = useState("");
-  const [emojis, setEmojis] = useState<string[]>([]);
-  const [tagIds, setTagIds] = useState<string[]>([]);
+  const [groupId, setGroupId] = useState(editPlan?.groupId ?? groups[0]?.id ?? "");
+  const [date, setDate] = useState(editPlan?.date ?? localDateIso());
+  const [topic, setTopic] = useState(editPlan?.topic ?? "");
+  const [emojis, setEmojis] = useState<string[]>(editPlan?.emojis ?? []);
+  const [tagIds, setTagIds] = useState<string[]>(editPlan?.tagIds ?? []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,23 +58,29 @@ export default function NewLessonModal({
     setSaving(true);
     setError(null);
     try {
-      const res = await authFetch("/api/board/weekly-plans", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ groupId, date, topic: topic.trim(), teacherNotes: "", emojis, tagIds }),
-      });
+      const res = editPlan
+        ? await authFetch(`/api/board/weekly-plans/${editPlan.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ groupId, date, topic: topic.trim(), emojis, tagIds }),
+          })
+        : await authFetch("/api/board/weekly-plans", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ groupId, date, topic: topic.trim(), teacherNotes: "", emojis, tagIds }),
+          });
       const body = await res.json();
       if (!res.ok) throw new Error(body.message ?? `Request failed with ${res.status}`);
       onCreated(body as WeeklyPlanDoc);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't create the lesson.");
+      setError(err instanceof Error ? err.message : `Couldn't ${editPlan ? "save" : "create"} the lesson.`);
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <Modal title="New Lesson" onClose={onClose}>
+    <Modal title={editPlan ? "Edit Lesson" : "New Lesson"} onClose={onClose}>
       {error && (
         <div style={{ color: "var(--danger)", fontSize: 13, marginBottom: 10 }}>{error}</div>
       )}
@@ -157,7 +166,7 @@ export default function NewLessonModal({
           Cancel
         </button>
         <button className="btn btn-primary" onClick={save} disabled={saving || groups.length === 0}>
-          <LoadingLabel loading={saving}>Create Lesson</LoadingLabel>
+          <LoadingLabel loading={saving}>{editPlan ? "Save Changes" : "Create Lesson"}</LoadingLabel>
         </button>
       </div>
     </Modal>

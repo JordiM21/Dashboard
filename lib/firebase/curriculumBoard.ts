@@ -23,35 +23,49 @@ function curriculumFromDoc(doc: QueryDocumentSnapshot<DocumentData>): Curriculum
     title: typeof data.title === "string" ? data.title : "",
     subtopics: Array.isArray(data.subtopics) ? data.subtopics.filter((s: unknown): s is string => typeof s === "string") : [],
     emoji: typeof data.emoji === "string" ? data.emoji : "",
+    color: typeof data.color === "string" ? data.color : null,
   };
 }
 
-/** The 20-level syllabus, straight from the `curriculum` collection — the Curriculum Board's static columns. */
+/** The syllabus, straight from the `curriculum` collection — the Curriculum Board's static columns. */
 export async function listCurriculumLevels(): Promise<CurriculumLevelDoc[]> {
   const snap = await getAdminDb().collection(CURRICULUM).orderBy("levelNumber").get();
   return snap.docs.map((doc) => curriculumFromDoc(doc as QueryDocumentSnapshot<DocumentData>));
 }
 
-/** Appends a new blank level after the highest existing levelNumber — the board's "+ Add New Level" button. */
-export async function createCurriculumLevel(): Promise<CurriculumLevelDoc> {
+/**
+ * Inserts a new blank level at the end of `stageName`'s levels (or at the
+ * very end of the whole syllabus if `stageName` doesn't match any existing
+ * stage — i.e. a brand new stage), cascading every level that comes after
+ * the insertion point up by one number. Doc ids are just `level-N` at
+ * creation time and never renamed afterward — only the `levelNumber` field
+ * is authoritative for ordering, so a level keeps its original doc id for
+ * life even after being renumbered by this or reorderCurriculumLevels.
+ */
+export async function createCurriculumLevel(stageName: string): Promise<CurriculumLevelDoc> {
+  const db = getAdminDb();
   const levels = await listCurriculumLevels();
-  const nextNumber = levels.reduce((max, l) => Math.max(max, l.levelNumber), 0) + 1;
-  const ref = getAdminDb().collection(CURRICULUM).doc(`level-${nextNumber}`);
-  const data = {
-    levelNumber: nextNumber,
-    stageName: levels[levels.length - 1]?.stageName ?? "New Stage",
-    title: "New Level",
-    subtopics: [] as string[],
-    emoji: "⭐",
-  };
-  await ref.set(data);
+
+  const lastInStage = levels.filter((l) => l.stageName === stageName).at(-1);
+  const insertAfterNumber = lastInStage?.levelNumber ?? levels.reduce((max, l) => Math.max(max, l.levelNumber), 0);
+  const newNumber = insertAfterNumber + 1;
+
+  const toShift = levels.filter((l) => l.levelNumber >= newNumber);
+  const batch = db.batch();
+  for (const l of toShift) batch.update(db.collection(CURRICULUM).doc(l.id), { levelNumber: l.levelNumber + 1 });
+
+  const ref = db.collection(CURRICULUM).doc(`level-${Date.now()}`);
+  const data = { levelNumber: newNumber, stageName, title: "New Level", subtopics: [] as string[], emoji: "⭐", color: null as string | null };
+  batch.set(ref, data);
+  await batch.commit();
+
   return { id: ref.id, ...data };
 }
 
-/** Edit-mode updates (title/subtopics) — the board's inline add/rename/delete-topic actions. */
+/** Edit-mode updates (title/subtopics/emoji/color) — the level detail modal. Reordering/restaging goes through reorderCurriculumLevels instead, since a lone levelNumber/stageName write here would break the sequence. */
 export async function updateCurriculumLevel(
   id: string,
-  updates: Partial<Pick<CurriculumLevelDoc, "title" | "subtopics">>
+  updates: Partial<Pick<CurriculumLevelDoc, "title" | "subtopics" | "emoji" | "color">>
 ): Promise<CurriculumLevelDoc | null> {
   const ref = getAdminDb().collection(CURRICULUM).doc(id);
   const existing = await ref.get();
@@ -59,6 +73,51 @@ export async function updateCurriculumLevel(
   await ref.update(updates);
   const doc = await ref.get();
   return curriculumFromDoc(doc as QueryDocumentSnapshot<DocumentData>);
+}
+
+/**
+ * Applies a full drag-reorder in one batch — `order` is every level id in
+ * its new visual sequence, each tagged with the stage it now belongs to
+ * (unchanged for a same-stage reorder, different for a drag across a stage
+ * boundary). Renumbers everything 1..N to match array position, so the
+ * whole syllabus — every stage, not just the one that moved — always comes
+ * back consistent. Returns false if `order` doesn't name exactly the
+ * current set of level ids (guards against a stale drag racing a concurrent
+ * add/delete).
+ */
+export async function reorderCurriculumLevels(order: { id: string; stageName: string }[]): Promise<boolean> {
+  const db = getAdminDb();
+  const levels = await listCurriculumLevels();
+  const knownIds = new Set(levels.map((l) => l.id));
+  if (order.length !== levels.length || !order.every((o) => knownIds.has(o.id))) return false;
+
+  const batch = db.batch();
+  order.forEach((o, i) => {
+    const level = levels.find((l) => l.id === o.id)!;
+    const levelNumber = i + 1;
+    if (level.levelNumber === levelNumber && level.stageName === o.stageName) return; // no-op write avoided
+    batch.update(db.collection(CURRICULUM).doc(o.id), { levelNumber, stageName: o.stageName });
+  });
+  await batch.commit();
+  return true;
+}
+
+/** Deletes a level and closes the number gap it leaves behind — every level after it shifts down by one. */
+export async function deleteCurriculumLevel(id: string): Promise<boolean> {
+  const db = getAdminDb();
+  const levels = await listCurriculumLevels();
+  const target = levels.find((l) => l.id === id);
+  if (!target) return false;
+
+  const batch = db.batch();
+  batch.delete(db.collection(CURRICULUM).doc(id));
+  for (const l of levels) {
+    if (l.id !== id && l.levelNumber > target.levelNumber) {
+      batch.update(db.collection(CURRICULUM).doc(l.id), { levelNumber: l.levelNumber - 1 });
+    }
+  }
+  await batch.commit();
+  return true;
 }
 
 function groupFromDoc(doc: QueryDocumentSnapshot<DocumentData>): GroupDoc {

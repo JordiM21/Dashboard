@@ -21,13 +21,20 @@ const STATUS_COLUMN_CLASS: Record<Status, string> = {
   Done: "kanban-col-done",
 };
 
-const emptyForm: Pick<Project, "title" | "priority" | "field" | "status" | "progress"> = {
+const emptyForm: Pick<Project, "title" | "priority" | "field" | "status" | "progress" | "icon"> = {
   title: "",
   priority: "Medium",
   field: "",
   status: "To Do",
   progress: 0,
+  icon: "",
 };
+
+function progressFromPointer(bar: HTMLDivElement, clientX: number) {
+  const rect = bar.getBoundingClientRect();
+  const ratio = (clientX - rect.left) / rect.width;
+  return Math.max(0, Math.min(100, Math.round(ratio * 100)));
+}
 
 export default function ProjectsPage() {
   const { data, error, loading, lastUpdated } = useFirestoreCollection<Project>("projects", {
@@ -44,6 +51,8 @@ export default function ProjectsPage() {
   const [content, setContent] = useState("");
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<Status | null>(null);
+  const [progressOverride, setProgressOverride] = useState<Record<string, number>>({});
+  const [scrubbingId, setScrubbingId] = useState<string | null>(null);
 
   const fields = useMemo(() => Array.from(new Set(docs.map((d) => d.field))), [docs]);
 
@@ -63,7 +72,14 @@ export default function ProjectsPage() {
 
   function openEdit(doc: Project) {
     setEditingId(doc.id);
-    setForm({ title: doc.title, priority: doc.priority, field: doc.field, status: doc.status, progress: doc.progress });
+    setForm({
+      title: doc.title,
+      priority: doc.priority,
+      field: doc.field,
+      status: doc.status,
+      progress: doc.progress,
+      icon: doc.icon ?? "",
+    });
     setContent(doc.content);
     setModalOpen(true);
   }
@@ -85,14 +101,59 @@ export default function ProjectsPage() {
 
   async function moveToStatus(doc: Project, status: Status) {
     if (doc.status === status) return;
+    const progress = status === "Done" ? 100 : doc.progress;
     await authFetch(`/api/projects/${doc.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        frontmatter: { title: doc.title, priority: doc.priority, field: doc.field, status, progress: doc.progress },
+        frontmatter: { title: doc.title, priority: doc.priority, field: doc.field, icon: doc.icon, status, progress },
         content: doc.content,
       }),
     });
+  }
+
+  async function setProgress(doc: Project, progress: number) {
+    await authFetch(`/api/projects/${doc.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        frontmatter: {
+          title: doc.title,
+          priority: doc.priority,
+          field: doc.field,
+          icon: doc.icon,
+          status: doc.status,
+          progress,
+        },
+        content: doc.content,
+      }),
+    });
+  }
+
+  function startProgressScrub(doc: Project, e: React.MouseEvent<HTMLDivElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    const bar = e.currentTarget;
+    setScrubbingId(doc.id);
+    setProgressOverride((prev) => ({ ...prev, [doc.id]: progressFromPointer(bar, e.clientX) }));
+
+    function onMove(ev: MouseEvent) {
+      setProgressOverride((prev) => ({ ...prev, [doc.id]: progressFromPointer(bar, ev.clientX) }));
+    }
+    function onUp(ev: MouseEvent) {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      setScrubbingId(null);
+      const final = progressFromPointer(bar, ev.clientX);
+      setProgress(doc, final).finally(() => {
+        setProgressOverride((prev) => {
+          const { [doc.id]: _drop, ...rest } = prev;
+          return rest;
+        });
+      });
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
   }
 
   return (
@@ -173,11 +234,29 @@ export default function ProjectsPage() {
                         onDragEnd={() => setDraggingId(null)}
                         onClick={() => openEdit(doc)}
                       >
-                        <div style={{ fontWeight: 600 }}>{doc.title}</div>
-                        <div style={{ fontSize: 12, color: "var(--ink-soft)", marginTop: 4 }}>{doc.field}</div>
-                        <span className={`badge badge-${doc.priority.toLowerCase()}`}>{doc.priority}</span>
-                        <div className="progress-bar">
-                          <div className="progress-bar-fill" style={{ width: `${doc.progress}%` }} />
+                        <div className="kanban-card-title-row">
+                          {doc.icon && <span className="kanban-card-icon">{doc.icon}</span>}
+                          <div className="kanban-card-title">{doc.title}</div>
+                        </div>
+                        <div className="kanban-card-field">{doc.field}</div>
+                        <div className="kanban-card-footer">
+                          <span className={`badge badge-${doc.priority.toLowerCase()}`}>{doc.priority}</span>
+                          <div
+                            className={`progress-bar${scrubbingId === doc.id ? " progress-bar-dragging" : ""}`}
+                            draggable={false}
+                            onMouseDown={(e) => startProgressScrub(doc, e)}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div
+                              className="progress-bar-fill"
+                              style={{ "--pct": (progressOverride[doc.id] ?? doc.progress) / 100 } as React.CSSProperties}
+                            />
+                            <div
+                              className="progress-bar-knob"
+                              style={{ "--pct-100": `${progressOverride[doc.id] ?? doc.progress}%` } as React.CSSProperties}
+                            />
+                          </div>
+                          <div className="progress-bar-label">{progressOverride[doc.id] ?? doc.progress}%</div>
                         </div>
                       </div>
                     ))}
@@ -233,6 +312,16 @@ export default function ProjectsPage() {
           <div className="form-row">
             <label>Title</label>
             <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+          </div>
+          <div className="form-row">
+            <label>Icon (emoji)</label>
+            <input
+              value={form.icon}
+              maxLength={2}
+              placeholder="🚀"
+              style={{ width: 70, textAlign: "center", fontSize: 18 }}
+              onChange={(e) => setForm({ ...form, icon: e.target.value })}
+            />
           </div>
           <div className="form-row">
             <label>Field</label>

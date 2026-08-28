@@ -7,7 +7,9 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import NewLessonModal from "@/components/NewLessonModal";
 import PromptModal from "@/components/PromptModal";
 import FolderEditModal from "@/components/FolderEditModal";
+import ConfirmModal from "@/components/ConfirmModal";
 import TagPicker from "@/components/TagPicker";
+import TagFilterDropdown from "@/components/TagFilterDropdown";
 import ResourcesBrowser from "@/components/ResourcesBrowser";
 import LoadingLabel from "@/components/LoadingLabel";
 import Spinner from "@/components/Spinner";
@@ -98,6 +100,9 @@ export default function TeachingView() {
   // = creating a subfolder under that folder ("+" on its header).
   const [addFolderParent, setAddFolderParent] = useState<string | null | undefined>(undefined);
   const [editingFolder, setEditingFolder] = useState<WeeklyPlanFolderDoc | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<WeeklyPlanDoc | null>(null);
+  const [editTarget, setEditTarget] = useState<WeeklyPlanDoc | null>(null);
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [tags, setTags] = useState<WeeklyPlanTagDoc[]>([]);
   const [tagFilter, setTagFilter] = useState<string>("all");
 
@@ -124,6 +129,22 @@ export default function TeachingView() {
 
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
 
+  // The scene as of the last onChange — kept up to date synchronously from
+  // onChange's own callback arguments, not read lazily from apiRef.current
+  // at save time. This is what fixes content vanishing on navigating away
+  // to a different top-nav tab: performSave() used to call
+  // apiRef.current.getSceneElements()/getAppState()/getFiles() at the
+  // moment of TeachingView's unmount, but those are methods bound to
+  // Excalidraw's own internal component instance — and React unmounts a
+  // subtree bottom-up, so Excalidraw (a child) had already torn itself
+  // down by the time TeachingView's own cleanup ran, making those calls
+  // return stale/blank data instead of throwing. A plain lesson-to-lesson
+  // switch never hit this because nothing there ever unmounts — only
+  // leaving the /teaching route entirely did. Every save now reads from
+  // this ref instead, which is safe to read at any point in the unmount
+  // sequence since it doesn't touch Excalidraw's internals at all.
+  const latestSceneRef = useRef<{ elements: readonly unknown[]; appState: unknown; files: unknown } | null>(null);
+
   // Mirror of state, read from callbacks (autosave debounce, the unmount
   // flush) that must always see the *current* plan/dirty flag rather than
   // whatever was captured in a stale closure when they were first created.
@@ -138,6 +159,35 @@ export default function TeachingView() {
 
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoOpenedRef = useRef(false);
+
+  // Single-flight lock for performSave(). Its save URL and the canvas's
+  // `getSceneElements()` are both read fresh after an `await import(...)`
+  // — if a second performSave() (e.g. flushBeforeSwitch reacting to the
+  // debounced autosave still being mid-flight) started concurrently, both
+  // calls share the one live Excalidraw instance, so the slower call could
+  // end up serializing the *other* plan's already-loaded content and PUTing
+  // it to the URL it captured before any of this happened — the outgoing
+  // plan's file, now overwritten with the incoming plan's board. Routing
+  // every call through this ref means a concurrent caller always awaits the
+  // one save actually in flight instead of racing a second one.
+  const saveInFlightRef = useRef<Promise<void> | null>(null);
+
+  // True only while openWeeklyPlan is programmatically replacing the scene
+  // (resetScene + updateScene) to load a different lesson. Excalidraw's
+  // onChange fires for that exactly like a real user edit — without this
+  // guard, loading a lesson marks the board "dirty" and schedules an
+  // autosave of content nobody actually drew, which is how a lesson switch
+  // could silently overwrite a real board with a blank/mid-transition one.
+  const loadingSceneRef = useRef(false);
+
+  // Bumped at the start of every openWeeklyPlan call; each call captures
+  // its own snapshot and checks it after every await. If a newer switch
+  // started in the meantime (e.g. an impatient double-click on another
+  // lesson while "Loading lesson…" is still showing), the stale call's
+  // fetch result is discarded instead of racing the newer one to apply its
+  // resetScene/updateScene/setCurrentWeeklyPlan — that race was the other
+  // way a wrong (or blank) board could end up saved over a real one.
+  const switchTokenRef = useRef(0);
 
   const loadWeeklyPlans = useCallback(() => {
     setWeeklyError(null);
@@ -210,36 +260,46 @@ export default function TeachingView() {
     return null;
   }
 
-  /** The one place that actually writes back to storage — used by the manual Save button and by the debounced autosave alike. Cancels any pending autosave timer first so the two never race each other. Works for both Firestore-backed lessons and generated weekly boards (which save straight back to the `.excalidraw` file they were loaded from). */
-  const performSave = useCallback(async () => {
-    const url = currentSaveUrl();
-    const api = apiRef.current;
-    if (!url || !api) return;
-    if (autosaveTimerRef.current) {
-      clearTimeout(autosaveTimerRef.current);
-      autosaveTimerRef.current = null;
-    }
+  /** The one place that actually writes back to storage — the debounced autosave, the blur handler, flushBeforeSwitch, and the unmount flush all funnel through here. Cancels any pending autosave timer first so the two never race each other. Unconditional: doesn't check `dirty` itself, so callers are responsible for only invoking this when there's something worth saving (see loadingSceneRef above for why a *programmatic* scene load must never be allowed to look dirty). Single-flight via saveInFlightRef — see that ref's comment. */
+  const performSave = useCallback((): Promise<void> => {
+    if (saveInFlightRef.current) return saveInFlightRef.current;
 
-    setSaving(true);
-    setSaveError(null);
-    try {
-      const { serializeAsJSON } = await import("@excalidraw/excalidraw");
-      const json = serializeAsJSON(api.getSceneElements(), api.getAppState(), api.getFiles(), "local");
-      const res = await authFetch(url, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: json,
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.message ?? `Request failed with ${res.status}`);
+    const run = async () => {
+      const url = currentSaveUrl();
+      const scene = latestSceneRef.current;
+      if (!url || !scene) return;
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
       }
-      setDirty(false);
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Save failed");
-    } finally {
-      setSaving(false);
-    }
+
+      setSaving(true);
+      setSaveError(null);
+      try {
+        const { serializeAsJSON } = await import("@excalidraw/excalidraw");
+        const json = serializeAsJSON(scene.elements as any, scene.appState as any, scene.files as any, "local");
+        const res = await authFetch(url, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: json,
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.message ?? `Request failed with ${res.status}`);
+        }
+        setDirty(false);
+      } catch (err) {
+        setSaveError(err instanceof Error ? err.message : "Save failed");
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    const promise = run().finally(() => {
+      saveInFlightRef.current = null;
+    });
+    saveInFlightRef.current = promise;
+    return promise;
   }, []);
 
   const scheduleAutosave = useCallback(() => {
@@ -274,9 +334,15 @@ export default function TeachingView() {
   }, [performSave]);
 
   // Flush any pending autosave and release the shared AudioContext when
-  // leaving /teaching entirely — otherwise a debounced save could still be
-  // sitting on the timer, and the AudioContext would stay open for the rest
-  // of the SPA session even though nothing on other routes uses it.
+  // leaving /teaching entirely (e.g. clicking a different top-nav tab) —
+  // otherwise a debounced save could still be sitting on the timer, and
+  // the AudioContext would stay open for the rest of the SPA session even
+  // though nothing on other routes uses it. Reads from latestSceneRef, not
+  // apiRef.current.getSceneElements() — see that ref's comment for why
+  // pulling straight from Excalidraw's imperative API is unsafe by the
+  // time this specific cleanup runs (this was the actual cause of a
+  // drawing silently vanishing on navigating away instead of switching
+  // lessons first).
   useEffect(() => {
     return () => {
       if (autosaveTimerRef.current) {
@@ -284,13 +350,15 @@ export default function TeachingView() {
         autosaveTimerRef.current = null;
       }
       const url = currentSaveUrl();
-      const api = apiRef.current;
-      if (dirtyRef.current && url && api) {
+      const scene = latestSceneRef.current;
+      if (dirtyRef.current && url && scene) {
         // Fire-and-forget — the component is unmounting, so no setState
-        // calls here, just get the bytes to the server.
+        // calls here, just get the bytes to the server. Doesn't touch
+        // Excalidraw's API at all, so it's unaffected by whatever order
+        // React tears down this subtree in.
         import("@excalidraw/excalidraw")
           .then(({ serializeAsJSON }) => {
-            const json = serializeAsJSON(api.getSceneElements(), api.getAppState(), api.getFiles(), "local");
+            const json = serializeAsJSON(scene.elements as any, scene.appState as any, scene.files as any, "local");
             return authFetch(url, {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
@@ -305,7 +373,12 @@ export default function TeachingView() {
 
   function handleApiReady(api: ExcalidrawImperativeAPI) {
     apiRef.current = api;
-    api.onChange(() => {
+    api.onChange((elements, appState, files) => {
+      // Cache unconditionally — even during a programmatic load, this is
+      // still the correct "last known good scene," it's just not a
+      // user edit worth marking dirty/autosaving (see loadingSceneRef).
+      latestSceneRef.current = { elements, appState, files };
+      if (loadingSceneRef.current) return;
       setDirty(true);
       scheduleAutosave();
     });
@@ -316,9 +389,20 @@ export default function TeachingView() {
     if (dirtyRef.current) await performSave();
   }
 
-  /** Loads a weekly plan's board off disk — autosave/Save write back to the same on-disk `.excalidraw` file via the weekly-plan board route (see currentSaveUrl). */
+  /**
+   * Loads a weekly plan's board off disk — autosave/Save write back to the
+   * same on-disk `.excalidraw` file via the weekly-plan board route (see
+   * currentSaveUrl). Guarded against overlapping calls (switchTokenRef) and
+   * against its own resetScene/updateScene being mistaken for a user edit
+   * (loadingSceneRef) — see those refs' comments for the data-loss bug this
+   * closes: an impatient double-click while a lesson was still loading
+   * could otherwise autosave a blank/mid-transition canvas over a real one.
+   */
   async function openWeeklyPlan(plan: WeeklyPlanDoc) {
+    const token = ++switchTokenRef.current;
+
     await flushBeforeSwitch();
+    if (token !== switchTokenRef.current) return; // superseded while flushing the outgoing plan
 
     setLoadingLesson(true);
     setLoadError(null);
@@ -326,23 +410,48 @@ export default function TeachingView() {
       const res = await authFetch(`/api/board/weekly-plans/${plan.id}/board`);
       const body = await res.json();
       if (!res.ok) throw new Error(body.message ?? `Request failed with ${res.status}`);
+      if (token !== switchTokenRef.current) return; // superseded while fetching
 
-      const scene = body.scene as { elements?: unknown[]; appState?: Record<string, unknown> };
-      apiRef.current?.resetScene();
-      apiRef.current?.updateScene({
-        elements: (scene.elements ?? []) as any,
-        appState: (scene.appState ?? {}) as any,
-      });
-      apiRef.current?.scrollToContent();
+      // `files` was missing here entirely — serializeAsJSON (see performSave)
+      // has always written a `files` map alongside elements/appState for
+      // any image dropped onto the canvas, but this load path never read
+      // it back or called addFiles(), so an image element loaded with no
+      // backing file data and rendered broken — independent of, and in
+      // addition to, the unmount/navigation bug below.
+      const scene = body.scene as { elements?: unknown[]; appState?: Record<string, unknown>; files?: Record<string, unknown> };
+      loadingSceneRef.current = true;
+      try {
+        apiRef.current?.resetScene();
+        apiRef.current?.updateScene({
+          elements: (scene.elements ?? []) as any,
+          appState: (scene.appState ?? {}) as any,
+        });
+        const files = Object.values(scene.files ?? {});
+        if (files.length) apiRef.current?.addFiles(files as any);
+        apiRef.current?.scrollToContent();
+      } finally {
+        loadingSceneRef.current = false;
+      }
+
+      // Seed latestSceneRef directly from what was just loaded, rather
+      // than waiting for onChange to (maybe) fire from the programmatic
+      // resetScene/updateScene above — that's not guaranteed the way a
+      // real user edit firing onChange is, so relying on it here would
+      // leave latestSceneRef stale until the next real edit. It's still
+      // correct even then (dirty stays false right after a load, so
+      // nothing tries to save this exact snapshot), but there's no reason
+      // to depend on unconfirmed behavior when seeding it directly costs
+      // nothing.
+      latestSceneRef.current = { elements: scene.elements ?? [], appState: scene.appState ?? {}, files: scene.files ?? {} };
 
       setCurrentWeeklyPlan(plan);
       setTeacherNotes(plan.teacherNotes);
       setNotesDirty(false);
       setDirty(false);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : "Failed to load lesson board");
+      if (token === switchTokenRef.current) setLoadError(err instanceof Error ? err.message : "Failed to load lesson board");
     } finally {
-      setLoadingLesson(false);
+      if (token === switchTokenRef.current) setLoadingLesson(false);
     }
   }
 
@@ -353,6 +462,24 @@ export default function TeachingView() {
     setSidebarTab("weekly");
     await openWeeklyPlan(plan);
   }
+
+  /** Edit Lesson modal's onCreated — patches the sidebar entry in place. Only reloads the canvas if the plan being edited is the one currently open (editing a different lesson's metadata shouldn't disturb the board you're looking at). */
+  function onLessonSaved(plan: WeeklyPlanDoc) {
+    setEditTarget(null);
+    setWeeklyPlans((prev) => prev?.map((p) => (p.id === plan.id ? plan : p)) ?? prev);
+    if (currentWeeklyPlanRef.current?.id === plan.id) {
+      setCurrentWeeklyPlan(plan);
+      setTeacherNotes(plan.teacherNotes);
+    }
+  }
+
+  // Closes the sidebar card's "⋯" options menu on any click outside it.
+  useEffect(() => {
+    if (!menuOpenId) return;
+    const handler = () => setMenuOpenId(null);
+    window.addEventListener("click", handler);
+    return () => window.removeEventListener("click", handler);
+  }, [menuOpenId]);
 
   /** Saves the Teacher Notes panel's text back to the current weekly plan's Firestore doc. */
   async function saveNotes() {
@@ -429,6 +556,32 @@ export default function TeachingView() {
     }).catch(() => {});
   }
 
+  /** The sidebar card's delete button, confirmed via ConfirmModal (see deleteTarget) — deletes the plan from Firestore and its on-disk .excalidraw file. If it's the one currently open, clears the canvas so nothing tries to autosave into a file that no longer exists. */
+  async function deleteLesson(plan: WeeklyPlanDoc) {
+    const res = await authFetch(`/api/board/weekly-plans/${plan.id}`, { method: "DELETE" });
+    setDeleteTarget(null);
+    if (!res.ok) {
+      setLoadError("Couldn't delete that lesson.");
+      return;
+    }
+
+    setWeeklyPlans((prev) => prev?.filter((p) => p.id !== plan.id) ?? prev);
+
+    if (currentWeeklyPlanRef.current?.id === plan.id) {
+      loadingSceneRef.current = true;
+      try {
+        apiRef.current?.resetScene();
+      } finally {
+        loadingSceneRef.current = false;
+      }
+      latestSceneRef.current = null;
+      setCurrentWeeklyPlan(null);
+      setTeacherNotes("");
+      setNotesDirty(false);
+      setDirty(false);
+    }
+  }
+
   /** Creates a folder — `parentId` null for a root folder, a folder id for a subfolder ("+" on that folder's header). */
   async function createFolder(name: string) {
     const res = await authFetch("/api/board/weekly-plan-folders", {
@@ -503,7 +656,8 @@ export default function TeachingView() {
         onClick={() => openWeeklyPlan(plan)}
         className="card plan-card"
         style={{
-          padding: "10px 12px",
+          position: "relative",
+          padding: "10px 26px 10px 12px",
           cursor: "grab",
           background: isActive ? "var(--cake)" : "var(--white)",
           borderColor: dropTargetId === plan.id ? "var(--accent)" : isActive ? "var(--accent)" : undefined,
@@ -512,6 +666,76 @@ export default function TeachingView() {
           opacity: dragPlanId === plan.id ? 0.5 : 1,
         }}
       >
+        <button
+          type="button"
+          className="plan-card-delete"
+          title="Lesson options"
+          aria-label={`Options for ${plan.topic}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            setMenuOpenId((cur) => (cur === plan.id ? null : plan.id));
+          }}
+          style={{
+            position: "absolute",
+            top: 6,
+            right: 6,
+            width: 24,
+            height: 24,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "none",
+            border: "none",
+            borderRadius: "50%",
+            cursor: "pointer",
+            color: "var(--ink-soft)",
+            padding: 0,
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="12" cy="5" r="1.8" />
+            <circle cx="12" cy="12" r="1.8" />
+            <circle cx="12" cy="19" r="1.8" />
+          </svg>
+        </button>
+        {menuOpenId === plan.id && (
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: "absolute",
+              top: 30,
+              right: 6,
+              zIndex: 20,
+              background: "var(--white)",
+              border: "1px solid var(--line)",
+              borderRadius: "var(--radius-sm)",
+              boxShadow: "var(--shadow-hover)",
+              overflow: "hidden",
+              minWidth: 100,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setMenuOpenId(null);
+                setEditTarget(plan);
+              }}
+              style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 12px", background: "none", border: "none", cursor: "pointer", fontSize: 12.5 }}
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMenuOpenId(null);
+                setDeleteTarget(plan);
+              }}
+              style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 12px", background: "none", border: "none", cursor: "pointer", fontSize: 12.5, color: "var(--danger)" }}
+            >
+              Delete
+            </button>
+          </div>
+        )}
         <div style={{ fontWeight: 700, fontSize: 14 }}>
           {plan.emojis.join(" ")} {plan.topic}
         </div>
@@ -826,18 +1050,9 @@ export default function TeachingView() {
               </div>
 
               {tags.length > 0 && (
-                <select
-                  value={tagFilter}
-                  onChange={(e) => setTagFilter(e.target.value)}
-                  style={{ marginBottom: 10, fontSize: 12.5, padding: "6px 8px" }}
-                >
-                  <option value="all">Filter by tag: All</option>
-                  {tags.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
+                <div style={{ marginBottom: 10 }}>
+                  <TagFilterDropdown tags={tags} value={tagFilter} onChange={setTagFilter} />
+                </div>
               )}
 
               {weeklyError && <FetchFailedState message={weeklyError} />}
@@ -1110,6 +1325,16 @@ export default function TeachingView() {
           onCreated={onLessonCreated}
         />
       )}
+      {editTarget && (
+        <NewLessonModal
+          groups={groups ?? []}
+          tags={tags}
+          editPlan={editTarget}
+          onTagCreated={(tag) => setTags((prev) => [...prev, tag])}
+          onClose={() => setEditTarget(null)}
+          onCreated={onLessonSaved}
+        />
+      )}
       {addFolderParent !== undefined && (
         <PromptModal
           title={addFolderParent ? "New Subfolder" : "New Folder"}
@@ -1126,6 +1351,14 @@ export default function TeachingView() {
           onClose={() => setEditingFolder(null)}
           onSave={(updates) => saveFolder(editingFolder.id, updates)}
           onDelete={() => deleteFolder(editingFolder.id)}
+        />
+      )}
+      {deleteTarget && (
+        <ConfirmModal
+          title="Delete lesson?"
+          message={`This permanently deletes "${deleteTarget.topic}" and its whiteboard. This can't be undone.`}
+          onConfirm={() => deleteLesson(deleteTarget)}
+          onCancel={() => setDeleteTarget(null)}
         />
       )}
     </main>

@@ -6,15 +6,18 @@ import { useFirestoreCollection } from "@/lib/firebase/useFirestoreCollection";
 import { FetchFailedState, EmptyState } from "@/components/StateBox";
 import PromptModal from "@/components/PromptModal";
 import AddHistoryModal from "@/components/AddHistoryModal";
+import LevelEditModal from "@/components/LevelEditModal";
 import LoadingLabel from "@/components/LoadingLabel";
 import type { CurriculumLevelDoc, GroupDocWithRecall, GroupHistoryEntry } from "@/lib/types";
 
-/** Which prompt-style modal (if any) is currently open — one shared PromptModal instance covers all three, plus AddHistoryModal for backfilling a group's past topics. */
+/** Which prompt-style modal (if any) is currently open — one shared PromptModal instance covers all three, plus AddHistoryModal for backfilling a group's past topics and LevelEditModal for a level's full details. */
 type ActiveModal =
   | { kind: "newGroup" }
+  | { kind: "newStage" }
   | { kind: "addTopic"; level: CurriculumLevelDoc }
   | { kind: "editTopic"; level: CurriculumLevelDoc; topic: string }
-  | { kind: "addHistory"; group: GroupDocWithRecall; entry?: GroupHistoryEntry };
+  | { kind: "addHistory"; group: GroupDocWithRecall; entry?: GroupHistoryEntry }
+  | { kind: "levelEdit"; level: CurriculumLevelDoc };
 
 // Cycled by a group's position in the list — plenty of visual distinction for the
 // handful of groups this school actually runs, without hardcoding names.
@@ -103,7 +106,15 @@ export default function CurriculumBoard() {
   const [historyByGroup, setHistoryByGroup] = useState<Record<string, GroupHistoryEntry[]>>({});
 
   const [editMode, setEditMode] = useState(false);
-  const [addingLevel, setAddingLevel] = useState(false);
+  const [addingLevelToStage, setAddingLevelToStage] = useState<string | null>(null);
+
+  // Drag-reorder state (Edit Syllabus mode only) — dragLevelId is the level
+  // being dragged; dropTarget is either another level's id (drop before it)
+  // or `stage-end:<stageName>` (drop at the end of that stage, from
+  // dragging onto its "+ Add Level" button) — purely for the hover
+  // highlight, the actual move happens in reorderTo() on drop.
+  const [dragLevelId, setDragLevelId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
 
   // The active "paintbrush" — set by clicking a group pill. While set,
   // clicking any subtopic instantly assigns it to this group. Grey mastery
@@ -182,6 +193,11 @@ export default function CurriculumBoard() {
     return STAGE_COLORS[stageIndex % STAGE_COLORS.length];
   }
 
+  /** A level's card color — its own custom override if set, else the stage's auto-cycled color. */
+  function levelColor(lvl: CurriculumLevelDoc, stageIndex: number): string {
+    return lvl.color ?? stageColor(stageIndex);
+  }
+
   function groupsAt(levelNumber: number, topic: string): GroupDocWithRecall[] {
     return (groups ?? []).filter((g) => g.currentLevel === levelNumber && g.currentTopic === topic);
   }
@@ -255,14 +271,73 @@ export default function CurriculumBoard() {
     setActiveModal(null);
   }
 
-  async function addLevel() {
-    setAddingLevel(true);
+  /** Inserts a new blank level at the end of `stageName` — a stage's "+ Add Level" button. Passing a stage name that doesn't exist yet (the "+ Add New Stage" bar) creates that stage, starting with this one level. */
+  async function addLevel(stageName: string) {
+    setAddingLevelToStage(stageName);
     try {
-      const res = await authFetch("/api/board/curriculum", { method: "POST" });
+      const res = await authFetch("/api/board/curriculum", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stageName }),
+      });
       if (!res.ok) window.alert("Couldn't add a new level.");
     } finally {
-      setAddingLevel(false);
+      setAddingLevelToStage(null);
     }
+  }
+
+  async function createStage(name: string) {
+    await addLevel(name);
+    setActiveModal(null);
+  }
+
+  async function saveLevel(level: CurriculumLevelDoc, updates: { title: string; emoji: string; color: string | null; subtopics: string[] }) {
+    const res = await authFetch(`/api/board/curriculum/${level.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    });
+    if (res.ok) setActiveModal(null);
+    else window.alert("Couldn't save that level.");
+  }
+
+  async function deleteLevel(level: CurriculumLevelDoc) {
+    const res = await authFetch(`/api/board/curriculum/${level.id}`, { method: "DELETE" });
+    if (res.ok) setActiveModal(null);
+    else window.alert("Couldn't delete that level.");
+  }
+
+  /**
+   * Reorders the flat level list — removes `draggedId`, reinserts it right
+   * before `insertBeforeId` (or at the end of `targetStageName`'s levels
+   * when `insertBeforeId` is null, e.g. dropped on a stage's "+ Add Level"
+   * button), reassigns its stage to `targetStageName`, then PATCHes the
+   * whole new order in one request. The server renumbers everything to
+   * match array position, so every level — not just the one dragged — ends
+   * up consistent, matching or crossing stage boundaries alike.
+   */
+  async function reorderTo(draggedId: string, targetStageName: string, insertBeforeId: string | null) {
+    const current = levels ?? [];
+    const dragged = current.find((l) => l.id === draggedId);
+    if (!dragged) return;
+
+    const rest = current.filter((l) => l.id !== draggedId);
+    let insertIndex = insertBeforeId ? rest.findIndex((l) => l.id === insertBeforeId) : -1;
+    if (insertIndex === -1) {
+      let lastInStage = -1;
+      rest.forEach((l, i) => {
+        if (l.stageName === targetStageName) lastInStage = i;
+      });
+      insertIndex = lastInStage === -1 ? rest.length : lastInStage + 1;
+    }
+    const reordered = [...rest.slice(0, insertIndex), dragged, ...rest.slice(insertIndex)];
+    const order = reordered.map((l) => ({ id: l.id, stageName: l.id === draggedId ? targetStageName : l.stageName }));
+
+    await authFetch("/api/board/curriculum/reorder", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ order }),
+    }).catch(() => {});
   }
 
   /** Builds a celebratory summary of a group's last 30 days from the cached history and copies it to the clipboard — the "Generate Parent Report" button. */
@@ -393,7 +468,7 @@ export default function CurriculumBoard() {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                     <div style={{ fontWeight: 700, fontSize: 16 }}>{g.name}</div>
                     <span className="tag" style={{ background: groupColor(g.id), color: "#fff", flexShrink: 0 }}>
-                      Level {g.currentLevel}/20
+                      Level {g.currentLevel}/{levels?.length ?? 20}
                     </span>
                   </div>
                   <div style={{ fontWeight: 600, fontSize: 14, marginTop: 10 }}>{level?.title ?? `Level ${g.currentLevel}`}</div>
@@ -481,7 +556,7 @@ export default function CurriculumBoard() {
         <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 4 }}>Curriculum Board</div>
         <div style={{ fontSize: 13, color: "var(--ink-soft)", marginBottom: 14 }}>
           {editMode
-            ? "Edit mode — click a subtopic to rename or delete it, or add new topics/levels below."
+            ? "Edit mode — click a level's header to edit its title/icon/color/topics, drag a card to reorder or move it to another stage, or click a subtopic to rename/delete it."
             : activeGroup
               ? `🖌️ ${(groups ?? []).find((g) => g.id === activeGroup)?.name ?? "This group"}'s brush is active — click any subtopic to assign it.`
               : "The 20-level syllabus, live from Firestore. Pick up a group's brush above, then click a subtopic to assign it."}
@@ -490,11 +565,12 @@ export default function CurriculumBoard() {
 
         {levelsSubError && <FetchFailedState message={levelsSubError} />}
         {!levelsSubError && !levelsLoading && levels && levels.length === 0 && (
-          <EmptyState title="No curriculum levels yet" hint='Click "+ Add New Level" below to get started.' />
+          <EmptyState title="No curriculum levels yet" hint='Turn on "Edit Syllabus" above, then click "+ Add New Stage" below to get started.' />
         )}
 
         {stages.map((stage, stageIndex) => {
           const color = stageColor(stageIndex);
+          const stageDropActive = dragLevelId !== null && dropTarget === `stage-end:${stage.name}`;
           return (
             <div key={stage.name} style={{ marginBottom: 24 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
@@ -504,15 +580,53 @@ export default function CurriculumBoard() {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
                 {stage.levels.map((lvl) => {
                   const hereNoTopic = groupsAt(lvl.levelNumber, "");
+                  const lvlColor = levelColor(lvl, stageIndex);
+                  const isDropTarget = dragLevelId !== null && dragLevelId !== lvl.id && dropTarget === lvl.id;
                   return (
-                    <div key={lvl.id} className="card" style={{ padding: 14, borderColor: color }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div
+                      key={lvl.id}
+                      className="card"
+                      draggable={editMode}
+                      onDragStart={(e) => {
+                        e.dataTransfer.effectAllowed = "move";
+                        setDragLevelId(lvl.id);
+                      }}
+                      onDragEnd={() => {
+                        setDragLevelId(null);
+                        setDropTarget(null);
+                      }}
+                      onDragOver={(e) => {
+                        if (!editMode || !dragLevelId || dragLevelId === lvl.id) return;
+                        e.preventDefault();
+                        setDropTarget(lvl.id);
+                      }}
+                      onDragLeave={() => setDropTarget((cur) => (cur === lvl.id ? null : cur))}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (dragLevelId && dragLevelId !== lvl.id) void reorderTo(dragLevelId, stage.name, lvl.id);
+                        setDragLevelId(null);
+                        setDropTarget(null);
+                      }}
+                      style={{
+                        padding: 14,
+                        borderColor: isDropTarget ? "var(--accent)" : lvlColor,
+                        borderStyle: isDropTarget ? "dashed" : "solid",
+                        borderWidth: isDropTarget ? 2 : 1,
+                        opacity: dragLevelId === lvl.id ? 0.5 : 1,
+                        cursor: editMode ? "grab" : "default",
+                      }}
+                    >
+                      <div
+                        onClick={() => editMode && setActiveModal({ kind: "levelEdit", level: lvl })}
+                        title={editMode ? "Edit this level" : undefined}
+                        style={{ display: "flex", alignItems: "center", gap: 8, cursor: editMode ? "pointer" : "default" }}
+                      >
                         <div
                           style={{
                             width: 30,
                             height: 30,
                             borderRadius: "50%",
-                            background: color,
+                            background: lvlColor,
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
@@ -526,6 +640,7 @@ export default function CurriculumBoard() {
                           <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-soft)" }}>LEVEL {lvl.levelNumber}</div>
                           <div style={{ fontSize: 13, fontWeight: 600 }}>{lvl.title}</div>
                         </div>
+                        {editMode && <span style={{ marginLeft: "auto", color: "var(--ink-soft)", fontSize: 12 }}>✎</span>}
                       </div>
 
                       {hereNoTopic.length > 0 && (
@@ -635,6 +750,34 @@ export default function CurriculumBoard() {
                   );
                 })}
               </div>
+
+              {editMode && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => addLevel(stage.name)}
+                  disabled={addingLevelToStage !== null}
+                  onDragOver={(e) => {
+                    if (!dragLevelId) return;
+                    e.preventDefault();
+                    setDropTarget(`stage-end:${stage.name}`);
+                  }}
+                  onDragLeave={() => setDropTarget((cur) => (cur === `stage-end:${stage.name}` ? null : cur))}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (dragLevelId) void reorderTo(dragLevelId, stage.name, null);
+                    setDragLevelId(null);
+                    setDropTarget(null);
+                  }}
+                  style={{
+                    marginTop: 10,
+                    border: stageDropActive ? "1px dashed var(--accent)" : "1px dashed var(--line)",
+                    background: stageDropActive ? "var(--cake)" : "transparent",
+                  }}
+                >
+                  <LoadingLabel loading={addingLevelToStage === stage.name}>+ Add Level to {stage.name}</LoadingLabel>
+                </button>
+              )}
             </div>
           );
         })}
@@ -643,11 +786,10 @@ export default function CurriculumBoard() {
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={addLevel}
-            disabled={addingLevel}
+            onClick={() => setActiveModal({ kind: "newStage" })}
             style={{ width: "100%", justifyContent: "center", marginTop: 8 }}
           >
-            <LoadingLabel loading={addingLevel}>+ Add New Level</LoadingLabel>
+            + Add New Stage
           </button>
         )}
       </section>
@@ -660,6 +802,24 @@ export default function CurriculumBoard() {
           confirmLabel="Create"
           onCancel={() => setActiveModal(null)}
           onSubmit={createGroup}
+        />
+      )}
+      {activeModal?.kind === "newStage" && (
+        <PromptModal
+          title="New Stage"
+          label="Stage name"
+          placeholder="e.g. Mastery Stage: Expression & Storytelling"
+          confirmLabel="Create"
+          onCancel={() => setActiveModal(null)}
+          onSubmit={createStage}
+        />
+      )}
+      {activeModal?.kind === "levelEdit" && (
+        <LevelEditModal
+          level={activeModal.level}
+          onClose={() => setActiveModal(null)}
+          onSave={(updates) => saveLevel(activeModal.level, updates)}
+          onDelete={() => deleteLevel(activeModal.level)}
         />
       )}
       {activeModal?.kind === "addTopic" && (

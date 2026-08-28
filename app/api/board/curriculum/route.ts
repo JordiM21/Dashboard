@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-/** The Curriculum Board's "+ Add New Level" button — no body, just appends a blank level after the highest levelNumber. */
+/** The Curriculum Board's per-stage "+ Add Level" button (and the "+ Add New Stage" bar, which just passes a stage name that doesn't exist yet) — body is `{ stageName }`. Inserts at the end of that stage, cascading every later level's number up by one. */
 export async function POST(req: NextRequest) {
   try {
     await requireAuth(req);
@@ -36,8 +36,12 @@ export async function POST(req: NextRequest) {
     return unauthorized(err);
   }
 
+  const body = (await req.json().catch(() => null)) as { stageName?: unknown } | null;
+  const stageName = typeof body?.stageName === "string" ? body.stageName.trim() : "";
+  if (!stageName) return NextResponse.json({ error: "invalid_request", message: "stageName is required." }, { status: 400 });
+
   try {
-    const level = await createCurriculumLevel();
+    const level = await createCurriculumLevel(stageName);
     return NextResponse.json(level, { status: 201 });
   } catch (err) {
     return NextResponse.json({ error: "write_failed", message: err instanceof Error ? err.message : "Unknown error" }, { status: 502 });

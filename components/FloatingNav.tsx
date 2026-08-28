@@ -115,13 +115,20 @@ export default function FloatingNav() {
         </div>
         <button
           type="button"
-          className="theme-toggle"
+          className="theme-switch"
+          data-on={theme === "dark"}
           onClick={toggleTheme}
+          role="switch"
+          aria-checked={theme === "dark"}
           aria-label="Toggle dark mode"
           title="Toggle dark mode"
         >
-          {theme === "dark" ? "☀︎" : "☾"}
+          <span className="theme-switch-knob">{theme === "dark" ? "☾" : "☀︎"}</span>
         </button>
+      </div>
+
+      {/* Separate pill so it visually follows the main pill as tabs are added/removed */}
+      <div className="nav-pill nav-pill-desktop nav-signout-pill">
         <button
           type="button"
           className="theme-toggle"
@@ -141,11 +148,14 @@ export default function FloatingNav() {
         </Link>
         <button
           type="button"
-          className="theme-toggle"
+          className="theme-switch"
+          data-on={theme === "dark"}
           onClick={toggleTheme}
+          role="switch"
+          aria-checked={theme === "dark"}
           aria-label="Toggle dark mode"
         >
-          {theme === "dark" ? "☀︎" : "☾"}
+          <span className="theme-switch-knob">{theme === "dark" ? "☾" : "☀︎"}</span>
         </button>
         <button
           type="button"
@@ -200,10 +210,10 @@ function CustomizePanel({
   onToggle: (id: string) => void;
 }) {
   return (
-    <div className="nav-customize-panel">
-      <div className="nav-customize-title">Show on navbar</div>
+    <div className="popover-menu">
+      <div className="popover-menu-title">Show on navbar</div>
       {ALL_NAV_TABS.map((tab) => (
-        <label key={tab.id} className="nav-customize-row">
+        <label key={tab.id} className="popover-menu-row">
           <input
             type="checkbox"
             checked={visibleIds.includes(tab.id)}
