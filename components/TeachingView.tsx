@@ -62,6 +62,20 @@ export default function TeachingView() {
     };
   }, []);
 
+  // Excalidraw is a fiddly finger-touch surface and its board files only
+  // live on the machine currently running `npm run dev` — there's nothing
+  // useful to edit from a phone away from home. Below the same 760px
+  // breakpoint the rest of the app already treats as "mobile" (globals.css),
+  // swap the board out for a note instead of loading it.
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 760px)");
+    setIsMobile(mq.matches);
+    const update = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
   const [loadingLesson, setLoadingLesson] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -1119,7 +1133,30 @@ export default function TeachingView() {
               Loading lesson…
             </div>
           )}
-          <ExcalidrawBoard onApiReady={handleApiReady} zenMode={presenting} />
+          {isMobile ? (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                height: "100%",
+                textAlign: "center",
+                padding: 24,
+                gap: 8,
+                color: "var(--text-muted, #666)",
+              }}
+            >
+              <div style={{ fontSize: 32 }}>🖥️</div>
+              <div style={{ fontWeight: 600 }}>Lesson board is desktop-only</div>
+              <div style={{ maxWidth: 320, fontSize: 14 }}>
+                Open this on your PC at home to view or edit the board — it&apos;s too fiddly on a phone
+                touchscreen.
+              </div>
+            </div>
+          ) : (
+            <ExcalidrawBoard onApiReady={handleApiReady} zenMode={presenting} />
+          )}
 
           {currentWeeklyPlan && (
             <div
@@ -1145,7 +1182,11 @@ export default function TeachingView() {
                 // canvas width instead, even with that child pinned to
                 // width:0. 190px comfortably fits the collapsed "▸ Teacher
                 // Notes" button with no ambiguous auto-sizing involved.
-                width: hudOpen ? 340 : 190,
+                // Capped at "100% - 24px" (12px matches the panel's own
+                // `right` offset, mirrored on the left) so a narrow phone
+                // viewport shrinks the panel instead of letting its fixed
+                // width push past the canvas edge and clip off-screen.
+                width: hudOpen ? "min(340px, calc(100% - 24px))" : "min(190px, calc(100% - 24px))",
                 maxHeight: "70%",
                 display: "flex",
                 flexDirection: "column",

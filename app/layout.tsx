@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "@/app/globals.css";
 import { AuthProvider } from "@/lib/firebase/AuthContext";
 import AppShell from "@/components/AppShell";
@@ -6,7 +6,27 @@ import AppShell from "@/components/AppShell";
 export const metadata: Metadata = {
   title: "My Dashboard",
   description: "Local business dashboard",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "My Dashboard",
+  },
+  icons: {
+    apple: "/icons/icon-192.png",
+  },
 };
+
+export const viewport: Viewport = {
+  themeColor: "#0b1220",
+};
+
+const SW_REGISTER_SCRIPT = `
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function () {});
+  });
+}
+`;
 
 const THEME_INIT_SCRIPT = `
 (function () {
@@ -23,6 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: SW_REGISTER_SCRIPT }} />
       </head>
       <body>
         <AuthProvider>

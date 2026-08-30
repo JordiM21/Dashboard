@@ -2444,3 +2444,16 @@ button {
     margin-left: auto;
   }
 }
+
+/* Apple HIG's 44x44pt minimum hit target — several buttons size themselves
+   to their text/padding alone and land well under that on a touchscreen
+   (e.g. the Teaching view's Mastered/Needs Review pair was ~29px tall).
+   min-height only ever grows a button's existing box, never shrinks or
+   repositions it, so this is safe to apply broadly rather than chasing
+   every undersized button individually. */
+@media (max-width: 760px) {
+  button:not(.theme-toggle):not(.theme-switch),
+  a.btn {
+    min-height: 44px;
+  }
+}
