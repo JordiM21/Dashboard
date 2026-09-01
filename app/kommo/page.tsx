@@ -1,65 +1,141 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import KpiCard from "@/components/KpiCard";
 import ViewToggle from "@/components/ViewToggle";
 import LoadingLabel from "@/components/LoadingLabel";
 import { EmptyState, FetchFailedState } from "@/components/StateBox";
 import { authFetch } from "@/lib/firebase/authFetch";
-import { formatDateDMY } from "@/lib/dateUtils";
+import { addDays, formatDateDMY, formatDayMonth, localDateIso } from "@/lib/dateUtils";
 import type { KommoLeadDetailed, KommoPipeline } from "@/lib/types";
 
-type DatePreset = "all" | "today" | "yesterday" | "thisWeek" | "lastWeek" | "thisMonth";
-type SortKey = "newest" | "value" | "name";
+/**
+ * Kommo — a read-only sales monitor.
+ *
+ * Deliberately not a working surface: no drag-and-drop board, no editing,
+ * no per-lead actions. Kommo itself is where leads get worked; this page
+ * answers "how is the pipeline doing right now" in one screen, so
+ * everything here is either a number, a comparison against the previous
+ * period of the same length, or a short list you read and move on from.
+ */
 
-const DATE_PRESETS: { value: DatePreset; label: string }[] = [
+// Kommo/amoCRM reserve two status ids across every pipeline: 142 is the
+// "won" terminal stage and 143 the "lost" one. Every other status id is a
+// user-defined stage in that pipeline's own order.
+const WON_STATUS_ID = 142;
+const LOST_STATUS_ID = 143;
+
+type PeriodKey = "this-month" | "last-month" | "last-90" | "all";
+
+const PERIOD_OPTIONS: { value: PeriodKey; label: string }[] = [
+  { value: "this-month", label: "This month" },
+  { value: "last-month", label: "Last month" },
+  { value: "last-90", label: "Last 90 days" },
   { value: "all", label: "All time" },
-  { value: "today", label: "Today" },
-  { value: "yesterday", label: "Yesterday" },
-  { value: "thisWeek", label: "This week" },
-  { value: "lastWeek", label: "Last week" },
-  { value: "thisMonth", label: "This month" },
 ];
 
-function startOfDay(d: Date): Date {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
+interface Period {
+  start: string | null; // null = unbounded ("All time")
+  end: string | null;
+  label: string;
 }
 
-function startOfWeek(d: Date): Date {
-  const x = startOfDay(d);
-  const mondayOffset = (x.getDay() + 6) % 7; // 0 = Monday
-  x.setDate(x.getDate() - mondayOffset);
-  return x;
+function periodFor(key: PeriodKey, today = new Date()): Period {
+  switch (key) {
+    case "this-month": {
+      const start = new Date(today.getFullYear(), today.getMonth(), 1);
+      return { start: localDateIso(start), end: localDateIso(today), label: "this month" };
+    }
+    case "last-month": {
+      const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const end = new Date(today.getFullYear(), today.getMonth(), 0);
+      return { start: localDateIso(start), end: localDateIso(end), label: "last month" };
+    }
+    case "last-90":
+      return { start: addDays(localDateIso(today), -89), end: localDateIso(today), label: "the last 90 days" };
+    case "all":
+      return { start: null, end: null, label: "all time" };
+  }
 }
 
-function matchesDatePreset(iso: string, preset: DatePreset): boolean {
-  if (preset === "all") return true;
-  const created = new Date(iso);
-  const now = new Date();
+/** The window of equal length immediately before `period` — what every delta compares against. Null for "All time", which has nothing to compare to. */
+function precedingPeriod(period: Period): Period | null {
+  if (!period.start || !period.end) return null;
+  const lengthDays = Math.round((Date.parse(period.end) - Date.parse(period.start)) / 86400000) + 1;
+  return {
+    start: addDays(period.start, -lengthDays),
+    end: addDays(period.start, -1),
+    label: "previous period",
+  };
+}
 
-  switch (preset) {
-    case "today":
-      return created >= startOfDay(now);
-    case "yesterday": {
-      const yStart = new Date(startOfDay(now));
-      yStart.setDate(yStart.getDate() - 1);
-      return created >= yStart && created < startOfDay(now);
-    }
-    case "thisWeek":
-      return created >= startOfWeek(now);
-    case "lastWeek": {
-      const lastWeekStart = new Date(startOfWeek(now));
-      lastWeekStart.setDate(lastWeekStart.getDate() - 7);
-      return created >= lastWeekStart && created < startOfWeek(now);
-    }
-    case "thisMonth": {
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      return created >= monthStart;
+function inPeriod(lead: KommoLeadDetailed, period: Period): boolean {
+  const day = lead.createdAt.slice(0, 10);
+  if (period.start && day < period.start) return false;
+  if (period.end && day > period.end) return false;
+  return true;
+}
+
+function pctChange(current: number, previous: number): number {
+  if (previous === 0) return current === 0 ? 0 : 100;
+  return ((current - previous) / previous) * 100;
+}
+
+const usd = (n: number) => `$${Math.round(n).toLocaleString()}`;
+
+interface Totals {
+  count: number;
+  won: number;
+  lost: number;
+  wonValue: number;
+  openValue: number;
+}
+
+function totalsFor(leads: KommoLeadDetailed[]): Totals {
+  let won = 0;
+  let lost = 0;
+  let wonValue = 0;
+  let openValue = 0;
+  for (const l of leads) {
+    if (l.statusId === WON_STATUS_ID) {
+      won++;
+      wonValue += l.price;
+    } else if (l.statusId === LOST_STATUS_ID) {
+      lost++;
+    } else {
+      openValue += l.price;
     }
   }
+  return { count: leads.length, won, lost, wonValue, openValue };
+}
+
+/** Leads created per bucket across the period — daily up to ~6 weeks, weekly beyond, so the bar count stays readable at any range. */
+function leadFlow(leads: KommoLeadDetailed[], period: Period): { label: string; leads: number; won: number }[] {
+  const days = leads.map((l) => l.createdAt.slice(0, 10)).sort();
+  const startIso = period.start ?? days[0];
+  const endIso = period.end ?? days[days.length - 1];
+  if (!startIso || !endIso) return [];
+
+  const totalDays = Math.round((Date.parse(endIso) - Date.parse(startIso)) / 86400000) + 1;
+  const bucketDays = totalDays <= 45 ? 1 : totalDays <= 200 ? 7 : 30;
+
+  const out: { label: string; leads: number; won: number }[] = [];
+  for (let offset = 0; offset < totalDays; offset += bucketDays) {
+    const bucketStart = addDays(startIso, offset);
+    const bucketEnd = addDays(startIso, Math.min(offset + bucketDays - 1, totalDays - 1));
+    const inBucket = leads.filter((l) => {
+      const d = l.createdAt.slice(0, 10);
+      return d >= bucketStart && d <= bucketEnd;
+    });
+    out.push({
+      label: formatDayMonth(bucketEnd),
+      leads: inBucket.length,
+      won: inBucket.filter((l) => l.statusId === WON_STATUS_ID).length,
+    });
+  }
+  return out;
 }
 
 export default function KommoPage() {
@@ -68,13 +144,8 @@ export default function KommoPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const [periodKey, setPeriodKey] = useState<PeriodKey>("this-month");
   const [pipelineFilter, setPipelineFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [tagFilter, setTagFilter] = useState("all");
-  const [datePreset, setDatePreset] = useState<DatePreset>("all");
-  const [search, setSearch] = useState("");
-  const [sort, setSort] = useState<SortKey>("newest");
-  const [view, setView] = useState<"grid" | "list">("grid");
 
   function load() {
     setLoading(true);
@@ -95,58 +166,79 @@ export default function KommoPage() {
 
   useEffect(load, []);
 
-  const allTags = useMemo(
-    () => Array.from(new Set((leads ?? []).flatMap((l) => l.tags))).sort(),
-    [leads]
+  const period = useMemo(() => periodFor(periodKey), [periodKey]);
+  const previous = useMemo(() => precedingPeriod(period), [period]);
+
+  const scoped = useMemo(
+    () => (leads ?? []).filter((l) => pipelineFilter === "all" || String(l.pipelineId) === pipelineFilter),
+    [leads, pipelineFilter]
   );
 
-  const statusesForFilter = useMemo(() => {
-    if (pipelineFilter === "all") return pipelines.flatMap((p) => p.statuses);
-    return pipelines.find((p) => String(p.id) === pipelineFilter)?.statuses ?? [];
-  }, [pipelines, pipelineFilter]);
+  const current = useMemo(() => scoped.filter((l) => inPeriod(l, period)), [scoped, period]);
+  const prior = useMemo(() => (previous ? scoped.filter((l) => inPeriod(l, previous)) : []), [scoped, previous]);
 
-  const counts = useMemo(() => {
-    const all = leads ?? [];
-    const inPreset = (preset: DatePreset) => all.filter((l) => matchesDatePreset(l.createdAt, preset)).length;
-    return {
-      today: inPreset("today"),
-      yesterday: inPreset("yesterday"),
-      thisWeek: inPreset("thisWeek"),
-      lastWeek: inPreset("lastWeek"),
-    };
-  }, [leads]);
+  const now = useMemo(() => totalsFor(current), [current]);
+  const before = useMemo(() => totalsFor(prior), [prior]);
 
-  const filtered = useMemo(() => {
-    let list = (leads ?? []).filter((l) => {
-      const matchesPipeline = pipelineFilter === "all" || String(l.pipelineId) === pipelineFilter;
-      const matchesStatus = statusFilter === "all" || String(l.statusId) === statusFilter;
-      const matchesTag = tagFilter === "all" || l.tags.includes(tagFilter);
-      const matchesDate = matchesDatePreset(l.createdAt, datePreset);
-      const matchesSearch = !search || l.name.toLowerCase().includes(search.toLowerCase());
-      return matchesPipeline && matchesStatus && matchesTag && matchesDate && matchesSearch;
-    });
-    list = [...list].sort((a, b) => {
-      if (sort === "value") return b.price - a.price;
-      if (sort === "name") return a.name.localeCompare(b.name);
-      return b.createdAt.localeCompare(a.createdAt);
-    });
-    return list;
-  }, [leads, pipelineFilter, statusFilter, tagFilter, datePreset, search, sort]);
+  const winRate = now.won + now.lost > 0 ? (now.won / (now.won + now.lost)) * 100 : 0;
+  const priorWinRate = before.won + before.lost > 0 ? (before.won / (before.won + before.lost)) * 100 : 0;
+  const avgDeal = now.won > 0 ? now.wonValue / now.won : 0;
 
-  const totalValue = filtered.reduce((sum, l) => sum + l.price, 0);
+  // Open value is a snapshot of the whole pipeline as it stands today, not
+  // a period measurement — a lead created last year that's still open is
+  // money still on the table, so this deliberately ignores the period.
+  const openNow = useMemo(() => totalsFor(scoped).openValue, [scoped]);
 
-  const byStatus = useMemo(() => {
-    const map = new Map<number, KommoLeadDetailed[]>();
-    for (const l of filtered) map.set(l.statusId, [...(map.get(l.statusId) ?? []), l]);
-    return map;
-  }, [filtered]);
+  const flow = useMemo(() => leadFlow(current, period), [current, period]);
+
+  const stages = useMemo(() => {
+    const relevant =
+      pipelineFilter === "all"
+        ? pipelines.flatMap((p) => p.statuses.map((s) => ({ ...s, pipeline: p.name })))
+        : (pipelines.find((p) => String(p.id) === pipelineFilter)?.statuses ?? []).map((s) => ({ ...s, pipeline: "" }));
+
+    // Open leads only: a stage bar is "who is sitting here right now",
+    // which is a live snapshot question, not a period one.
+    const open = scoped.filter((l) => l.statusId !== WON_STATUS_ID && l.statusId !== LOST_STATUS_ID);
+    return relevant
+      .filter((s) => s.id !== WON_STATUS_ID && s.id !== LOST_STATUS_ID)
+      .map((s) => {
+        const here = open.filter((l) => l.statusId === s.id);
+        return { id: s.id, name: s.name, pipeline: s.pipeline, count: here.length, value: here.reduce((sum, l) => sum + l.price, 0) };
+      })
+      .filter((s) => s.count > 0)
+      .sort((a, b) => b.count - a.count);
+  }, [pipelines, pipelineFilter, scoped]);
+
+  const maxStage = stages[0]?.count ?? 1;
+
+  const topTags = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const l of current) for (const t of l.tags) map.set(t, (map.get(t) ?? 0) + 1);
+    return Array.from(map.entries())
+      .map(([tag, count]) => ({ tag, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6);
+  }, [current]);
+
+  const latest = useMemo(
+    () => [...current].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 8),
+    [current]
+  );
+
+  // No comparison window (All time), or nothing on either side of it — a
+  // "▲ 0.0%" against two zeros is noise dressed up as a measurement.
+  // No comparison window (All time), or nothing on either side of it — a
+  // "▲ 0.0%" against two zeros is noise dressed up as a measurement.
+  const delta = (curr: number, prev: number) =>
+    previous && !(curr === 0 && prev === 0) ? { pct: pctChange(curr, prev), label: "vs previous period" } : undefined;
 
   return (
     <main className="page">
       <div className="page-header">
         <div>
-          <div className="page-title">Kommo Pipeline</div>
-          <div className="page-subtitle">Every lead, stage, and tag across your Kommo pipelines</div>
+          <div className="page-title">Kommo</div>
+          <div className="page-subtitle">Sales pipeline health — read-only</div>
         </div>
         <button className="btn btn-secondary" onClick={load} disabled={loading}>
           <LoadingLabel loading={loading}>↻ Refresh</LoadingLabel>
@@ -156,149 +248,158 @@ export default function KommoPage() {
       {error && <FetchFailedState message={error} />}
 
       {!error && (
-        <ErrorBoundary label="the Kommo pipeline">
-          <div className="grid grid-kpis" style={{ marginBottom: 20 }}>
-            <KpiCard label="Today" value={String(counts.today)} />
-            <KpiCard label="Yesterday" value={String(counts.yesterday)} />
-            <KpiCard label="This Week" value={String(counts.thisWeek)} />
-            <KpiCard label="Last Week" value={String(counts.lastWeek)} />
+        <ErrorBoundary label="the Kommo monitor">
+          <div className="control-bar">
+            <ViewToggle value={periodKey} onChange={setPeriodKey} options={PERIOD_OPTIONS} />
+            {pipelines.length > 1 && (
+              <select value={pipelineFilter} onChange={(e) => setPipelineFilter(e.target.value)}>
+                <option value="all">All pipelines</option>
+                {pipelines.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
-          <div className="filter-bar">
-            <input
-              type="text"
-              placeholder="Search by name…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            <select
-              value={pipelineFilter}
-              onChange={(e) => {
-                setPipelineFilter(e.target.value);
-                setStatusFilter("all");
-              }}
-            >
-              <option value="all">All pipelines</option>
-              {pipelines.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="all">All stages</option>
-              {statusesForFilter.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-            <select value={tagFilter} onChange={(e) => setTagFilter(e.target.value)}>
-              <option value="all">All tags</option>
-              {allTags.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-            <select value={datePreset} onChange={(e) => setDatePreset(e.target.value as DatePreset)}>
-              {DATE_PRESETS.map((p) => (
-                <option key={p.value} value={p.value}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-            <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
-              <option value="newest">Sort: Newest</option>
-              <option value="value">Sort: Value</option>
-              <option value="name">Sort: Name</option>
-            </select>
-            <ViewToggle
-              value={view}
-              onChange={setView}
-              options={[
-                { value: "grid", label: "By Stage" },
-                { value: "list", label: "List" },
-              ]}
-            />
+          <div className="grid grid-kpis grid-kpis-3">
+            <KpiCard label="New leads" value={String(now.count)} delta={delta(now.count, before.count)} />
+            <KpiCard label="Won" value={String(now.won)} delta={delta(now.won, before.won)} />
+            <KpiCard label="Win rate" value={`${winRate.toFixed(0)}%`} delta={delta(winRate, priorWinRate)} />
+            <KpiCard label="Won value" value={usd(now.wonValue)} delta={delta(now.wonValue, before.wonValue)} />
+            <KpiCard label="Avg deal" value={usd(avgDeal)} />
+            <KpiCard label="Open pipeline" value={usd(openNow)} />
           </div>
+          <p className="metric-note">
+            New leads, Won, Win rate and Won value cover {period.label}
+            {previous ? ", compared against the equally long window before it" : ""}. Avg deal is won value ÷ won
+            count. Open pipeline is every lead still in play today, whenever it came in.
+          </p>
 
-          {leads && filtered.length === 0 && (
-            <EmptyState title="No leads match" hint="Try clearing filters." />
+          {loading && !leads && <div className="state-box">Loading pipeline…</div>}
+
+          {leads && now.count === 0 && (
+            <EmptyState title={`No leads in ${period.label}`} hint="Pick a wider period to see more." />
           )}
 
-          {filtered.length > 0 && (
-            <div className="page-subtitle" style={{ marginBottom: 14 }}>
-              {filtered.length} lead{filtered.length === 1 ? "" : "s"} · ${totalValue.toLocaleString()} total value
-            </div>
+          {/* A single bucket (a period one day long) or an all-zero series is a
+              chart with nothing to compare — the KPI strip already said it. */}
+          {flow.length > 1 && flow.some((b) => b.leads > 0) && (
+            <>
+              <h2 className="section-title">Lead flow</h2>
+              <div className="card card-pad">
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={flow}>
+                    <CartesianGrid stroke="var(--line)" vertical={false} />
+                    <XAxis dataKey="label" stroke="var(--ink-soft)" fontSize={12} tickLine={false} />
+                    <YAxis stroke="var(--ink-soft)" fontSize={12} allowDecimals={false} width={28} tickLine={false} axisLine={false} />
+                    <Tooltip
+                      cursor={{ fill: "rgba(125,125,125,0.08)" }}
+                      contentStyle={{ borderRadius: 12, border: "1px solid var(--line)", background: "var(--white)", color: "var(--ink)" }}
+                    />
+                    <Bar dataKey="leads" name="New leads" fill="var(--accent)" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="won" name="Won" fill="var(--success)" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </>
           )}
 
-          {view === "grid" && filtered.length > 0 && (
-            <div className="kanban" style={{ gridTemplateColumns: `repeat(${statusesForFilter.length || 1}, minmax(220px, 1fr))` }}>
-              {statusesForFilter.map((status) => (
-                <div key={status.id} className="kanban-col">
-                  <div className="kanban-col-title">
-                    {status.name} <span style={{ color: "var(--ink-soft)", fontWeight: 400 }}>({(byStatus.get(status.id) ?? []).length})</span>
-                  </div>
-                  {(byStatus.get(status.id) ?? []).map((lead) => (
-                    <div key={lead.id} className="kanban-card">
-                      <div style={{ fontWeight: 600 }}>{lead.name}</div>
-                      <div style={{ fontSize: 12, color: "var(--ink-soft)", marginTop: 4 }}>{lead.pipelineName}</div>
-                      <div style={{ fontSize: 13, marginTop: 6, fontWeight: 600 }}>${lead.price.toLocaleString()}</div>
-                      {lead.tags.length > 0 && (
-                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 8 }}>
-                          {lead.tags.map((t) => (
-                            <span key={t} className="tag">
-                              {t}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      <div style={{ fontSize: 11, color: "var(--ink-soft)", marginTop: 8 }}>
-                        {formatDateDMY(lead.createdAt)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {view === "list" && filtered.length > 0 && (
-            <div className="card">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Pipeline</th>
-                    <th>Stage</th>
-                    <th>Tags</th>
-                    <th>Value</th>
-                    <th>Created</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((lead) => (
-                    <tr key={lead.id}>
-                      <td>{lead.name}</td>
-                      <td>{lead.pipelineName}</td>
-                      <td>
-                        <span className="badge badge-info">{lead.statusName}</span>
-                      </td>
-                      <td>
-                        {lead.tags.map((t) => (
-                          <span key={t} className="tag" style={{ marginRight: 4 }}>
-                            {t}
+          <div className="grid grid-cards" style={{ marginTop: 30 }}>
+            <div>
+              <h2 className="section-title">Open leads by stage</h2>
+              <div className="card card-pad">
+                {stages.length === 0 ? (
+                  <EmptyState title="No open leads" />
+                ) : (
+                  <div className="stage-list">
+                    {stages.map((s) => (
+                      <div key={`${s.pipeline}-${s.id}`} className="stage-row">
+                        <div className="stage-row-head">
+                          <span className="stage-row-name">
+                            {s.name}
+                            {s.pipeline && <span className="stage-row-pipeline"> · {s.pipeline}</span>}
                           </span>
-                        ))}
-                      </td>
-                      <td>${lead.price.toLocaleString()}</td>
-                      <td>{formatDateDMY(lead.createdAt)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                          <span className="stage-row-count">
+                            {s.count} <span className="stage-row-value">{usd(s.value)}</span>
+                          </span>
+                        </div>
+                        <div className="stage-row-track">
+                          <div className="stage-row-bar" style={{ width: `${(s.count / maxStage) * 100}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
+
+            <div>
+              <h2 className="section-title">Top tags</h2>
+              <div className="card card-pad">
+                {topTags.length === 0 ? (
+                  <EmptyState title="No tags on these leads" />
+                ) : (
+                  <div className="stage-list">
+                    {topTags.map((t) => (
+                      <div key={t.tag} className="stage-row">
+                        <div className="stage-row-head">
+                          <span className="stage-row-name">{t.tag}</span>
+                          <span className="stage-row-count">{t.count}</span>
+                        </div>
+                        <div className="stage-row-track">
+                          <div
+                            className="stage-row-bar stage-row-bar-soft"
+                            style={{ width: `${(t.count / topTags[0].count) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {latest.length > 0 && (
+            <>
+              <h2 className="section-title">Latest leads</h2>
+              <div className="card">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Stage</th>
+                      <th>Value</th>
+                      <th>Created</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {latest.map((lead) => (
+                      <tr key={lead.id}>
+                        <td>{lead.name}</td>
+                        <td>
+                          <span
+                            className={`badge ${
+                              lead.statusId === WON_STATUS_ID
+                                ? "badge-active"
+                                : lead.statusId === LOST_STATUS_ID
+                                  ? "badge-inactive"
+                                  : "badge-info"
+                            }`}
+                          >
+                            {lead.statusName}
+                          </span>
+                        </td>
+                        <td>{usd(lead.price)}</td>
+                        <td>{formatDateDMY(lead.createdAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </ErrorBoundary>
       )}

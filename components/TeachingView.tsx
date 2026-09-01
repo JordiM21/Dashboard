@@ -16,7 +16,7 @@ import Spinner from "@/components/Spinner";
 import { EmptyState, FetchFailedState } from "@/components/StateBox";
 import { authFetch } from "@/lib/firebase/authFetch";
 import { closeAudioContext } from "@/lib/soundEffects";
-import { localDateIso } from "@/lib/dateUtils";
+import { formatDateDMY, localDateIso } from "@/lib/dateUtils";
 import type { GroupDoc, WeeklyPlanDoc, WeeklyPlanFolderDoc, WeeklyPlanTagDoc } from "@/lib/types";
 
 type Mode = "standard" | "present";
@@ -51,10 +51,19 @@ export default function TeachingView() {
   useEffect(() => {
     const navEl = document.getElementById("floating-nav");
     if (!navEl) return;
-    const update = () => setNavBottom(navEl.getBoundingClientRect().bottom);
+    // On phones the desktop pill is hidden and a fixed bottom tab bar takes
+    // its place — that bar overlays the viewport's last ~64px, so its height
+    // has to come off this view's budget too or the canvas ends up under it.
+    const update = () => {
+      const barEl = document.querySelector<HTMLElement>(".nav-bottom");
+      const barHeight = barEl && getComputedStyle(barEl).display !== "none" ? barEl.getBoundingClientRect().height : 0;
+      setNavBottom(navEl.getBoundingClientRect().bottom + barHeight);
+    };
     update();
     const ro = new ResizeObserver(update);
     ro.observe(navEl);
+    const barEl = document.querySelector<HTMLElement>(".nav-bottom");
+    if (barEl) ro.observe(barEl);
     window.addEventListener("resize", update);
     return () => {
       ro.disconnect();
@@ -763,7 +772,7 @@ export default function TeachingView() {
             ))}
           </div>
         )}
-        <div style={{ fontSize: 11.5, color: "var(--ink-soft)", marginTop: 4 }}>{plan.date}</div>
+        <div style={{ fontSize: 11.5, color: "var(--ink-soft)", marginTop: 4 }}>{formatDateDMY(plan.date)}</div>
       </div>
     );
   }
@@ -946,7 +955,7 @@ export default function TeachingView() {
               <div className="page-title">Teaching</div>
               <div className="page-subtitle">
                 {currentWeeklyPlan
-                  ? `${(groups ?? []).find((g) => g.id === currentWeeklyPlan.groupId)?.name ?? currentWeeklyPlan.groupId} · ${currentWeeklyPlan.topic} · ${currentWeeklyPlan.date}`
+                  ? `${(groups ?? []).find((g) => g.id === currentWeeklyPlan.groupId)?.name ?? currentWeeklyPlan.groupId} · ${currentWeeklyPlan.topic} · ${formatDateDMY(currentWeeklyPlan.date)}`
                   : "Pick a lesson, or start a new whiteboard"}
               </div>
             </div>

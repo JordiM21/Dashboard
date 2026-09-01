@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
+import QuickAdd from "@/components/QuickAdd";
 import { ALL_NAV_TABS, DEFAULT_VISIBLE_TAB_IDS, NAV_STORAGE_KEY } from "@/lib/navConfig";
 
 type Theme = "light" | "dark";
@@ -26,6 +27,11 @@ const TAB_PRELOADERS: Partial<Record<string, () => void>> = {
 function preloadTab(id: string) {
   TAB_PRELOADERS[id]?.();
 }
+
+// How many tabs get their own slot in the mobile bottom bar. Three plus the
+// add button and More fills a phone's width without shrinking labels past
+// legibility; everything else is one tap away behind More.
+const MOBILE_BAR_TABS = 3;
 
 export default function FloatingNav() {
   const pathname = usePathname();
@@ -61,6 +67,12 @@ export default function FloatingNav() {
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
+  // A route change means the sheet did its job — leaving it open over the
+  // page you just navigated to is the classic "why is this still here".
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
   function toggleTheme() {
     const next: Theme = theme === "dark" ? "light" : "dark";
     setTheme(next);
@@ -82,143 +94,139 @@ export default function FloatingNav() {
   }
 
   const visibleTabs = ALL_NAV_TABS.filter((t) => visibleIds.includes(t.id));
+  const isActive = (href: string) => pathname?.startsWith(href) ?? false;
+  const barTabs = visibleTabs.slice(0, MOBILE_BAR_TABS);
+  const sheetTabs = visibleTabs.slice(MOBILE_BAR_TABS);
 
   return (
-    <nav id="floating-nav">
-      {/* Desktop / wide-screen pill */}
-      <div className="nav-pill nav-pill-desktop">
-        {visibleTabs.map((tab) => (
-          <Link
-            key={tab.id}
-            href={tab.href}
-            className={`nav-tab${pathname?.startsWith(tab.href) ? " active" : ""}`}
-            onMouseEnter={() => preloadTab(tab.id)}
-            onFocus={() => preloadTab(tab.id)}
-            onTouchStart={() => preloadTab(tab.id)}
-          >
-            {tab.label}
-          </Link>
-        ))}
-        <div className="nav-customize" ref={customizeRef}>
-          <button
-            type="button"
-            className="theme-toggle"
-            onClick={() => setCustomizeOpen((o) => !o)}
-            aria-label="Customize navigation"
-            title="Customize navigation"
-          >
-            ⚙
-          </button>
-          {customizeOpen && (
-            <CustomizePanel visibleIds={visibleIds} onToggle={toggleTabVisible} />
-          )}
-        </div>
-        <button
-          type="button"
-          className="theme-switch"
-          data-on={theme === "dark"}
-          onClick={toggleTheme}
-          role="switch"
-          aria-checked={theme === "dark"}
-          aria-label="Toggle dark mode"
-          title="Toggle dark mode"
-        >
-          <span className="theme-switch-knob">{theme === "dark" ? "☾" : "☀︎"}</span>
-        </button>
-      </div>
-
-      {/* Separate pill so it visually follows the main pill as tabs are added/removed */}
-      <div className="nav-pill nav-pill-desktop nav-signout-pill">
-        <button
-          type="button"
-          className="theme-toggle"
-          onClick={handleSignOut}
-          aria-label="Sign out"
-          title="Sign out"
-        >
-          ⎋
-        </button>
-      </div>
-
-      {/* Compact pill for narrow screens */}
-      <div className="nav-pill nav-pill-mobile">
-        <Link href="/overview" className="nav-mobile-brand">
-          {ALL_NAV_TABS.find((t) => pathname?.startsWith(t.href))?.icon ?? "🏠"}{" "}
-          {ALL_NAV_TABS.find((t) => pathname?.startsWith(t.href))?.label ?? "Dashboard"}
-        </Link>
-        <button
-          type="button"
-          className="theme-switch"
-          data-on={theme === "dark"}
-          onClick={toggleTheme}
-          role="switch"
-          aria-checked={theme === "dark"}
-          aria-label="Toggle dark mode"
-        >
-          <span className="theme-switch-knob">{theme === "dark" ? "☾" : "☀︎"}</span>
-        </button>
-        <button
-          type="button"
-          className="theme-toggle"
-          onClick={() => setMobileOpen((o) => !o)}
-          aria-label="Open navigation menu"
-        >
-          ☰
-        </button>
-      </div>
-
-      {mobileOpen && (
-        <div className="nav-mobile-sheet">
+    <>
+      <nav id="floating-nav">
+        <div className="nav-pill nav-pill-desktop">
           {visibleTabs.map((tab) => (
             <Link
               key={tab.id}
               href={tab.href}
-              className={`nav-mobile-item${pathname?.startsWith(tab.href) ? " active" : ""}`}
-              onClick={() => setMobileOpen(false)}
-              onTouchStart={() => preloadTab(tab.id)}
+              className={`nav-tab${isActive(tab.href) ? " active" : ""}`}
+              onMouseEnter={() => preloadTab(tab.id)}
+              onFocus={() => preloadTab(tab.id)}
             >
-              <span>{tab.icon}</span> {tab.label}
+              {tab.label}
             </Link>
           ))}
-          <div className="nav-mobile-divider" />
-          <div className="nav-mobile-item nav-mobile-label">Show on navbar</div>
-          {ALL_NAV_TABS.map((tab) => (
-            <label key={tab.id} className="nav-mobile-checkbox">
-              <input
-                type="checkbox"
-                checked={visibleIds.includes(tab.id)}
-                onChange={() => toggleTabVisible(tab.id)}
-              />
-              <span>{tab.icon}</span> {tab.label}
-            </label>
-          ))}
-          <div className="nav-mobile-divider" />
-          <button type="button" className="nav-mobile-item" onClick={handleSignOut} style={{ width: "100%", textAlign: "left" }}>
-            <span>⎋</span> Sign out
+          <QuickAdd variant="pill" />
+          <div className="nav-customize" ref={customizeRef}>
+            <button
+              type="button"
+              className="theme-toggle"
+              onClick={() => setCustomizeOpen((o) => !o)}
+              aria-label="Customize navigation"
+              title="Customize navigation"
+            >
+              ⚙
+            </button>
+            {customizeOpen && <CustomizePanel visibleIds={visibleIds} onToggle={toggleTabVisible} />}
+          </div>
+          <button
+            type="button"
+            className="theme-switch"
+            data-on={theme === "dark"}
+            onClick={toggleTheme}
+            role="switch"
+            aria-checked={theme === "dark"}
+            aria-label="Toggle dark mode"
+            title="Toggle dark mode"
+          >
+            <span className="theme-switch-knob">{theme === "dark" ? "☾" : "☀︎"}</span>
           </button>
         </div>
+
+        {/* Separate pill so it visually follows the main pill as tabs are added/removed */}
+        <div className="nav-pill nav-pill-desktop nav-signout-pill">
+          <button type="button" className="theme-toggle" onClick={handleSignOut} aria-label="Sign out" title="Sign out">
+            ⎋
+          </button>
+        </div>
+      </nav>
+
+      {/* Phones get a real bottom tab bar instead of a hamburger: the three
+          most-used destinations and "add anything" are one thumb-reach tap,
+          which is the whole difference between checking a number and
+          giving up on checking it. */}
+      <nav className="nav-bottom" aria-label="Main">
+        {barTabs.map((tab) => (
+          <Link
+            key={tab.id}
+            href={tab.href}
+            className={`nav-bottom-item${isActive(tab.href) ? " active" : ""}`}
+            onTouchStart={() => preloadTab(tab.id)}
+          >
+            <span className="nav-bottom-icon">{tab.icon}</span>
+            <span className="nav-bottom-label">{tab.label}</span>
+          </Link>
+        ))}
+        <QuickAdd variant="tab" />
+        <button
+          type="button"
+          className={`nav-bottom-item${mobileOpen ? " active" : ""}`}
+          onClick={() => setMobileOpen((o) => !o)}
+          aria-expanded={mobileOpen}
+        >
+          <span className="nav-bottom-icon">☰</span>
+          <span className="nav-bottom-label">More</span>
+        </button>
+      </nav>
+
+      {mobileOpen && (
+        <>
+          <div className="nav-sheet-backdrop" onClick={() => setMobileOpen(false)} />
+          <div className="nav-sheet" role="dialog" aria-label="More">
+            <div className="nav-sheet-grip" />
+            {sheetTabs.length > 0 && (
+              <div className="nav-sheet-grid">
+                {sheetTabs.map((tab) => (
+                  <Link
+                    key={tab.id}
+                    href={tab.href}
+                    className={`nav-sheet-tile${isActive(tab.href) ? " active" : ""}`}
+                    onTouchStart={() => preloadTab(tab.id)}
+                  >
+                    <span className="nav-sheet-tile-icon">{tab.icon}</span>
+                    {tab.label}
+                  </Link>
+                ))}
+              </div>
+            )}
+
+            <div className="nav-sheet-row">
+              <button type="button" className="btn btn-secondary" onClick={toggleTheme} style={{ flex: 1, justifyContent: "center" }}>
+                {theme === "dark" ? "☀︎ Light mode" : "☾ Dark mode"}
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={handleSignOut} style={{ flex: 1, justifyContent: "center" }}>
+                ⎋ Sign out
+              </button>
+            </div>
+
+            <div className="nav-mobile-label">Show on navbar — first {MOBILE_BAR_TABS} become the bottom tabs</div>
+            {ALL_NAV_TABS.map((tab) => (
+              <label key={tab.id} className="nav-mobile-checkbox">
+                <input type="checkbox" checked={visibleIds.includes(tab.id)} onChange={() => toggleTabVisible(tab.id)} />
+                <span>{tab.icon}</span> {tab.label}
+              </label>
+            ))}
+          </div>
+        </>
       )}
-    </nav>
+    </>
   );
 }
 
-function CustomizePanel({
-  visibleIds,
-  onToggle,
-}: {
-  visibleIds: string[];
-  onToggle: (id: string) => void;
-}) {
+function CustomizePanel({ visibleIds, onToggle }: { visibleIds: string[]; onToggle: (id: string) => void }) {
   return (
     <div className="popover-menu">
       <div className="popover-menu-title">Show on navbar</div>
       {ALL_NAV_TABS.map((tab) => (
         <label key={tab.id} className="popover-menu-row">
-          <input
-            type="checkbox"
-            checked={visibleIds.includes(tab.id)}
-            onChange={() => onToggle(tab.id)}
-          />
+          <input type="checkbox" checked={visibleIds.includes(tab.id)} onChange={() => onToggle(tab.id)} />
           <span>{tab.icon}</span> {tab.label}
         </label>
       ))}

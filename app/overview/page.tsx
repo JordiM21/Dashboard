@@ -20,14 +20,13 @@ import {
 import ErrorBoundary from "@/components/ErrorBoundary";
 import LiveBadge from "@/components/LiveBadge";
 import KpiCard from "@/components/KpiCard";
-import ViewToggle from "@/components/ViewToggle";
 import { EmptyState, FetchFailedState } from "@/components/StateBox";
 import { useFirestoreCollection } from "@/lib/firebase/useFirestoreCollection";
 import { authFetch } from "@/lib/firebase/authFetch";
 import { summarizeFinance } from "@/lib/finance";
 import { studentPaymentStatus, PAYMENT_STATUS_LABEL, PAYMENT_STATUS_BADGE_CLASS } from "@/lib/studentStatus";
-import { formatDateDMY } from "@/lib/dateUtils";
-import type { FinanceEntry, Project, ContentItem, Student } from "@/lib/types";
+import { formatDateDMY, formatDayMonth } from "@/lib/dateUtils";
+import type { FinanceEntry, Student } from "@/lib/types";
 import type { StripeDailyRevenue, StripeBalanceOverview } from "@/lib/api/stripe";
 import type { KommoLead } from "@/lib/api/kommo";
 import type { MetaAdsSummary } from "@/lib/api/meta";
@@ -35,7 +34,6 @@ import type { MetaAdsSummary } from "@/lib/api/meta";
 const PALETTE = ["#d98c5f", "#6fae7c", "#e0a83e", "#c06b3d", "#7a6a5e", "#d96060"];
 const RANGE_OPTIONS = [7, 30, 90] as const;
 type RangeOption = (typeof RANGE_OPTIONS)[number];
-const PROJECT_STATUSES: Project["status"][] = ["To Do", "In Progress", "Paused", "Done"];
 
 interface KpiData {
   revenue: StripeDailyRevenue[];
@@ -120,7 +118,7 @@ function cashFlowBuckets(entries: FinanceEntry[], days: number) {
     const label =
       bucketDays === 30
         ? new Date(bucketEndEpoch * 86400000).toLocaleDateString(undefined, { month: "short" })
-        : endIso.slice(5);
+        : formatDayMonth(endIso);
 
     out.push({
       label,
@@ -162,9 +160,6 @@ function studentsByPlanGroup(students: Student[]) {
     .sort((a, b) => b.value - a.value);
 }
 
-type StudentSort = "name" | "tuition" | "nextPayment";
-type ProjectSort = "title" | "priority" | "progress";
-
 export default function OverviewPage() {
   const { data: students, loading: studentsLoading, lastUpdated: studentsUpdated } = useFirestoreCollection<Student>(
     "students",
@@ -172,29 +167,11 @@ export default function OverviewPage() {
   );
   const { data: transactions, loading: financeLoading, lastUpdated: financeUpdated } =
     useFirestoreCollection<FinanceEntry>("transactions", { orderByField: "date", orderByDirection: "desc" });
-  const { data: projects, loading: projectsLoading, lastUpdated: projectsUpdated } = useFirestoreCollection<Project>(
-    "projects",
-    { orderByField: "createdAt", orderByDirection: "desc" }
-  );
-  const { data: content } = useFirestoreCollection<ContentItem>("content", {
-    orderByField: "createdAt",
-    orderByDirection: "desc",
-  });
 
   const [kpiData, setKpiData] = useState<KpiData | null>(null);
   const [kpiError, setKpiError] = useState<string | null>(null);
   const [range, setRange] = useState<RangeOption>(30);
   const [stripeBalance, setStripeBalance] = useState<StripeBalanceOverview | null>(null);
-
-  const [studentSearch, setStudentSearch] = useState("");
-  const [studentStatusFilter, setStudentStatusFilter] = useState<"all" | "active" | "inactive">("all");
-  const [studentSort, setStudentSort] = useState<StudentSort>("name");
-  const [studentView, setStudentView] = useState<"grid" | "list">("list");
-
-  const [projectFieldFilter, setProjectFieldFilter] = useState("all");
-  const [projectStatusFilter, setProjectStatusFilter] = useState<"all" | Project["status"]>("all");
-  const [projectSort, setProjectSort] = useState<ProjectSort>("progress");
-  const [projectView, setProjectView] = useState<"grid" | "list">("list");
 
   useEffect(() => {
     fetch("/api/kpis")
@@ -228,7 +205,7 @@ export default function OverviewPage() {
       totalSpend: sum(kpiData.ads.map((a) => a.spend)),
       spendDelta: pctChange(sum(currentAds.map((a) => a.spend)), sum(previousAds.map((a) => a.spend))),
       merged: kpiData.revenue.map((r, i) => ({
-        date: r.date.slice(5),
+        date: formatDayMonth(r.date),
         revenue: r.revenue,
         spend: kpiData.ads[i]?.spend ?? 0,
       })),
@@ -251,12 +228,6 @@ export default function OverviewPage() {
   const enrollmentData = useMemo(() => studentsPerMonth(students ?? [], 6), [students]);
   const planGroupData = useMemo(() => studentsByPlanGroup(students ?? []), [students]);
 
-  const projectStatusCounts = useMemo(() => {
-    const counts = new Map(PROJECT_STATUSES.map((s) => [s, 0]));
-    for (const p of projects ?? []) counts.set(p.status, (counts.get(p.status) ?? 0) + 1);
-    return PROJECT_STATUSES.map((status) => ({ status, count: counts.get(status) ?? 0 }));
-  }, [projects]);
-
   // "Action required" = active students who are Pending or Late on tuition
   // — see lib/studentStatus.ts for how those are derived (due date + a
   // 5-day grace window before "late").
@@ -266,41 +237,8 @@ export default function OverviewPage() {
       .sort((a, b) => (a.nextPayment ?? "").localeCompare(b.nextPayment ?? ""));
   }, [students]);
 
-  const filteredStudents = useMemo(() => {
-    let list = (students ?? []).filter((s) => {
-      const matchesStatus = studentStatusFilter === "all" || s.status === studentStatusFilter;
-      const matchesSearch = !studentSearch || s.name.toLowerCase().includes(studentSearch.toLowerCase());
-      return matchesStatus && matchesSearch;
-    });
-    list = [...list].sort((a, b) => {
-      if (studentSort === "tuition") return (b.tuition ?? 0) - (a.tuition ?? 0);
-      if (studentSort === "nextPayment") return (a.nextPayment ?? "").localeCompare(b.nextPayment ?? "");
-      return a.name.localeCompare(b.name);
-    });
-    return list;
-  }, [students, studentSearch, studentStatusFilter, studentSort]);
-
-  const projectFields = useMemo(() => Array.from(new Set((projects ?? []).map((p) => p.field))), [projects]);
-
-  const filteredProjects = useMemo(() => {
-    let list = (projects ?? []).filter((p) => {
-      const matchesField = projectFieldFilter === "all" || p.field === projectFieldFilter;
-      const matchesStatus = projectStatusFilter === "all" || p.status === projectStatusFilter;
-      return matchesField && matchesStatus;
-    });
-    list = [...list].sort((a, b) => {
-      if (projectSort === "priority") {
-        const order = { Urgent: 0, High: 1, Medium: 2, Low: 3 };
-        return order[a.priority] - order[b.priority];
-      }
-      if (projectSort === "progress") return b.progress - a.progress;
-      return a.title.localeCompare(b.title);
-    });
-    return list;
-  }, [projects, projectFieldFilter, projectStatusFilter, projectSort]);
-
   const financeError = !transactions && !financeLoading ? "Couldn't load Finance data." : null;
-  const lastUpdated = [studentsUpdated, financeUpdated, projectsUpdated]
+  const lastUpdated = [studentsUpdated, financeUpdated]
     .filter((d): d is Date => d !== null)
     .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
 
@@ -313,7 +251,7 @@ export default function OverviewPage() {
         </div>
       </div>
 
-      <LiveBadge lastUpdated={lastUpdated} loading={studentsLoading || financeLoading || projectsLoading} />
+      <LiveBadge lastUpdated={lastUpdated} loading={studentsLoading || financeLoading} />
 
       {financeError && <FetchFailedState message={financeError} />}
 
@@ -343,7 +281,7 @@ export default function OverviewPage() {
               <div className="kpi-label">Last Payout</div>
               <div style={{ fontSize: 15, marginTop: 4 }}>
                 {stripeBalance.lastPayout
-                  ? `$${stripeBalance.lastPayout.amountUsd.toLocaleString()} on ${stripeBalance.lastPayout.date}`
+                  ? `$${stripeBalance.lastPayout.amountUsd.toLocaleString()} on ${formatDateDMY(stripeBalance.lastPayout.date)}`
                   : "No payouts yet"}
               </div>
             </div>
@@ -365,6 +303,49 @@ export default function OverviewPage() {
         )}
       </ErrorBoundary>
 
+      <div className="section-head">
+        <h2 className="section-title">Action Required</h2>
+        <Link href="/students" className="section-link">
+          All students →
+        </Link>
+      </div>
+      {actionRequiredStudents.length === 0 ? (
+        <EmptyState title="Nothing needs attention" hint="Every active student is up to date on payments." />
+      ) : (
+        <div className="card">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Plan</th>
+                <th>Tuition</th>
+                <th>Due Date</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {actionRequiredStudents.map((s) => {
+                const status = studentPaymentStatus(s.nextPayment);
+                return (
+                  <tr key={s.id}>
+                    <td>{s.name}</td>
+                    <td>{s.plan ?? "—"}</td>
+                    <td>{s.tuition !== undefined ? `$${s.tuition.toLocaleString()}` : "—"}</td>
+                    <td>{formatDateDMY(s.nextPayment)}</td>
+                    <td>
+                      <span className={`badge ${PAYMENT_STATUS_BADGE_CLASS[status]}`}>
+                        {PAYMENT_STATUS_LABEL[status]}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+
       <div className="filter-bar">
         <span style={{ fontSize: 13, color: "var(--ink-soft)", fontWeight: 600 }}>Range</span>
         <select value={range} onChange={(e) => setRange(Number(e.target.value) as RangeOption)}>
@@ -380,11 +361,11 @@ export default function OverviewPage() {
       <div className="card card-pad">
         <ResponsiveContainer width="100%" height={260}>
           <BarChart data={cashFlowData}>
-            <CartesianGrid stroke="#e9ddce" vertical={false} />
-            <XAxis dataKey="label" stroke="#7a6a5e" fontSize={12} />
-            <YAxis stroke="#7a6a5e" fontSize={12} />
+            <CartesianGrid stroke="var(--line)" vertical={false} />
+            <XAxis dataKey="label" stroke="var(--ink-soft)" fontSize={12} />
+            <YAxis stroke="var(--ink-soft)" fontSize={12} />
             <Tooltip
-              contentStyle={{ borderRadius: 12, border: "1px solid #e9ddce" }}
+              contentStyle={{ borderRadius: 12, border: "1px solid var(--line)", background: "var(--white)", color: "var(--ink)" }}
               formatter={(value: number, name: string) => [
                 `$${Math.abs(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
                 name === "expenseNeg" ? "Expense" : "Income",
@@ -412,7 +393,7 @@ export default function OverviewPage() {
                   </Pie>
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Tooltip
-                    contentStyle={{ borderRadius: 12, border: "1px solid #e9ddce" }}
+                    contentStyle={{ borderRadius: 12, border: "1px solid var(--line)", background: "var(--white)", color: "var(--ink)" }}
                     formatter={(value: number) => `$${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
                   />
                 </PieChart>
@@ -426,10 +407,10 @@ export default function OverviewPage() {
           <div className="card card-pad">
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={enrollmentData}>
-                <CartesianGrid stroke="#e9ddce" vertical={false} />
-                <XAxis dataKey="month" stroke="#7a6a5e" fontSize={12} />
-                <YAxis stroke="#7a6a5e" fontSize={12} allowDecimals={false} />
-                <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #e9ddce" }} />
+                <CartesianGrid stroke="var(--line)" vertical={false} />
+                <XAxis dataKey="month" stroke="var(--ink-soft)" fontSize={12} />
+                <YAxis stroke="var(--ink-soft)" fontSize={12} allowDecimals={false} />
+                <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid var(--line)", background: "var(--white)", color: "var(--ink)" }} />
                 <Bar dataKey="count" fill="#6fae7c" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -457,7 +438,7 @@ export default function OverviewPage() {
                     ))}
                   </Pie>
                   <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #e9ddce" }} />
+                  <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid var(--line)", background: "var(--white)", color: "var(--ink)" }} />
                 </PieChart>
               </ResponsiveContainer>
             )}
@@ -499,12 +480,12 @@ export default function OverviewPage() {
           <div className="card card-pad">
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={channelWindowed.merged}>
-                <CartesianGrid stroke="#e9ddce" vertical={false} />
-                <XAxis dataKey="date" stroke="#7a6a5e" fontSize={12} />
-                <YAxis stroke="#7a6a5e" fontSize={12} />
-                <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #e9ddce" }} />
+                <CartesianGrid stroke="var(--line)" vertical={false} />
+                <XAxis dataKey="date" stroke="var(--ink-soft)" fontSize={12} />
+                <YAxis stroke="var(--ink-soft)" fontSize={12} />
+                <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid var(--line)", background: "var(--white)", color: "var(--ink)" }} />
                 <Line type="monotone" dataKey="revenue" stroke="#d98c5f" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="spend" stroke="#7a6a5e" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="spend" stroke="var(--ink-soft)" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -517,236 +498,6 @@ export default function OverviewPage() {
         </ErrorBoundary>
       )}
 
-      <h2 className="section-title">Students</h2>
-      <ErrorBoundary label="the Students section">
-        <div className="filter-bar">
-          <input
-            type="text"
-            placeholder="Search by name…"
-            value={studentSearch}
-            onChange={(e) => setStudentSearch(e.target.value)}
-          />
-          <select value={studentStatusFilter} onChange={(e) => setStudentStatusFilter(e.target.value as any)}>
-            <option value="all">All statuses</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </select>
-          <select value={studentSort} onChange={(e) => setStudentSort(e.target.value as StudentSort)}>
-            <option value="name">Sort: Name</option>
-            <option value="tuition">Sort: Tuition</option>
-            <option value="nextPayment">Sort: Next payment</option>
-          </select>
-          <ViewToggle
-            value={studentView}
-            onChange={setStudentView}
-            options={[
-              { value: "list", label: "List" },
-              { value: "grid", label: "Grid" },
-            ]}
-          />
-        </div>
-
-        {students && filteredStudents.length === 0 && (
-          <EmptyState title="No students match" hint="Try clearing filters." />
-        )}
-
-        {studentView === "list" && filteredStudents.length > 0 && (
-          <div className="card">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Plan</th>
-                  <th>Status</th>
-                  <th>Payment</th>
-                  <th>Parent Email</th>
-                  <th>Tuition</th>
-                  <th>Due Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredStudents.map((s) => {
-                  const payStatus = studentPaymentStatus(s.nextPayment);
-                  return (
-                    <tr key={s.id}>
-                      <td>{s.name}</td>
-                      <td>{s.plan ?? "—"}</td>
-                      <td>
-                        <span className={`badge badge-${s.status}`}>{s.status}</span>
-                      </td>
-                      <td>
-                        <span className={`badge ${PAYMENT_STATUS_BADGE_CLASS[payStatus]}`}>
-                          {PAYMENT_STATUS_LABEL[payStatus]}
-                        </span>
-                      </td>
-                      <td style={{ color: "var(--ink-soft)", fontSize: 13 }}>{s.parentEmail ?? "—"}</td>
-                      <td>{s.tuition !== undefined ? `$${s.tuition.toLocaleString()}` : "—"}</td>
-                      <td>{formatDateDMY(s.nextPayment)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {studentView === "grid" && filteredStudents.length > 0 && (
-          <div className="grid grid-cards">
-            {filteredStudents.map((s) => (
-              <div key={s.id} className="card card-pad">
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <div style={{ fontWeight: 700 }}>{s.name}</div>
-                  <span className={`badge badge-${s.status}`}>{s.status}</span>
-                </div>
-                {s.parentEmail && (
-                  <div style={{ fontSize: 13, color: "var(--ink-soft)", marginTop: 6 }}>{s.parentEmail}</div>
-                )}
-                {(s.tuition !== undefined || s.nextPayment) && (
-                  <div style={{ fontSize: 13, marginTop: 8 }}>
-                    {s.tuition !== undefined && `Tuition $${s.tuition}`}
-                    {s.tuition !== undefined && s.nextPayment && " · "}
-                    {s.nextPayment && `Due ${formatDateDMY(s.nextPayment)}`}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </ErrorBoundary>
-
-      <h2 className="section-title">Projects</h2>
-      <ErrorBoundary label="the Projects section">
-        <div className="filter-bar">
-          <select value={projectFieldFilter} onChange={(e) => setProjectFieldFilter(e.target.value)}>
-            <option value="all">All fields</option>
-            {projectFields.map((f) => (
-              <option key={f} value={f}>
-                {f}
-              </option>
-            ))}
-          </select>
-          <select value={projectStatusFilter} onChange={(e) => setProjectStatusFilter(e.target.value as any)}>
-            <option value="all">All statuses</option>
-            {PROJECT_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-          <select value={projectSort} onChange={(e) => setProjectSort(e.target.value as ProjectSort)}>
-            <option value="progress">Sort: Progress</option>
-            <option value="priority">Sort: Priority</option>
-            <option value="title">Sort: Title</option>
-          </select>
-          <ViewToggle
-            value={projectView}
-            onChange={setProjectView}
-            options={[
-              { value: "list", label: "List" },
-              { value: "grid", label: "Grid" },
-            ]}
-          />
-        </div>
-
-        {projects && filteredProjects.length === 0 && (
-          <EmptyState title="No projects match" hint="Try clearing filters." />
-        )}
-
-        {projectView === "list" && filteredProjects.length > 0 && (
-          <div className="card">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Title</th>
-                  <th>Field</th>
-                  <th>Priority</th>
-                  <th>Status</th>
-                  <th>Progress</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredProjects.map((p) => (
-                  <tr key={p.id}>
-                    <td>{p.title}</td>
-                    <td>{p.field}</td>
-                    <td>
-                      <span className={`badge badge-${p.priority.toLowerCase()}`}>{p.priority}</span>
-                    </td>
-                    <td>{p.status}</td>
-                    <td>{p.progress}%</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {projectView === "grid" && filteredProjects.length > 0 && (
-          <div className="grid grid-cards">
-            {filteredProjects.map((p) => (
-              <div key={p.id} className="card card-pad">
-                <div style={{ fontWeight: 600 }}>{p.title}</div>
-                <div style={{ fontSize: 12, color: "var(--ink-soft)", marginTop: 4 }}>{p.field}</div>
-                <span className={`badge badge-${p.priority.toLowerCase()}`}>{p.priority}</span>
-                <div className="progress-bar">
-                  <div className="progress-bar-fill" style={{ width: `${p.progress}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </ErrorBoundary>
-
-      <h2 className="section-title">Projects &amp; Content Status</h2>
-      <div className="grid grid-cards">
-        {projectStatusCounts.map(({ status, count }) => (
-          <div key={status} className="card kpi-card">
-            <div className="kpi-label">{status}</div>
-            <div className="kpi-value">{count}</div>
-          </div>
-        ))}
-        <div className="card kpi-card">
-          <div className="kpi-label">Content Items</div>
-          <div className="kpi-value">{content?.length ?? 0}</div>
-        </div>
-      </div>
-
-      <h2 className="section-title">Action Required</h2>
-      {actionRequiredStudents.length === 0 ? (
-        <EmptyState title="Nothing needs attention" hint="Every active student is up to date on payments." />
-      ) : (
-        <div className="card">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Student</th>
-                <th>Plan</th>
-                <th>Tuition</th>
-                <th>Due Date</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {actionRequiredStudents.map((s) => {
-                const status = studentPaymentStatus(s.nextPayment);
-                return (
-                  <tr key={s.id}>
-                    <td>{s.name}</td>
-                    <td>{s.plan ?? "—"}</td>
-                    <td>{s.tuition !== undefined ? `$${s.tuition.toLocaleString()}` : "—"}</td>
-                    <td>{formatDateDMY(s.nextPayment)}</td>
-                    <td>
-                      <span className={`badge ${PAYMENT_STATUS_BADGE_CLASS[status]}`}>
-                        {PAYMENT_STATUS_LABEL[status]}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
     </main>
   );
 }

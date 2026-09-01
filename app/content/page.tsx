@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -39,6 +39,16 @@ export default function ContentPage() {
         (d.tags ?? []).some((t) => t.toLowerCase().includes(search.toLowerCase()))
     );
   }, [docs, search]);
+
+  // Deep link from the global quick-add (`?new=1`) — opens the create
+  // modal straight from the nav, then drops the param so a refresh or a
+  // back-navigation does not reopen it.
+  useEffect(() => {
+    if (!new URLSearchParams(window.location.search).has("new")) return;
+    openCreate();
+    window.history.replaceState(null, "", window.location.pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function openCreate() {
     setEditingId(null);

@@ -33,3 +33,9 @@ export function addDays(iso: string, n: number): string {
   const target = new Date(y, m - 1, d + n);
   return `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, "0")}-${String(target.getDate()).padStart(2, "0")}`;
 }
+
+/** "YYYY-MM-DD" -> "DD-MM" — compact chart-axis label, day-first like formatDateDMY so ticks never read as month-first. */
+export function formatDayMonth(iso: string): string {
+  const [, m, d] = iso.slice(0, 10).split("-");
+  return m && d ? `${d}-${m}` : iso;
+}

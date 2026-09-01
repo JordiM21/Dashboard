@@ -182,31 +182,6 @@ export interface KommoLeadDetailed {
   updatedAt: string;
 }
 
-/**
- * A Firestore-managed post going out to Facebook and/or Instagram — the
- * unified scheduling layer behind the Meta view's calendar. Deliberately
- * NOT the same thing as Facebook's own native `scheduled_publish_time`:
- * routing every post (Facebook and Instagram alike) through our own
- * Firestore doc + cron/manual trigger keeps both platforms editable and
- * cancelable right up to the moment they go out, since Instagram's Graph
- * API has no native "schedule for later" of its own to lean on.
- */
-export interface ScheduledMetaPost {
-  id: string;
-  platform: "facebook" | "instagram" | "both";
-  caption: string;
-  mediaUrl?: string; // public image URL — required for Instagram, optional for Facebook (text-only posts allowed)
-  linkUrl?: string; // Facebook only — an attached link card
-  scheduledFor: string; // ISO datetime
-  status: "scheduled" | "publishing" | "published" | "failed";
-  // Set once actually posted — {facebook: postId, instagram: mediaId}, only
-  // for the platform(s) that succeeded (a "both" post can partially fail).
-  publishedIds?: { facebook?: string; instagram?: string };
-  errorMessage?: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
 /** One ad campaign with its rolled-up insights for the selected date range — powers the Meta view's Campaigns tab. */
 export interface MetaCampaign {
   id: string;
@@ -244,27 +219,6 @@ export interface MetaPost {
   // engagementRate are always 0 for a "facebook" post, not a real
   // measurement. Only "instagram" posts have this be a real number.
   reachAvailable: boolean;
-}
-
-/** One comment on a Facebook or Instagram post — powers the Meta view's Comments tab. */
-export interface MetaComment {
-  id: string;
-  platform: "facebook" | "instagram";
-  postId: string;
-  postPermalink?: string;
-  message: string;
-  from: string;
-  createdAt: string;
-  likeCount: number;
-  hidden: boolean;
-}
-
-/** One Lead Ads submission — powers the Meta view's Leads tab. */
-export interface MetaLeadgenLead {
-  id: string;
-  formName: string;
-  createdAt: string;
-  fields: { name: string; value: string }[];
 }
 
 /** Account-level snapshot — Page/IG follower counts, used for the Meta view's growth KPI. */
@@ -452,7 +406,7 @@ export interface WeeklyPlanTagDoc {
 // a flat optional field per type (rather than a generic `data: unknown` or a
 // discriminated union) keeps every game's shape simple and directly typed
 // without cast gymnastics, matching the existing flat-optional-field
-// convention (e.g. ScheduledMetaPost.publishedIds).
+// convention (e.g. GameDoc.memoryCards).
 // ---------------------------------------------------------------------------
 
 export type GameType =

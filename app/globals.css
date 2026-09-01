@@ -129,12 +129,21 @@ button {
   justify-content: center;
   gap: 10px;
   margin: 16px auto 0;
+  padding: 0 16px;
   width: 100%;
 }
 
 .nav-pill {
   display: flex;
   align-items: center;
+  justify-content: center;
+  /* With ten tabs plus the add/settings/theme controls, the pill outgrows a
+     laptop viewport somewhere around 1000px — and since it is centred, an
+     overflowing pill loses BOTH ends off-screen behind body's overflow-x
+     clip. Wrapping to a second line keeps every tab reachable at any width
+     down to the mobile breakpoint. */
+  flex-wrap: wrap;
+  max-width: 100%;
   gap: 4px;
   background: var(--nav-bg);
   backdrop-filter: blur(16px) saturate(180%);
@@ -237,12 +246,6 @@ button {
   margin-left: 0;
 }
 
-/* ---------- Nav customization ---------- */
-
-.nav-pill-mobile {
-  display: none;
-}
-
 .nav-customize {
   position: relative;
   display: inline-flex;
@@ -311,97 +314,313 @@ button {
   font-weight: 700;
 }
 
-/* Mobile compact nav: hamburger + slide-down sheet instead of the full pill */
+/* Mobile: the desktop pill is replaced by a bottom tab bar (see .nav-bottom
+   below, which lives outside this media query because it must be hidden on
+   desktop too). */
 
 @media (max-width: 760px) {
   #floating-nav {
-    top: 10px;
-    padding: 0 12px;
-  }
-
-  .nav-pill-desktop {
     display: none;
   }
 
-  .nav-pill-mobile {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    max-width: 480px;
-    gap: 4px;
-  }
+}
 
-  .nav-mobile-brand {
-    font-weight: 700;
-    font-size: 14px;
-    padding: 8px 12px;
-    color: var(--ink);
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
+.nav-bottom {
+  /* Shown by default and hidden on wide screens, not the reverse: the
+     desktop-hiding rule has to come after this one to win the cascade, and
+     a min-width query is the only ordering that guarantees it. */
+  display: flex;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 70;
+  align-items: stretch;
+  justify-content: space-around;
+  gap: 2px;
+  padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+  background: var(--nav-bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-top: 1px solid var(--line);
+}
 
-  .nav-mobile-sheet {
-    position: absolute;
-    top: calc(100% + 8px);
-    left: 12px;
-    right: 12px;
-    background: var(--white);
-    border: 1px solid var(--line);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-hover);
-    padding: 10px;
-    z-index: 60;
-    animation: fadeIn 0.18s ease both;
-    max-height: 70vh;
-    overflow-y: auto;
+@media (min-width: 761px) {
+  .nav-bottom {
+    display: none;
   }
+}
 
-  .nav-mobile-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 11px 12px;
-    border-radius: var(--radius-sm);
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--ink-soft);
-  }
+.nav-bottom-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 52px;
+  padding: 4px 2px;
+  border: none;
+  background: transparent;
+  border-radius: 14px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
 
-  .nav-mobile-item.active {
-    background: var(--accent);
-    color: var(--white);
-  }
+.nav-bottom-item.active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
 
-  .nav-mobile-label {
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--ink-soft);
-    padding-bottom: 2px;
-  }
+.nav-bottom-item:active {
+  transform: scale(0.96);
+}
 
-  .nav-mobile-divider {
-    height: 1px;
-    background: var(--line);
-    margin: 8px 4px;
-  }
+.nav-bottom-icon {
+  font-size: 19px;
+  line-height: 1;
+}
 
-  .nav-mobile-checkbox {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 9px 12px;
-    font-size: 14px;
-    color: var(--ink);
-  }
+.nav-bottom-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
 
-  .nav-mobile-checkbox input {
-    accent-color: var(--accent);
+/* The add button is the one control in the bar that isn't a destination, so
+   it reads as an action: filled accent circle, no label. */
+.nav-bottom-add {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 26px;
+  line-height: 1;
+  font-weight: 300;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(217, 140, 95, 0.4);
+  transition: transform 0.15s ease;
+}
+
+.nav-bottom-add:active {
+  transform: scale(0.92);
+}
+
+.quick-add.quick-add-tab {
+  /* Static so the menu above positions against the fixed .nav-bottom (i.e.
+     the viewport's width) instead of against a 46px button near the right
+     edge, which pushed half of it off-screen. */
+  position: static;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+}
+
+/* ---------- More sheet (mobile) ---------- */
+
+.nav-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 75;
+  background: rgba(0, 0, 0, 0.28);
+  animation: fadeIn 0.18s ease both;
+}
+
+.nav-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 80;
+  max-height: 78vh;
+  overflow-y: auto;
+  background: var(--white);
+  border-radius: 22px 22px 0 0;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.22);
+  padding: 10px 16px calc(24px + 64px + env(safe-area-inset-bottom));
+  animation: sheetUp 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes sheetUp {
+  from {
+    transform: translateY(14%);
+    opacity: 0.6;
   }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.nav-sheet-grip {
+  width: 38px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line);
+  margin: 2px auto 14px;
+}
+
+.nav-sheet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.nav-sheet-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 14px 6px;
+  border-radius: 16px;
+  background: var(--cream);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  text-align: center;
+}
+
+.nav-sheet-tile.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.nav-sheet-tile-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.nav-sheet-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.nav-mobile-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  padding: 0 4px 6px;
+}
+
+.nav-mobile-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 4px;
+  font-size: 14.5px;
+  color: var(--ink);
+}
+
+.nav-mobile-checkbox input {
+  accent-color: var(--accent);
+  width: 18px;
+  height: 18px;
+}
+
+/* ---------- Quick add ---------- */
+
+.quick-add {
+  position: relative;
+  display: inline-flex;
+}
+
+.quick-add-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin-left: 2px;
+  border-radius: 999px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+  font-weight: 300;
+  cursor: pointer;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.quick-add-trigger:hover {
+  background: var(--accent-dark);
+}
+
+.quick-add-trigger:active {
+  transform: scale(0.93);
+}
+
+.quick-add-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  min-width: 236px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-hover);
+  padding: 8px;
+  z-index: 90;
+  animation: fadeIn 0.16s ease both;
+}
+
+/* Bottom-bar variant opens upward — a menu below the bar would be off-screen.
+   Pinned to the viewport rather than centred on the button: the trigger sits
+   near the right edge on a phone, so anchoring to it pushes half the menu
+   off-screen at narrow widths. */
+.quick-add-menu-up {
+  top: auto;
+  bottom: calc(100% + 10px);
+  left: 12px;
+  right: 12px;
+  width: auto;
+}
+
+.quick-add-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background-color 0.13s ease;
+}
+
+.quick-add-item:hover {
+  background: var(--cream);
+}
+
+.quick-add-item-icon {
+  font-size: 19px;
+  line-height: 1;
+}
+
+.quick-add-item-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.quick-add-item-hint {
+  display: block;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  margin-top: 1px;
 }
 
 @media (min-width: 761px) and (max-width: 980px) {
@@ -646,8 +865,21 @@ button {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
+/* A six-card strip auto-fits to 4 + 2 on a laptop, which reads as a full row
+   and a stray remainder. Pinning it to 3 + 3 keeps both rows deliberate and
+   gives each number more room. */
+@media (min-width: 900px) {
+  .grid-kpis-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* auto-FIT, not auto-fill: a two- or three-card row (best posts, the
+   stage/tags pair, Overview's chart trio) would otherwise be laid into a
+   four-track grid and left hugging the left edge with dead space beside
+   it. auto-fit collapses the empty tracks so the real cards stretch. */
 .grid-cards {
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
 /* Uniform-height student cards — grid's default row-stretch only equalizes
@@ -2259,98 +2491,159 @@ button {
   margin-top: 0;
 }
 
-/* ---------- Meta calendar ---------- */
+/* A section heading with a 'go to the full page' link on the same line —
+   Overview shows the exception (who needs chasing), the full list lives on
+   its own page, and this is the one-click bridge between them. */
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
 
-.meta-calendar-nav {
+.section-link {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.section-link:hover {
+  color: var(--accent-dark);
+}
+
+/* ---------- Report surfaces (Kommo / Meta monitors) ----------
+   These two pages are read-only: no filters to configure, nothing to
+   submit. The shared vocabulary is a period control at the top, a KPI
+   strip, then ranked bars and compact tables — so the eye lands on the
+   number first and the explanation second. */
+
+.control-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 14px;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
 }
 
-.meta-calendar-nav-title {
-  font-size: 16px;
-  font-weight: 700;
-}
-
-.meta-calendar-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 8px;
-}
-
-.meta-calendar-weekday {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--ink-soft);
-  text-align: center;
-  padding-bottom: 4px;
-}
-
-.meta-calendar-cell {
-  min-height: 108px;
+.control-bar select {
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 6px;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  background: var(--white);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+/* The "what this number actually means" line under a KPI strip. Deliberately
+   quiet: it should be there when questioned, invisible when scanning. */
+.metric-note {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  margin: 12px 0 0;
+  max-width: 74ch;
+}
+
+.stage-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  gap: 14px;
 }
 
-.meta-calendar-cell:hover {
-  border-color: var(--accent);
+.stage-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
 }
 
-.meta-calendar-cell-outside {
-  opacity: 0.4;
-}
-
-.meta-calendar-cell-today {
-  border-color: var(--accent);
-  background: rgba(217, 140, 95, 0.08);
-}
-
-.meta-calendar-date {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--ink-soft);
-}
-
-.meta-calendar-post {
-  font-size: 11px;
-  padding: 3px 6px;
-  border-radius: 6px;
-  background: var(--cake);
-  color: var(--ink);
+.stage-row-name {
+  font-size: 13.5px;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  text-align: left;
 }
 
-.meta-calendar-post-facebook {
-  border-left: 3px solid #4267b2;
+.stage-row-pipeline {
+  font-weight: 400;
+  color: var(--ink-soft);
 }
 
-.meta-calendar-post-instagram {
-  border-left: 3px solid #c13584;
+.stage-row-count {
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
 }
 
-.meta-calendar-post-failed {
-  border-left: 3px solid var(--danger);
+.stage-row-value {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  margin-left: 6px;
 }
 
-.meta-calendar-post-published {
-  opacity: 0.65;
+.stage-row-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--cake);
+  overflow: hidden;
 }
 
-@media (max-width: 900px) {
-  .meta-calendar-grid {
-    grid-template-columns: repeat(7, minmax(70px, 1fr));
-    overflow-x: auto;
-  }
+.stage-row-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.stage-row-bar-soft {
+  background: var(--ink-soft);
+  opacity: 0.55;
+}
+
+/* Percentage change shown inline beside a value in a table cell, rather
+   than as its own column — keeps the row readable at a glance. */
+.inline-delta {
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.inline-delta.up {
+  color: var(--success);
+}
+
+.inline-delta.down {
+  color: var(--danger);
+}
+
+.post-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+
+.post-metric-value {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.post-metric-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+  margin-top: 1px;
 }
 
 /* Teaching view's Screen Share mode sets Excalidraw's zenModeEnabled to get
@@ -2380,8 +2673,10 @@ button {
    add new narrow-viewport overrides here, not next to the rule they're
    overriding. */
 @media (max-width: 760px) {
+  /* The bottom tab bar floats over the page, so the last row of any list
+     needs its height (plus the home-indicator inset) reserved beneath it. */
   .page {
-    padding: 20px 16px 60px;
+    padding: 20px 16px calc(84px + env(safe-area-inset-bottom));
   }
 
   .page-title {
@@ -2392,10 +2687,51 @@ button {
     grid-template-columns: minmax(240px, 1fr);
   }
 
-  .grid-kpis,
   .grid-cards,
   .grid-content {
     grid-template-columns: 1fr;
+  }
+
+  /* Two-up and tighter: one card per row turned a six-number strip into
+     ~800px of scrolling before the first chart. */
+  .grid-kpis {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .kpi-card {
+    padding: 14px 15px;
+  }
+
+  .kpi-label {
+    font-size: 11px;
+  }
+
+  .kpi-value {
+    font-size: 24px;
+  }
+
+  .kpi-delta {
+    font-size: 11.5px;
+  }
+
+  /* A wrapped segmented control looks like a broken pill and costs ~100px
+     of height. One row that scrolls sideways keeps it reading as a control. */
+  .view-toggle {
+    flex-wrap: nowrap;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .view-toggle::-webkit-scrollbar {
+    display: none;
+  }
+
+  .view-toggle button {
+    flex: 0 0 auto;
+    padding: 7px 10px;
+    font-size: 12.5px;
   }
 
   .game-type-grid,

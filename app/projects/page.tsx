@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import Modal from "@/components/Modal";
 import ViewToggle from "@/components/ViewToggle";
@@ -62,6 +62,16 @@ export default function ProjectsPage() {
   );
 
   const sortedByProgress = useMemo(() => [...filtered].sort((a, b) => b.progress - a.progress), [filtered]);
+
+  // Deep link from the global quick-add (`?new=1`) — opens the create
+  // modal straight from the nav, then drops the param so a refresh or a
+  // back-navigation does not reopen it.
+  useEffect(() => {
+    if (!new URLSearchParams(window.location.search).has("new")) return;
+    openCreate();
+    window.history.replaceState(null, "", window.location.pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function openCreate() {
     setEditingId(null);

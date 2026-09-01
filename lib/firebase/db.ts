@@ -9,7 +9,6 @@ import type {
   ContentItem,
   AgentDoc,
   RecurringTransaction,
-  ScheduledMetaPost,
   MetaAudienceSnapshotRecord,
   GameDoc,
 } from "@/lib/types";
@@ -33,7 +32,6 @@ const GAMES = "games";
 const CONTENT = "content";
 const AGENTS = "agents";
 const RECURRING_TRANSACTIONS = "recurringTransactions";
-const SCHEDULED_META_POSTS = "scheduledMetaPosts";
 const META_AUDIENCE_SNAPSHOTS = "metaAudienceSnapshots";
 
 function tsToIso(value: unknown): string | undefined {
@@ -399,63 +397,6 @@ export async function updateRecurringTransaction(
 
 export async function deleteRecurringTransaction(id: string): Promise<boolean> {
   const ref = getAdminDb().collection(RECURRING_TRANSACTIONS).doc(id);
-  const existing = await ref.get();
-  if (!existing.exists) return false;
-  await ref.delete();
-  return true;
-}
-
-// ---------------------------------------------------------------------------
-// Scheduled Meta posts (Meta view's Calendar tab — see
-// app/api/cron/meta-publish/route.ts for the publish trigger)
-// ---------------------------------------------------------------------------
-
-export async function getScheduledMetaPost(id: string): Promise<ScheduledMetaPost | null> {
-  const doc = await getAdminDb().collection(SCHEDULED_META_POSTS).doc(id).get();
-  if (!doc.exists) return null;
-  return fromDoc<ScheduledMetaPost>(doc as QueryDocumentSnapshot<DocumentData>);
-}
-
-export async function listScheduledMetaPosts(): Promise<ScheduledMetaPost[]> {
-  const snap = await getAdminDb().collection(SCHEDULED_META_POSTS).orderBy("scheduledFor", "asc").get();
-  return snap.docs.map((doc) => fromDoc<ScheduledMetaPost>(doc));
-}
-
-/** Every post still `scheduled` whose time has arrived — used by the publish cron/manual trigger. */
-export async function listDueScheduledMetaPosts(nowIso: string): Promise<ScheduledMetaPost[]> {
-  const snap = await getAdminDb()
-    .collection(SCHEDULED_META_POSTS)
-    .where("status", "==", "scheduled")
-    .where("scheduledFor", "<=", nowIso)
-    .get();
-  return snap.docs.map((doc) => fromDoc<ScheduledMetaPost>(doc));
-}
-
-export async function createScheduledMetaPost(
-  data: Omit<ScheduledMetaPost, "id" | "createdAt" | "updatedAt">
-): Promise<ScheduledMetaPost> {
-  const ref = getAdminDb().collection(SCHEDULED_META_POSTS).doc();
-  await ref.set({ ...data, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
-  const doc = await ref.get();
-  return fromDoc<ScheduledMetaPost>(doc as QueryDocumentSnapshot<DocumentData>);
-}
-
-export async function updateScheduledMetaPost(
-  id: string,
-  updates: Partial<ScheduledMetaPost>
-): Promise<ScheduledMetaPost | null> {
-  const ref = getAdminDb().collection(SCHEDULED_META_POSTS).doc(id);
-  const existing = await ref.get();
-  if (!existing.exists) return null;
-
-  const { id: _ignoredId, createdAt: _ignoredCreatedAt, ...safeUpdates } = updates;
-  await ref.update({ ...safeUpdates, updatedAt: FieldValue.serverTimestamp() });
-  const doc = await ref.get();
-  return fromDoc<ScheduledMetaPost>(doc as QueryDocumentSnapshot<DocumentData>);
-}
-
-export async function deleteScheduledMetaPost(id: string): Promise<boolean> {
-  const ref = getAdminDb().collection(SCHEDULED_META_POSTS).doc(id);
   const existing = await ref.get();
   if (!existing.exists) return false;
   await ref.delete();

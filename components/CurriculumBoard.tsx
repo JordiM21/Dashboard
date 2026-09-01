@@ -8,6 +8,7 @@ import PromptModal from "@/components/PromptModal";
 import AddHistoryModal from "@/components/AddHistoryModal";
 import LevelEditModal from "@/components/LevelEditModal";
 import LoadingLabel from "@/components/LoadingLabel";
+import { formatDateDMY } from "@/lib/dateUtils";
 import type { CurriculumLevelDoc, GroupDocWithRecall, GroupHistoryEntry } from "@/lib/types";
 
 /** Which prompt-style modal (if any) is currently open — one shared PromptModal instance covers all three, plus AddHistoryModal for backfilling a group's past topics and LevelEditModal for a level's full details. */
@@ -506,7 +507,7 @@ export default function CurriculumBoard() {
                         {recent.map((entry) => {
                           const row = (
                             <>
-                              <span style={{ color: "var(--ink-soft)", flexShrink: 0 }}>{entry.date}</span>
+                              <span style={{ color: "var(--ink-soft)", flexShrink: 0 }}>{formatDateDMY(entry.date)}</span>
                               <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                 {entry.topic}
                               </span>

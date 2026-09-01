@@ -22,6 +22,22 @@ export default function Modal({
     setMounted(true);
   }, []);
 
+  // Escape closes, and the page behind stops scrolling while a modal is up —
+  // both are what any native dialog does, and their absence is what made
+  // these feel like web forms rather than sheets.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [onClose]);
+
   if (!mounted) return null;
 
   return createPortal(
