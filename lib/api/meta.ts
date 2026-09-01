@@ -121,7 +121,8 @@ interface MetaCampaignInsightRaw {
 interface MetaAdAccountRaw {
   id: string;
   name?: string;
-  amount_spent?: string; // minor units (cents for a USD account)
+  currency?: string;
+  amount_spent?: string; // minor units of the account's own currency
 }
 
 /**
@@ -151,7 +152,7 @@ export async function fetchMetaCampaigns(
   });
 
   const [accountBody, campaignsBody, insightsBody] = await Promise.all([
-    graphGet<MetaAdAccountRaw>(`/${metaAdAccountId()}`, { fields: "id,name,amount_spent" }),
+    graphGet<MetaAdAccountRaw>(`/${metaAdAccountId()}`, { fields: "id,name,currency,amount_spent" }),
     graphGet<{ data?: MetaCampaignRaw[] }>(`/${metaAdAccountId()}/campaigns`, {
       fields: "id,name,status,objective,daily_budget,lifetime_budget",
       limit: "200",
@@ -167,7 +168,12 @@ export async function fetchMetaCampaigns(
   const account: MetaAdAccountInfo = {
     id: accountBody.id ?? metaAdAccountId(),
     name: accountBody.name ?? "Unknown ad account",
-    amountSpentUsd: Math.round(Number(accountBody.amount_spent ?? 0)) / 100,
+    currency: accountBody.currency ?? "USD",
+    // amount_spent is minor units of the account currency. Both currencies
+    // this has run against (USD, VES) are two-decimal; a zero-decimal
+    // currency like JPY would need its own divisor, which isn't worth
+    // carrying until an account actually uses one.
+    amountSpent: Math.round(Number(accountBody.amount_spent ?? 0)) / 100,
   };
 
   const insightsByCampaign = new Map((insightsBody.data ?? []).map((row) => [row.campaign_id, row]));

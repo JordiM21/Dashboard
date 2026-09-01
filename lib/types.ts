@@ -196,8 +196,14 @@ export interface KommoLeadDetailed {
 export interface MetaAdAccountInfo {
   id: string; // "act_1234567890"
   name: string;
-  /** Lifetime spend on the account, USD. Zero on an account that has never run an ad. */
-  amountSpentUsd: number;
+  /**
+   * The account's own currency (ISO 4217, e.g. "USD", "VES"). Every ad
+   * money figure Meta returns is denominated in this, NOT in dollars —
+   * hardcoding "$" mislabels the numbers on any non-USD account.
+   */
+  currency: string;
+  /** Lifetime spend on the account, in `currency`. Zero on an account that has never run an ad. */
+  amountSpent: number;
 }
 
 export interface MetaCampaign {

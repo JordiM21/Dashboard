@@ -46,6 +46,24 @@ function pctChange(current: number, previous: number): number {
   return ((current - previous) / previous) * 100;
 }
 
+/**
+ * Formats an ad-money figure in the ad account's own currency. Meta reports
+ * spend in whatever the account is denominated in, so a hardcoded "$" turns
+ * a bolívar account's numbers into a plausible-looking lie. Falls back to a
+ * plain amount plus code if the runtime doesn't know the currency.
+ */
+function money(amount: number, currency: string | undefined): string {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: currency ?? "USD",
+      maximumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    return `${amount.toFixed(2)} ${currency ?? ""}`.trim();
+  }
+}
+
 /** { data, loading, error } fetch-on-mount-or-dep-change. */
 function useLazyFetch<T>(path: string, deps: unknown[]): { data: T | null; loading: boolean; error: string | null } {
   const [data, setData] = useState<T | null>(null);
@@ -150,6 +168,8 @@ export default function MetaPage() {
     };
   }, [campaigns.data]);
 
+  const currency = campaigns.data?.account.currency;
+
   const followers = addComparisons(growth.data?.facebook.followers, growth.data?.instagram.followers);
   const posts = addComparisons(growth.data?.facebook.posts, growth.data?.instagram.posts);
   const interactions = addComparisons(growth.data?.facebook.interactions, growth.data?.instagram.interactions);
@@ -176,11 +196,11 @@ export default function MetaPage() {
           <ComparisonKpi label="Followers gained" comparison={followers} />
           <ComparisonKpi label="Posts published" comparison={posts} />
           <ComparisonKpi label="Interactions" comparison={interactions} />
-          <KpiCard label="Ad spend" value={campaigns.loading ? "…" : `$${ads.spend.toFixed(2)}`} />
+          <KpiCard label="Ad spend" value={campaigns.loading ? "…" : money(ads.spend, currency)} />
           <KpiCard label="Ad leads" value={campaigns.loading ? "…" : String(ads.leads)} />
           <KpiCard
             label="Cost per lead"
-            value={campaigns.loading ? "…" : ads.leads > 0 ? `$${ads.costPerLead.toFixed(2)}` : "—"}
+            value={campaigns.loading ? "…" : ads.leads > 0 ? money(ads.costPerLead, currency) : "—"}
           />
         </div>
         <p className="metric-note">
@@ -266,7 +286,7 @@ export default function MetaPage() {
           <EmptyState
             title={`No campaigns on ${campaigns.data.account.name}`}
             hint={
-              campaigns.data.account.amountSpentUsd === 0
+              campaigns.data.account.amountSpent === 0
                 ? "This ad account has never run an ad. If you are running one, it lives on a different ad account — boosts placed from the Instagram app or a personal Facebook profile go to a personal ad account, not the business one. Point META_AD_ACCOUNT_ID at that account, or move the campaign into this one in Ads Manager."
                 : "This ad account has spent before but has no campaigns on it now. Check that the campaign you are looking for wasn't created on a different ad account."
             }
@@ -300,9 +320,9 @@ export default function MetaPage() {
                       <td>
                         <span className={`badge ${c.status === "ACTIVE" ? "badge-active" : "badge-inactive"}`}>{c.status}</span>
                       </td>
-                      <td>${c.spend.toFixed(2)}</td>
+                      <td>{money(c.spend, currency)}</td>
                       <td>{c.leads}</td>
-                      <td>{c.leads > 0 ? `$${(c.spend / c.leads).toFixed(2)}` : "—"}</td>
+                      <td>{c.leads > 0 ? money(c.spend / c.leads, currency) : "—"}</td>
                       <td>{c.ctr}%</td>
                       <td>{c.reach.toLocaleString()}</td>
                     </tr>
