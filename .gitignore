@@ -16,3 +16,6 @@ firebase-debug.*.log
 *firebase-adminsdk*.json
 *service-account*.json
 service-account.json
+
+.vercel
+.env*

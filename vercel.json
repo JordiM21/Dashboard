@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/meta-publish",
-      "schedule": "0 * * * *"
+      "schedule": "0 6 * * *"
     },
     {
       "path": "/api/cron/meta-audience-snapshot",
