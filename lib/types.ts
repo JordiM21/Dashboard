@@ -183,6 +183,23 @@ export interface KommoLeadDetailed {
 }
 
 /** One ad campaign with its rolled-up insights for the selected date range — powers the Meta view's Campaigns tab. */
+/**
+ * Which ad account the campaign numbers actually came from.
+ *
+ * Returned alongside the campaigns so the UI can tell "this account has
+ * never run a campaign" apart from "nothing ran in the selected period" —
+ * the two look identical from an empty array, and conflating them hides a
+ * real misconfiguration (pointing META_AD_ACCOUNT_ID at an account that
+ * isn't the one the ads are actually running on) behind a shrug of a
+ * message about picking a wider date range.
+ */
+export interface MetaAdAccountInfo {
+  id: string; // "act_1234567890"
+  name: string;
+  /** Lifetime spend on the account, USD. Zero on an account that has never run an ad. */
+  amountSpentUsd: number;
+}
+
 export interface MetaCampaign {
   id: string;
   name: string;

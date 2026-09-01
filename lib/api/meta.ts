@@ -14,7 +14,7 @@
  * content and Lead Ads integrations that live alongside this one.
  */
 import { graphGet, metaAdAccountId } from "./metaCore";
-import type { MetaCampaign } from "@/lib/types";
+import type { MetaAdAccountInfo, MetaCampaign } from "@/lib/types";
 
 export interface MetaAdsSummary {
   date: string;
@@ -118,8 +118,30 @@ interface MetaCampaignInsightRaw {
   actions?: { action_type: string; value: string }[];
 }
 
-/** Every campaign on the ad account (any status) with its rolled-up insights for the given date range. No dummy fallback — the Campaigns tab shows a clear "not configured" state instead, same as /kommo. */
-export async function fetchMetaCampaigns(days = 30): Promise<MetaCampaign[]> {
+interface MetaAdAccountRaw {
+  id: string;
+  name?: string;
+  amount_spent?: string; // minor units (cents for a USD account)
+}
+
+/**
+ * Every campaign on the ad account (any status, regardless of date — an
+ * active campaign that hasn't spent yet still has to be visible) with its
+ * rolled-up insights for the given date range, plus which account they came
+ * from.
+ *
+ * The account is returned even when there are no campaigns, deliberately:
+ * Graph answers `/act_X/campaigns` for an account with nothing on it with a
+ * perfectly cheerful `200 {"data":[]}` — the same response it gives when the
+ * ads are simply running somewhere else — so the account's identity and
+ * lifetime spend are the only things that tell those two apart.
+ *
+ * No dummy fallback: the Meta view shows a real "not configured" state
+ * instead, same as /kommo.
+ */
+export async function fetchMetaCampaigns(
+  days = 30
+): Promise<{ account: MetaAdAccountInfo; campaigns: MetaCampaign[] }> {
   const until = new Date();
   const since = new Date(until);
   since.setDate(since.getDate() - (days - 1));
@@ -128,7 +150,8 @@ export async function fetchMetaCampaigns(days = 30): Promise<MetaCampaign[]> {
     until: until.toISOString().slice(0, 10),
   });
 
-  const [campaignsBody, insightsBody] = await Promise.all([
+  const [accountBody, campaignsBody, insightsBody] = await Promise.all([
+    graphGet<MetaAdAccountRaw>(`/${metaAdAccountId()}`, { fields: "id,name,amount_spent" }),
     graphGet<{ data?: MetaCampaignRaw[] }>(`/${metaAdAccountId()}/campaigns`, {
       fields: "id,name,status,objective,daily_budget,lifetime_budget",
       limit: "200",
@@ -141,9 +164,15 @@ export async function fetchMetaCampaigns(days = 30): Promise<MetaCampaign[]> {
     }),
   ]);
 
+  const account: MetaAdAccountInfo = {
+    id: accountBody.id ?? metaAdAccountId(),
+    name: accountBody.name ?? "Unknown ad account",
+    amountSpentUsd: Math.round(Number(accountBody.amount_spent ?? 0)) / 100,
+  };
+
   const insightsByCampaign = new Map((insightsBody.data ?? []).map((row) => [row.campaign_id, row]));
 
-  return (campaignsBody.data ?? []).map((c) => {
+  const campaigns = (campaignsBody.data ?? []).map((c) => {
     const insight = insightsByCampaign.get(c.id);
     return {
       id: c.id,
@@ -161,4 +190,6 @@ export async function fetchMetaCampaigns(days = 30): Promise<MetaCampaign[]> {
       leads: countLeadActions(insight?.actions),
     };
   });
+
+  return { account, campaigns };
 }

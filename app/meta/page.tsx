@@ -7,7 +7,7 @@ import ViewToggle from "@/components/ViewToggle";
 import { EmptyState, FetchFailedState } from "@/components/StateBox";
 import { authFetch } from "@/lib/firebase/authFetch";
 import { formatDateDMY } from "@/lib/dateUtils";
-import type { MetaCampaign, MetaPost, PeriodComparison, PlatformGrowth } from "@/lib/types";
+import type { MetaAdAccountInfo, MetaCampaign, MetaPost, PeriodComparison, PlatformGrowth } from "@/lib/types";
 
 /**
  * Meta — one read-only performance view.
@@ -124,7 +124,10 @@ export default function MetaPage() {
   const [period, setPeriod] = useState<PeriodKey>("this-month");
 
   const growth = useLazyFetch<GrowthResponse>(`/api/meta/growth?period=${period}`, [period]);
-  const campaigns = useLazyFetch<{ campaigns: MetaCampaign[] }>(`/api/meta/campaigns?days=${approxPeriodDays(period)}`, [period]);
+  const campaigns = useLazyFetch<{ account: MetaAdAccountInfo; campaigns: MetaCampaign[] }>(
+    `/api/meta/campaigns?days=${approxPeriodDays(period)}`,
+    [period]
+  );
 
   const ads = useMemo(() => {
     const list = campaigns.data?.campaigns ?? [];
@@ -241,11 +244,33 @@ export default function MetaPage() {
           </>
         )}
 
-        <h2 className="section-title">Ad campaigns</h2>
+        <div className="section-head">
+          <h2 className="section-title">Ad campaigns</h2>
+          {campaigns.data && (
+            <span className="section-meta">
+              {campaigns.data.account.name} · {campaigns.data.account.id}
+            </span>
+          )}
+        </div>
         {campaigns.error && <FetchFailedState message={campaigns.error} />}
         {campaigns.loading && !campaigns.data && <div className="state-box">Loading campaigns…</div>}
+        {/* The campaign list is deliberately NOT filtered by the period — an
+            active campaign that hasn't spent yet still has to be visible — so
+            an empty list means the ad account genuinely has no campaigns on
+            it, not that the window was too narrow. Saying "try a wider
+            period" here would send you looking in the wrong place: the usual
+            cause is that the ads are running on a different ad account (a
+            boost placed from the Instagram app or a personal profile lands
+            in a personal ad account, not the business one). */}
         {campaigns.data && ads.list.length === 0 && (
-          <EmptyState title="No campaigns ran in this period" hint="Pick a wider period to see older campaigns." />
+          <EmptyState
+            title={`No campaigns on ${campaigns.data.account.name}`}
+            hint={
+              campaigns.data.account.amountSpentUsd === 0
+                ? "This ad account has never run an ad. If you are running one, it lives on a different ad account — boosts placed from the Instagram app or a personal Facebook profile go to a personal ad account, not the business one. Point META_AD_ACCOUNT_ID at that account, or move the campaign into this one in Ads Manager."
+                : "This ad account has spent before but has no campaigns on it now. Check that the campaign you are looking for wasn't created on a different ad account."
+            }
+          />
         )}
         {ads.list.length > 0 && (
           <>
