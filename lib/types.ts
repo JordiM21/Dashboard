@@ -380,9 +380,11 @@ export interface GroupHistoryEntry {
 /**
  * Firestore `weeklyPlans` document shape — one manually-created lesson plan,
  * replacing the folder-scanning of /lessons/[group]/week-[date]/ that
- * scripts/generate-week.ts used to produce. `excalidrawPath` still points at
- * a local .excalidraw file (created blank by the "New Lesson" modal) — only
- * the plan's metadata and scheduling move into Firestore.
+ * scripts/generate-week.ts used to produce. `excalidrawPath` is the Firebase
+ * Storage key of the .excalidraw scene (created blank by the "New Lesson"
+ * modal) — only the plan's metadata and scheduling live in Firestore. It kept
+ * its "lessons/..." shape from when scenes were local files, so existing docs
+ * needed no migration; see lib/firebase/weeklyPlans.ts.
  */
 export interface WeeklyPlanDoc {
   id: string;
