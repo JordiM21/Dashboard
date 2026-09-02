@@ -51,7 +51,8 @@ function addOneMonth(iso: string): string {
  * student's parentEmail. No-ops silently if neither matches anyone — most
  * transactions aren't tuition.
  */
-async function applyPaymentToStudent(opts: { studentId: string | null; payerEmail: string | null }): Promise<void> {
+/** Returns true only if a student was actually found and rolled forward — the caller uses that to record the payment as applied exactly once. */
+async function applyPaymentToStudent(opts: { studentId: string | null; payerEmail: string | null }): Promise<boolean> {
   const db = getFirestore();
   let ref;
 
@@ -63,16 +64,17 @@ async function applyPaymentToStudent(opts: { studentId: string | null; payerEmai
       .where("parentEmail", "==", opts.payerEmail.trim().toLowerCase())
       .limit(1)
       .get();
-    if (snap.empty) return;
+    if (snap.empty) return false;
     ref = snap.docs[0].ref;
   } else {
-    return;
+    return false;
   }
 
   const doc = await ref.get();
-  if (!doc.exists) return;
+  if (!doc.exists) return false;
   const nextPayment = addOneMonth((doc.data()?.nextPayment as string | undefined) ?? new Date().toISOString().slice(0, 10));
   await ref.update({ nextPayment, updatedAt: FieldValue.serverTimestamp() });
+  return true;
 }
 
 function stripeAmountToDecimal(amount: number, currency: string): number {
@@ -172,28 +174,74 @@ export const paymentReceiver = onRequest(async (req, res) => {
       interpretation.fallbackCurrency
     );
 
-    const ref = getFirestore().collection("transactions").doc();
-    await ref.set({
-      amount: converted.amountUsd,
-      ...(converted.originalAmount !== undefined ? { originalAmount: converted.originalAmount } : {}),
-      ...(converted.originalCurrency ? { originalCurrency: converted.originalCurrency } : {}),
-      ...(converted.exchangeRate !== undefined ? { exchangeRate: converted.exchangeRate } : {}),
-      date: new Date().toISOString().slice(0, 10),
-      type: "Income",
-      category: "Tuition",
-      description: interpretation.description,
-      studentId: interpretation.studentId,
-      ...(interpretation.payerEmail ? { payerEmail: interpretation.payerEmail } : {}),
-      source: "stripe",
-      stripePaymentId: interpretation.stripePaymentId,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
+    // The Stripe payment id IS the document id, so Firestore itself enforces
+    // "one transaction per payment". A random doc() id made uniqueness
+    // nobody's job, and one payment could land three times: Stripe fires BOTH
+    // checkout.session.completed and payment_intent.succeeded for a single
+    // checkout, it redelivers on any non-2xx, and the backfill script writes
+    // the same payments too. All three now collide on this id instead.
+    const ref = getFirestore().collection("transactions").doc(interpretation.stripePaymentId);
+
+    let alreadyApplied = false;
+    const outcome = await getFirestore().runTransaction(async (tx): Promise<"created" | "upgraded" | "duplicate"> => {
+      const existing = await tx.get(ref);
+      const prev = existing.data();
+      alreadyApplied = prev?.studentApplied === true;
+
+      // A duplicate is only worth rewriting when it carries better data — the
+      // checkout event knows the student and payer, the payment_intent event
+      // doesn't. Whichever arrives second must not blank out the first.
+      if (prev && (prev.rank ?? 0) >= interpretation.rank) return "duplicate";
+
+      tx.set(
+        ref,
+        {
+          amount: converted.amountUsd,
+          ...(converted.originalAmount !== undefined ? { originalAmount: converted.originalAmount } : {}),
+          ...(converted.originalCurrency ? { originalCurrency: converted.originalCurrency } : {}),
+          ...(converted.exchangeRate !== undefined ? { exchangeRate: converted.exchangeRate } : {}),
+          date: new Date(interpretation.createdUnix * 1000).toISOString().slice(0, 10),
+          type: "Income",
+          category: "Tuition",
+          description: interpretation.description,
+          source: "stripe",
+          stripePaymentId: interpretation.stripePaymentId,
+          rank: interpretation.rank,
+          // On a first write these land as-is (null included, so the field
+          // exists). On an upgrade they're omitted when this event doesn't
+          // know them, so the better event's values are never blanked out.
+          ...(prev && !interpretation.studentId ? {} : { studentId: interpretation.studentId }),
+          ...(prev && !interpretation.payerEmail ? {} : { payerEmail: interpretation.payerEmail }),
+          ...(prev ? {} : { createdAt: FieldValue.serverTimestamp() }),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+      return prev ? "upgraded" : "created";
     });
 
-    await applyPaymentToStudent({ studentId: interpretation.studentId, payerEmail: interpretation.payerEmail });
+    if (outcome === "duplicate") {
+      logger.info(`paymentReceiver: ${interpretation.stripePaymentId} already recorded — event ${event.id} ignored`);
+      res.status(200).json({ ok: true, recorded: false, reason: "duplicate", transactionId: ref.id });
+      return;
+    }
 
-    logger.info(`paymentReceiver: recorded transaction ${ref.id} for Stripe event ${event.id}`);
-    res.status(200).json({ ok: true, recorded: true, transactionId: ref.id });
+    // Exactly once per payment, tracked on the document rather than inferred
+    // from "created": applyPaymentToStudent rolls nextPayment forward a month,
+    // so a second event for the same payment would bill the student a month
+    // into the future. Flagging it only on success also means a payment_intent
+    // event that couldn't identify the student still gets applied later, when
+    // the checkout event arrives carrying client_reference_id.
+    if (!alreadyApplied) {
+      const applied = await applyPaymentToStudent({
+        studentId: interpretation.studentId,
+        payerEmail: interpretation.payerEmail,
+      });
+      if (applied) await ref.update({ studentApplied: true });
+    }
+
+    logger.info(`paymentReceiver: ${outcome} transaction ${ref.id} for Stripe event ${event.id}`);
+    res.status(200).json({ ok: true, recorded: true, outcome, transactionId: ref.id });
   } catch (err) {
     logger.error("paymentReceiver: Firestore write failed:", err);
     res.status(500).json({ error: "internal_error" });
@@ -208,6 +256,15 @@ interface Interpretation {
   studentId: string | null;
   payerEmail: string | null;
   stripePaymentId: string;
+  /** When Stripe says the money moved, not when this webhook happened to run — a retry a day later must not redate the payment. */
+  createdUnix: number;
+  /**
+   * checkout.session.completed carries client_reference_id and
+   * customer_details; payment_intent.succeeded carries neither. Both fire for
+   * the same payment, so when they race, the richer one has to win regardless
+   * of arrival order — see the merge in the handler above.
+   */
+  rank: number;
 }
 
 function interpretStripeEvent(event: Stripe.Event): Interpretation | null {
@@ -224,6 +281,8 @@ function interpretStripeEvent(event: Stripe.Event): Interpretation | null {
       studentId: session.client_reference_id ?? (session.metadata?.studentId as string | undefined) ?? null,
       payerEmail,
       stripePaymentId: paymentIntentId ?? session.id,
+      createdUnix: session.created,
+      rank: 2,
     };
   }
 
@@ -237,6 +296,8 @@ function interpretStripeEvent(event: Stripe.Event): Interpretation | null {
       studentId: (intent.metadata?.studentId as string | undefined) ?? null,
       payerEmail: intent.receipt_email ?? null,
       stripePaymentId: intent.id,
+      createdUnix: intent.created,
+      rank: 1,
     };
   }
 

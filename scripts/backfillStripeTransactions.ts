@@ -161,8 +161,11 @@ async function main() {
     const stripePaymentId = paymentIntentId ?? session.id;
 
     try {
-      const existing = await transactions.where("stripePaymentId", "==", stripePaymentId).limit(1).get();
-      if (!existing.empty) {
+      // The payment id is the doc id, so this is an exact key lookup rather
+      // than the old query-then-add, which raced the webhook and could add a
+      // second copy of a payment the webhook was recording at the same moment.
+      const ref = transactions.doc(stripePaymentId);
+      if ((await ref.get()).exists) {
         skippedDuplicate++;
         continue;
       }
@@ -195,7 +198,7 @@ async function main() {
       );
 
       if (!DRY_RUN) {
-        await transactions.add({
+        await ref.set({
           amount: converted.amountUsd,
           ...(converted.originalAmount !== undefined ? { originalAmount: converted.originalAmount } : {}),
           ...(converted.originalCurrency ? { originalCurrency: converted.originalCurrency } : {}),
@@ -207,6 +210,7 @@ async function main() {
           studentId,
           source: "stripe",
           stripePaymentId,
+          rank: 2, // same ranking as the webhook's checkout event — this reads Checkout Sessions, so it carries the richer data
           createdAt: createdIso,
           updatedAt: new Date().toISOString(),
         });
