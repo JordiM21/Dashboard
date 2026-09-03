@@ -349,7 +349,7 @@ export default function GroupsHub() {
             ) : (
               <div className="lesson-grid">
                 {planned.map((l) => (
-                  <LessonCard key={l.id} lesson={l} tags={tags} color={groupColor(l.groupId)} onOpen={() => setOpenLesson(l)} />
+                  <LessonCard key={l.id} lesson={l} tags={tags} onOpen={() => setOpenLesson(l)} />
                 ))}
               </div>
             )}
@@ -371,7 +371,6 @@ export default function GroupsHub() {
                         key={item.lesson.id}
                         lesson={item.lesson}
                         tags={tags}
-                        color={groupColor(item.lesson.groupId)}
                         taught
                         onOpen={() => setOpenLesson(item.lesson)}
                       />
@@ -485,13 +484,11 @@ export default function GroupsHub() {
 function LessonCard({
   lesson,
   tags,
-  color,
   taught,
   onOpen,
 }: {
   lesson: WeeklyPlanDoc;
   tags: WeeklyPlanTagDoc[];
-  color: string;
   taught?: boolean;
   onOpen: () => void;
 }) {
@@ -501,7 +498,7 @@ function LessonCard({
   const kinds = Array.from(new Set(lesson.links.map((l) => linkKind(l.url)))).slice(0, 4);
 
   return (
-    <button className={`lesson-card${taught ? " lesson-card-taught" : ""}${isToday ? " lesson-card-today" : ""}`} style={{ ["--chip" as string]: color }} onClick={onOpen}>
+    <button className={`lesson-card${taught ? " lesson-card-taught" : ""}${isToday ? " lesson-card-today" : ""}`} onClick={onOpen}>
       <span className="lesson-card-date">
         {isToday ? "Today" : formatDateDMY(lesson.date)}
         {lesson.emojis.length > 0 && <span className="lesson-card-emojis">{lesson.emojis.join(" ")}</span>}

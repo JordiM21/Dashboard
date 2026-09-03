@@ -2839,9 +2839,6 @@ button {
   gap: 7px;
   padding: 14px 15px;
   border: 1px solid var(--line);
-  /* The group's colour as a left edge, not a full tint — enough to tie the
-     card to the chip above it without recolouring the whole surface. */
-  border-left: 3px solid var(--chip, var(--line));
   border-radius: var(--radius-md);
   background: var(--white);
   box-shadow: var(--shadow);
@@ -2875,9 +2872,10 @@ button {
   box-shadow: var(--shadow-hover);
 }
 
+/* A backfilled history entry — logged, but with no lesson behind it, so
+   there is no plan or material to open. Reads as quieter than a real one. */
 .lesson-card-plain {
-  border-left-color: var(--line);
-  opacity: 0.85;
+  opacity: 0.8;
 }
 
 .lesson-card-date {

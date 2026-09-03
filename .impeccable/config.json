@@ -47,6 +47,30 @@
         "value": "cubic-bezier(0.34, 1.56, 0.64, 1)",
         "createdAt": "2026-08-28T10:44:57.849Z",
         "reason": "deliberate spring/overshoot easing for the children's Games section's score-pop, matched-card, and hover-lift feedback -- Apple's own UIKit spring animations use this exact overshoot for playful delight, which is the explicit brief here (kid-facing game UI), not the flat/professional tone the exponential-easing default assumes"
+      },
+      {
+        "rule": "bounce-easing",
+        "value": "var(--ease-spring)",
+        "createdAt": "2026-09-03T17:20:51.786Z",
+        "reason": "Pre-existing design-system token, defined and documented at globals.css :root before this change: one shared curve so every card, chip and checkbox settles the same way. cubic-bezier(0.34,1.4,0.64,1) is a 4% overshoot, not an elastic bounce. Not user confirmed."
+      },
+      {
+        "rule": "bounce-easing",
+        "value": "cubic-bezier(0.34, 1.4, 0.64, 1)",
+        "createdAt": "2026-09-03T17:20:59.463Z",
+        "reason": "Same pre-existing token at its :root definition site (globals.css L26). Not user confirmed."
+      },
+      {
+        "rule": "layout-transition",
+        "value": "transition: width 0.4s var(--ease-out)",
+        "createdAt": "2026-09-03T17:21:08.838Z",
+        "reason": "Progress-bar fill: the width IS the datum, and scaleX distorts the pill's rounded cap. 4px-tall element in a fixed-size parent, no reflow beyond itself. Pre-existing. Not user confirmed."
+      },
+      {
+        "rule": "layout-transition",
+        "value": "transition: width 0.45s var(--ease-out)",
+        "createdAt": "2026-09-03T17:21:08.923Z",
+        "reason": "Same: .project-chip-fill and .task-subprogress-fill progress bars. Pre-existing. Not user confirmed."
       }
     ]
   }
