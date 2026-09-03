@@ -17,18 +17,15 @@ export default function TaskEditModal({
   task,
   projects,
   onPatch,
-  onDelete,
   onClose,
 }: {
   task: Task;
   projects: Project[];
   onPatch: (id: string, updates: Partial<Task>) => void;
-  onDelete: (id: string) => void;
   onClose: () => void;
 }) {
   const [draft, setDraft] = useState<Task>(task);
   const [newSubtask, setNewSubtask] = useState("");
-  const [confirmDelete, setConfirmDelete] = useState(false);
 
   function set<K extends keyof Task>(key: K, value: Task[K]) {
     setDraft((d) => ({ ...d, [key]: value }));
@@ -191,17 +188,10 @@ export default function TaskEditModal({
         <textarea rows={3} value={draft.notes} onChange={(e) => set("notes", e.target.value)} />
       </div>
 
+      {/* No Delete here on purpose — deleting lives on the card's "⋯"
+          menu, so there is exactly one destructive path with one
+          confirmation, rather than two that behave differently. */}
       <div className="modal-actions">
-        <button
-          className={confirmDelete ? "btn btn-danger" : "btn btn-ghost"}
-          onClick={() => {
-            if (!confirmDelete) return setConfirmDelete(true);
-            onDelete(task.id);
-            onClose();
-          }}
-        >
-          {confirmDelete ? "Really delete" : "Delete"}
-        </button>
         <button className="btn btn-primary" onClick={saveAndClose}>
           Done
         </button>

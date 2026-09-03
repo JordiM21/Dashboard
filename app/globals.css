@@ -1771,6 +1771,191 @@ button {
   color: #fff;
 }
 
+/* ---------- Card "⋯" menu (tasks + projects) ---------- */
+
+.card-menu-trigger {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--cream);
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  transition: background-color 0.18s var(--ease-out), color 0.18s var(--ease-out), transform 0.18s var(--ease-spring);
+}
+
+.card-menu-trigger:hover {
+  background: var(--cake);
+  color: var(--ink);
+  transform: scale(1.08);
+}
+
+.card-menu-trigger:active {
+  transform: scale(0.92);
+}
+
+.card-menu-trigger.active {
+  background: var(--cake-dark);
+  color: var(--ink);
+}
+
+/* On a project card the trigger floats in the corner, appearing on hover
+   (and always, on touch — see the hover:none block below). */
+.project-chip-card {
+  position: relative;
+}
+
+.project-chip-card .card-menu-trigger {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  opacity: 0;
+  transition: opacity 0.2s var(--ease-out), background-color 0.18s var(--ease-out), transform 0.18s var(--ease-spring);
+}
+
+.project-chip-card:hover .card-menu-trigger,
+.project-chip-card:focus-within .card-menu-trigger,
+.project-chip-card .card-menu-trigger.active {
+  opacity: 1;
+}
+
+/* Popover — scales out of the corner nearest its trigger, so it reads as
+   coming from the button rather than appearing over it. */
+.card-menu-popover {
+  position: fixed;
+  z-index: 90;
+  min-width: 176px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow-hover);
+  padding: 6px;
+  transform-origin: top right;
+  animation: cardMenuIn 0.18s var(--ease-spring) both;
+}
+
+.card-menu-popover-up {
+  transform-origin: bottom right;
+}
+
+@keyframes cardMenuIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.card-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 11px;
+  border: none;
+  background: none;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s var(--ease-out), transform 0.15s var(--ease-spring);
+}
+
+.card-menu-item:hover {
+  background: var(--cream);
+}
+
+.card-menu-item:active {
+  transform: scale(0.98);
+}
+
+.card-menu-item-danger {
+  color: var(--danger);
+}
+
+.card-menu-item-danger:hover {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.card-menu-icon {
+  width: 16px;
+  text-align: center;
+  opacity: 0.85;
+}
+
+/* Action sheet — the phone presentation. Same items, thumb-reachable,
+   with the sheet itself sliding up from the bottom edge. */
+.card-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(2px);
+  animation: fadeIn 0.18s ease both;
+}
+
+.card-menu-sheet {
+  position: fixed;
+  left: 10px;
+  right: 10px;
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  z-index: 96;
+  background: var(--white);
+  border-radius: 20px;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.25);
+  padding: 8px;
+  animation: sheetUp 0.24s var(--ease-out) both;
+}
+
+.card-menu-grip {
+  width: 38px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line);
+  margin: 2px auto 8px;
+}
+
+.card-menu-sheet-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-align: center;
+  padding: 0 12px 8px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-menu-sheet .card-menu-item {
+  justify-content: center;
+  font-size: 16px;
+  padding: 14px;
+}
+
+.card-menu-item-cancel {
+  justify-content: center;
+  font-weight: 700;
+  margin-top: 4px;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 14px 14px;
+}
+
+@media (hover: none) {
+  .project-chip-card .card-menu-trigger {
+    opacity: 1;
+  }
+}
+
 /* ---------- Subtasks (inside the task modal) ---------- */
 
 .subtask-list {

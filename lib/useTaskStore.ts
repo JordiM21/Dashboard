@@ -26,10 +26,13 @@ export function useTaskStore() {
 
   const [overlay, setOverlay] = useState<Record<string, Partial<Task>>>({});
   const [deleted, setDeleted] = useState<string[]>([]);
-  // A locally-created task, kept until the real document shows up in the
-  // snapshot — dropping it the moment POST resolves makes a brand new task
-  // blink out of existence for a frame.
-  const [creating, setCreating] = useState<{ temp: Task; serverId?: string }[]>([]);
+  // Locally-created tasks, shown while their POST is in flight and dropped
+  // the moment it resolves. Keeping one around until its real document
+  // appeared in the snapshot would be marginally smoother, and was: a
+  // placeholder that outlives its own request has no id the rest of the UI
+  // can act on, so deleting the real document just brought the placeholder
+  // back. The request is the slow part; the snapshot lands right behind it.
+  const [creating, setCreating] = useState<Task[]>([]);
   const [writeError, setWriteError] = useState<string | null>(null);
 
   const serverTasks = tasksQuery.data;
@@ -38,10 +41,7 @@ export function useTaskStore() {
     const live = (serverTasks ?? [])
       .filter((t) => !deleted.includes(t.id))
       .map((t) => (overlay[t.id] ? { ...t, ...overlay[t.id] } : t));
-    const stillPending = creating
-      .filter((c) => !c.serverId || !(serverTasks ?? []).some((t) => t.id === c.serverId))
-      .map((c) => c.temp);
-    return [...stillPending, ...live];
+    return [...creating, ...live];
   }, [serverTasks, overlay, deleted, creating]);
 
   const projects = useMemo(
@@ -89,7 +89,7 @@ export function useTaskStore() {
       subtasks: fields.subtasks ?? [],
       createdAt: new Date().toISOString(),
     };
-    setCreating((prev) => [...prev, { temp }]);
+    setCreating((prev) => [...prev, temp]);
     setWriteError(null);
     try {
       const res = await authFetch("/api/tasks", {
@@ -98,11 +98,10 @@ export function useTaskStore() {
         body: JSON.stringify(fields),
       });
       if (!res.ok) throw new Error(`Couldn't create the task (${res.status})`);
-      const saved = (await res.json()) as Task;
-      setCreating((prev) => prev.map((c) => (c.temp.id === tempId ? { ...c, serverId: saved.id } : c)));
     } catch (err) {
-      setCreating((prev) => prev.filter((c) => c.temp.id !== tempId));
       setWriteError(err instanceof Error ? err.message : "Couldn't create the task");
+    } finally {
+      setCreating((prev) => prev.filter((c) => c.id !== tempId));
     }
   }, []);
 

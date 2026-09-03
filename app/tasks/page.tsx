@@ -7,6 +7,7 @@ import ViewToggle from "@/components/ViewToggle";
 import { EmptyState, FetchFailedState } from "@/components/StateBox";
 import TaskCapture from "@/components/tasks/TaskCapture";
 import TaskCard from "@/components/tasks/TaskCard";
+import CardMenu from "@/components/tasks/CardMenu";
 import TaskEditModal from "@/components/tasks/TaskEditModal";
 import ProjectModal from "@/components/tasks/ProjectModal";
 import { useTaskStore } from "@/lib/useTaskStore";
@@ -118,14 +119,31 @@ export default function TasksPage() {
             {activeProjects.map((p) => {
               const progress = projectProgress(p, tasks);
               return (
-                <button
+                // A div rather than a button: the whole card toggles the
+                // filter, but it also contains the ⋯ menu's own button, and
+                // a button inside a button is invalid HTML (browsers drop
+                // the inner one, taking its click handler with it).
+                <div
                   key={p.id}
-                  type="button"
+                  role="button"
+                  tabIndex={0}
                   className={`project-chip-card${projectFilter === p.id ? " active" : ""}`}
                   onClick={() => setProjectFilter((cur) => (cur === p.id ? null : p.id))}
-                  onDoubleClick={() => setProjectModal({ project: p })}
-                  title="Click to filter · double-click to edit"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setProjectFilter((cur) => (cur === p.id ? null : p.id));
+                    }
+                  }}
+                  title="Click to filter"
                 >
+                  <CardMenu
+                    label={p.title}
+                    onEdit={() => setProjectModal({ project: p })}
+                    onDelete={() => store.removeProject(p.id)}
+                    deleteTitle="Delete project"
+                    deleteMessage={`"${p.title}" will be removed. Its ${progress.total} task${progress.total === 1 ? "" : "s"} stay — they just become unfiled.`}
+                  />
                   <span className="project-chip-icon">{p.icon || "🗂️"}</span>
                   <span className="project-chip-title">{p.title}</span>
                   <span className="project-chip-meta">
@@ -134,7 +152,7 @@ export default function TasksPage() {
                   <span className="project-chip-track">
                     <span className="project-chip-fill" style={{ width: `${progress.pct}%` }} />
                   </span>
-                </button>
+                </div>
               );
             })}
           </div>
@@ -201,6 +219,7 @@ export default function TasksPage() {
                     onToggleDoing={store.toggleDoing}
                     onPatch={store.patch}
                     onOpen={setEditing}
+                    onDelete={store.remove}
                   />
                 </div>
               ))}
@@ -214,7 +233,6 @@ export default function TasksPage() {
           task={tasks.find((t) => t.id === editing.id) ?? editing}
           projects={activeProjects}
           onPatch={store.patch}
-          onDelete={store.remove}
           onClose={() => setEditing(null)}
         />
       )}
@@ -223,7 +241,6 @@ export default function TasksPage() {
         <ProjectModal
           project={projectModal.project}
           onSave={store.saveProject}
-          onDelete={store.removeProject}
           onClose={() => setProjectModal(null)}
         />
       )}

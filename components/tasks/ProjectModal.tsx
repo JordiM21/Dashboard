@@ -8,12 +8,10 @@ import type { Project } from "@/lib/types";
 export default function ProjectModal({
   project,
   onSave,
-  onDelete,
   onClose,
 }: {
   project: Project | null;
   onSave: (id: string | null, fields: Partial<Project>) => void;
-  onDelete: (id: string) => void;
   onClose: () => void;
 }) {
   const [title, setTitle] = useState(project?.title ?? "");
@@ -21,7 +19,6 @@ export default function ProjectModal({
   const [field, setField] = useState(project?.field ?? "");
   const [content, setContent] = useState(project?.content ?? "");
   const [archived, setArchived] = useState(project?.archived ?? false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
 
   function save() {
     if (!title.trim()) return;
@@ -64,18 +61,6 @@ export default function ProjectModal({
       </label>
 
       <div className="modal-actions">
-        {project && (
-          <button
-            className={confirmDelete ? "btn btn-danger" : "btn btn-ghost"}
-            onClick={() => {
-              if (!confirmDelete) return setConfirmDelete(true);
-              onDelete(project.id);
-              onClose();
-            }}
-          >
-            {confirmDelete ? "Really delete — tasks stay" : "Delete"}
-          </button>
-        )}
         <button className="btn btn-ghost" onClick={onClose}>
           Cancel
         </button>

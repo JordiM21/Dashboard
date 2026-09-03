@@ -318,6 +318,7 @@ export default function OverviewPage() {
                     onToggleDoing={taskStore.toggleDoing}
                     onPatch={taskStore.patch}
                     onOpen={setEditingTask}
+                    onDelete={taskStore.remove}
                   />
                 </div>
               ))}
@@ -592,7 +593,6 @@ export default function OverviewPage() {
           task={taskStore.tasks.find((t) => t.id === editingTask.id) ?? editingTask}
           projects={taskStore.projects.filter((p) => !p.archived)}
           onPatch={taskStore.patch}
-          onDelete={taskStore.remove}
           onClose={() => setEditingTask(null)}
         />
       )}

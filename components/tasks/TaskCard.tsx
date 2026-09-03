@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import CardMenu from "@/components/tasks/CardMenu";
 import { SIZE_LABEL, subtaskProgress } from "@/lib/tasks";
 import { addDays, formatDateDMY, localDateIso } from "@/lib/dateUtils";
 import type { Project, Task } from "@/lib/types";
@@ -23,6 +24,7 @@ export default function TaskCard({
   onToggleDoing,
   onPatch,
   onOpen,
+  onDelete,
   compact = false,
 }: {
   task: Task;
@@ -31,6 +33,7 @@ export default function TaskCard({
   onToggleDoing: (task: Task) => void;
   onPatch: (id: string, updates: Partial<Task>) => void;
   onOpen: (task: Task) => void;
+  onDelete: (id: string) => void;
   compact?: boolean;
 }) {
   const [justTicked, setJustTicked] = useState(false);
@@ -143,6 +146,13 @@ export default function TaskCard({
         >
           →
         </button>
+        <CardMenu
+          label={task.title}
+          onEdit={() => onOpen(task)}
+          onDelete={() => onDelete(task.id)}
+          deleteTitle="Delete task"
+          deleteMessage={`"${task.title}" will be removed. This can't be undone.`}
+        />
       </div>
     </article>
   );
