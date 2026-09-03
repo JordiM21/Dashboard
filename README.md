@@ -28,49 +28,54 @@ from a phone.
 ```
 My Dashboard/
 ├── app/
-│   ├── layout.tsx            # wraps everything in AuthProvider + AppShell
-│   ├── globals.css           # design system (cream/cake, rounded, floating tabs)
+│   ├── layout.tsx             # wraps everything in AuthProvider + AppShell
+│   ├── globals.css            # design system (cream/cake, rounded, floating tabs)
 │   ├── page.tsx               # redirects to /overview
 │   ├── login/page.tsx         # email/password sign-in (only page not behind the auth gate)
 │   ├── overview/page.tsx      # THE dashboard: today's tasks, Finance/Students/channel KPIs
-│   ├── kommo/page.tsx         # dedicated Kommo pipeline view — every lead, stage, tag, date filter
-│   ├── students/page.tsx      # student roster, backed by Firestore
+│   ├── students/page.tsx      # Classroom: Groups / Curriculum / Students / Resources
+│   ├── teaching/page.tsx      # redirect to /students (Teaching merged into Classroom)
 │   ├── finance/page.tsx       # income/expense ledger + recurring payments, backed by Firestore
 │   ├── tasks/page.tsx         # task grid: capture box, buckets by due date, optional projects
-│   ├── resources/page.tsx     # file manager: folders, images, video, docs (Firebase, CRUD)
+│   ├── kommo/page.tsx         # dedicated Kommo pipeline view — every lead, stage, tag, date filter
+│   ├── meta/page.tsx          # Meta ads, posts and audience growth
+│   ├── manifest.ts            # PWA manifest (installable, standalone)
 │   └── api/
-│       ├── kpis/route.ts              # aggregates Stripe/Kommo/Meta/Gmail — consumed by Overview
+│       ├── kpis/route.ts              # aggregates Stripe/Kommo/Meta — consumed by Overview
 │       ├── kommo/route.ts             # full Kommo leads + pipelines pull — consumed by /kommo
+│       ├── meta/...                   # campaigns, posts, audience growth
 │       ├── stripe/balance/route.ts    # live Stripe balance + last payout — consumed by Overview
 │       ├── cron/recurring-payments/   # auto-triggers due recurring payments (Vercel Cron + manual)
-│       ├── students/route.ts          # GET + POST, via lib/firebase/db.ts (admin SDK)
-│       ├── finance/route.ts           # GET (+ computed summary) + POST, same pattern
-│       ├── finance/recurring/...      # recurring payment template CRUD (requireAuth)
-│       ├── tasks/...                  # GET (public) + POST/PUT/DELETE (requireAuth), same pattern
-│       ├── projects/...               # task containers — same pattern; DELETE unfiles its tasks
+│       ├── cron/meta-audience-snapshot/ # daily follower snapshot (see MetaAudienceSnapshotRecord)
+│       ├── students/...               # GET + POST + PATCH/DELETE, via lib/firebase/db.ts (admin SDK)
+│       ├── finance/...                # ledger + recurring payment templates (requireAuth)
+│       ├── tasks/... , projects/...   # same pattern; deleting a project unfiles its tasks
+│       ├── board/...                  # curriculum levels, groups + history, lessons, lesson tags
 │       └── resources/...              # folder + file CRUD, upload, signed-URL file serving
-├── components/                # FloatingNav, Modal, LiveBadge, KpiCard, ViewToggle, StateBox,
-│                               # ErrorBoundary, ResourceDetailModal, AddStudentModal,
-│                               # AddTransactionModal, AddRecurringModal, AppShell
+├── components/
+│   ├── classroom/              # GroupsHub, LessonSheet, StudentsRoster
+│   ├── tasks/                  # TaskCard, TaskCapture, TaskEditModal, ProjectModal, CardMenu
+│   └── …                       # FloatingNav, Modal, LiveBadge, KpiCard, ViewToggle, StateBox,
+│                               # ErrorBoundary, CurriculumBoard, ResourcesBrowser, TagPicker…
 ├── lib/
 │   ├── resources.ts            # Firestore + Storage CRUD for Resources (admin SDK)
 │   ├── resourceUtils.ts        # client-safe file-type/size helpers for Resources
+│   ├── lessonLinks.ts          # link kind / thumbnail / title helpers for a lesson's material
 │   ├── firebase/
 │   │   ├── client.ts                    # client SDK init (NEXT_PUBLIC_* config)
 │   │   ├── admin.ts                     # firebase-admin init (service account) — Route Handlers
-│   │   ├── db.ts                         # Firestore CRUD: students / transactions / lessons /
-│   │   │                                 # tasks / projects / recurringTransactions
+│   │   ├── db.ts                        # Firestore CRUD: students / transactions / tasks /
+│   │   │                                # projects / recurringTransactions / meta snapshots
+│   │   ├── curriculumBoard.ts           # curriculum levels, groups, group history (admin SDK)
+│   │   ├── weeklyPlans.ts               # lessons + lesson tags (admin SDK)
 │   │   ├── useFirestoreCollection.ts    # reusable onSnapshot hook (client-side, read-only)
 │   │   ├── AuthContext.tsx              # onAuthStateChanged -> { user, loading } via useAuth()
-│   │   ├── authFetch.ts                  # fetch() wrapper that attaches the Firebase ID token
-│   │   └── verifyAuth.ts                 # server-side ID token verification for Route Handlers
-│   ├── finance.ts               # pure summarizeFinance() — totals + category breakdown
+│   │   ├── authFetch.ts                 # fetch() wrapper that attaches the Firebase ID token
+│   │   └── verifyAuth.ts                # server-side ID token verification for Route Handlers
+│   ├── finance.ts              # pure summarizeFinance() — totals + category breakdown
 │   ├── types.ts                # shared type definitions
-│   └── api/
-│       └── stripe.ts, kommo.ts, meta.ts, gmail.ts   # channel integrations (all four call the real API when configured, dummy fallback otherwise)
+│   └── api/                    # stripe.ts, kommo.ts, meta*.ts — channel integrations
 ├── functions/                  # Cloud Functions — separate Node subproject
-│   ├── package.json            # firebase-admin, firebase-functions, own build step
-│   ├── tsconfig.json
 │   └── src/
 │       ├── index.ts             # exports both functions below
 │       ├── metaLeadReceiver.ts  # Meta Lead Ads webhook -> students
@@ -82,13 +87,11 @@ My Dashboard/
 ├── firestore.indexes.json
 ├── storage.rules                # Firebase Storage security rules (Resources file bytes)
 ├── vercel.json                  # Vercel Cron schedule for recurring payments
-├── scripts/
-│   ├── backfillStripeTransactions.ts   # one-time local backfill — npm run backfill:stripe
-│   ├── migrateResourcesToFirebase.ts   # one-time local->Firebase migration — npm run migrate:resources
-│   └── migrateMarkdownToFirebase.ts    # one-time local->Firebase migration — npm run migrate:markdown
+├── scripts/                     # one-off migrations, backfills and small assert-based tests
 ├── data/                        # migration SOURCE ONLY — the app no longer reads these at runtime
-│   └── projects/*.md
-└── public/covers/               # placeholder cover images for Games
+├── lessons/                     # your local .excalidraw boards — not read by the app; a lesson
+│                                # links to one, it doesn't load it
+└── public/                      # PWA icons + the service worker
 ```
 
 ## Firebase migration status
@@ -991,18 +994,17 @@ but worth revisiting once Phase 4 ships.
 
 ## Meta view (`/meta`)
 
-A dedicated page for everything Meta beyond ad spend — Facebook Page +
-Instagram content, comments, Lead Ads, and a posting calendar. Five tabs,
-each fetched independently and lazily (a tab you never open never calls the
-Graph API):
+One read-only performance page — "is the money and the content working?"
+answered in a single scroll, no clicking through tabs. There used to be five
+tabs here (overview, posts, comments, leads, calendar) plus a publishing
+pipeline; posting and moderation happen in Meta's own tools now, so all of
+that is gone.
 
-| Tab | What it shows | Backed by |
+| Section | What it shows | Backed by |
 |---|---|---|
-| Overview | Period-over-period growth dashboard (This Month / Last Month / Last 3 Months) — followers, posts published, interactions, best post of the period per platform, Ad Spend/Leads, and Ad Campaigns as a section underneath | `app/api/meta/growth` → `lib/api/metaGrowth.ts`, `app/api/meta/campaigns`, `app/api/kpis` |
-| Posts | Facebook + Instagram posts as cards — cross-posted content (same caption, published within an hour on both platforms) merges into one card with both platform badges; click through for the full per-platform metrics breakdown | `app/api/meta/posts` → `lib/api/metaContent.ts` |
-| Comments | Comments across recent posts on both platforms — reply, hide/unhide, delete | `app/api/meta/comments` → `lib/api/metaContent.ts` |
-| Leads | Native Lead Ads form submissions | `app/api/meta/leads` → `lib/api/metaLeads.ts` |
-| Calendar | Month view of scheduled/published/failed posts; click a day to schedule, click a post to edit/publish-now/delete | Firestore `scheduledMetaPosts` (real-time) + `app/api/meta/schedule/*` |
+| Audience & growth | Period-over-period growth (This Month / Last Month / Last 3 Months) — followers, posts published, interactions, best post of the period per platform | `app/api/meta/growth` → `lib/api/metaGrowth.ts` |
+| Content | Facebook + Instagram posts as cards, with per-platform metrics | `app/api/meta/posts` → `lib/api/metaContent.ts` |
+| Ads | Spend, leads and the campaigns behind them | `app/api/meta/campaigns`, `app/api/kpis` |
 
 Messenger/inbox management was deliberately left out of scope.
 
@@ -1015,8 +1017,8 @@ rate would only ever reflect Instagram — mixing in Facebook's structural
 zeros would silently understate it rather than average anything real.
 Overview's growth cards stick to what's genuinely comparable across both
 platforms (followers, posts, raw interactions); the Instagram-only
-engagement rate still shows up in Overview's "Best Post" section and in the
-Posts tab, clearly scoped to Instagram.
+engagement rate still shows up in the "Best Post" and Content sections,
+clearly scoped to Instagram.
 
 **Why followers show "(partial)" sometimes**: Facebook's `page_follows`
 insight has ~90 days of live history; Instagram's `follower_count` insight
@@ -1034,66 +1036,78 @@ are; this fills in on its own as the snapshot history grows.
 
 - The token's permissions need to include `pages_show_list`,
   `pages_read_engagement`, `pages_manage_posts`, `pages_manage_engagement`,
-  `pages_manage_ads`, `instagram_basic`, `instagram_manage_comments`,
-  `instagram_manage_insights`, `instagram_content_publish`, and
-  `leads_retrieval` (that last one needs Meta App Review — the Leads tab
-  shows a clear error naming exactly which permission is missing if it
-  isn't granted yet).
+  `pages_manage_ads`, `instagram_basic` and `instagram_manage_insights`.
+  (The page only reads; the publish/moderate permissions the old tabs
+  needed aren't required any more.)
 - The Facebook Page needs its Instagram Business Account actually linked
   (Meta Business Suite > Settings > Linked accounts) for the Instagram
-  side of Posts/Comments/Calendar to return anything — `lib/api/metaCore.ts`'s
+  side of the Content section to return anything — `lib/api/metaCore.ts`'s
   `resolveMetaAssets()` auto-detects it from the Page once linked.
 - Optional: `META_PAGE_ID` / `META_IG_BUSINESS_ACCOUNT_ID` in `.env.local`,
   only needed if the token can see more than one Page.
 
-**Scheduling a post**: the Calendar stores every post as a Firestore
-`scheduledMetaPosts` doc and posts it through our own trigger rather than
-relying on Facebook's native `scheduled_publish_time` — that keeps Facebook
-and Instagram posts editable/cancelable the same way right up to send time,
-since Instagram's API has no native "post later" of its own. Instagram
-posts need a publicly reachable image URL (Meta's servers fetch it
-directly) — there's no upload-and-host step built in yet; paste a URL to an
-already-hosted image. `app/api/cron/meta-publish` publishes whatever's due;
-**Vercel's Hobby plan only allows daily cron**, so for on-time publishing
-either use the Calendar's "Publish due posts" / a post's "Publish Now"
-button, or point an external scheduler (e.g. cron-job.org) at that endpoint
-with `Authorization: Bearer $CRON_SECRET` on a tighter interval.
+## Classroom (`/students`)
 
-## Teaching view (`/teaching`)
+Students and Teaching used to be two tabs; they're one view now, because
+every question worth asking ("what did I teach Group A last month?", "who's
+in it?", "what's next?") crosses both. `/teaching` redirects here.
 
-An Excalidraw whiteboard for live lessons, with a lesson library and a
-screen-share presentation mode.
+Four sections, remembered in `localStorage` under `classroom-section`:
 
-- **Editor**: `@excalidraw/excalidraw`, loaded via `next/dynamic({ ssr: false })`
-  end to end — it touches `window` at module scope, so nothing that imports
-  from it (even a type-only import of the wrong kind) can survive Next's
-  server render pass. `app/teaching/page.tsx` is a thin ssr:false wrapper;
-  all the actual logic lives in `components/TeachingView.tsx`, whose header
-  comment explains the exact SSR crash this avoids (confirmed live — see
-  that file before adding a new top-level import from the package).
-- **Lessons library**: Firestore `lessonFiles` (metadata) + Firebase
-  Storage `lessons/{id}.excalidraw` (the actual scene JSON) — same
-  metadata/bytes split as Resources, via `lib/teaching.ts`. The sidebar's
-  "Import" button accepts an existing `.excalidraw`/`.json` export;
-  "+ New" creates a blank one. Loading a lesson calls
-  `excalidrawAPI.updateScene()` imperatively rather than remounting the
-  canvas — the same canvas instance is reused for every lesson switch.
-  There's no autosave; the Save button serializes the live scene with
-  Excalidraw's own `serializeAsJSON()` (strips transient state like
-  collaboration cursors) and `PUT`s it back to
-  `app/api/teaching/lessons/[id]/content`.
-- **Screen Share mode**: toggles the same mounted canvas into a fixed,
-  near-fullscreen overlay (`zIndex: 10000`, above the app's own nav) with
-  Excalidraw's own chrome hidden (`zenModeEnabled`) — deliberately built as
-  one render tree with conditional styling, not two separate
-  early-returned layouts, specifically so the canvas component never
-  unmounts when toggling modes (an early version did this wrong and would
-  have silently wiped the whiteboard on every toggle).
-- **Gamification bar**: bottom-overlay buttons in Screen Share mode —
-  Confetti, Victory, Drum Roll, Applause. `lib/soundEffects.ts` synthesizes
-  every sound with the Web Audio API (oscillators + generated noise
-  buffers) rather than shipping audio files — zero extra assets, no
-  licensing question, works offline. Confetti itself is `canvas-confetti`.
+- **Groups** (`components/classroom/GroupsHub.tsx`) — the home. A rail of
+  group chips across the top; pick one and everything below is that class:
+  where they are in the syllabus, who's in it, how many lessons are planned
+  vs. taught, then **Coming up** and **Already taught** as grids of lesson
+  cards. "Already taught" merges taught lessons with backfilled
+  `groups/{id}/history` entries that never had a lesson behind them, so the
+  record is complete either way.
+- **Curriculum** (`components/CurriculumBoard.tsx`) — the 20-level
+  syllabus, unchanged, plus a "+" on every subtopic while a group's brush
+  is up: plan a lesson on that topic for that group without leaving the
+  board.
+- **Students** (`components/classroom/StudentsRoster.tsx`) — the roster,
+  exactly as it was.
+- **Resources** (`components/ResourcesBrowser.tsx`) — the file library.
+
+**There is no embedded whiteboard any more.** The Excalidraw canvas, its
+autosave machinery, the per-lesson `.excalidraw` scene in Storage and the
+Screen Share mode built around it are all gone (along with the
+`@excalidraw/excalidraw` dependency — by far the heaviest thing this app
+shipped). Boards live as local `.excalidraw` files opened straight from the
+browser, and a lesson links to one like it links to anything else.
+
+### A lesson
+
+One `weeklyPlans` doc, opened in the lesson sheet
+(`components/classroom/LessonSheet.tsx`):
+
+- **The plan** — what you'll run, in what order.
+- **Material** — a list of links: a YouTube video (thumbnail rendered from
+  `img.youtube.com`), an image (rendered inline), a Google Doc, a local
+  `.excalidraw` file, or a `/api/resources/files/{id}/raw` URL from the
+  Resources library. Only `http(s)` and same-origin paths are storable, and
+  that's re-checked server-side in the PATCH route — a saved link is
+  rendered as an anchor, so a `javascript:` URL must never survive the
+  round trip.
+- **Takeaways** — written after the lesson.
+- **Tags** — `weeklyPlanTags`, shared with the filter above the grids.
+
+Everything autosaves on a 700 ms debounce, and the pending write is flushed
+when the sheet unmounts. There is no Save button and no dirty state to
+remember, which is the whole point of the rewrite.
+
+**Marking a lesson taught** (`✅ Mastered` / `🔁 Needs review`) does three
+things in one click: writes the `groups/{groupId}/history` entry the parent
+report and the 90-day recall badge read, stamps that entry's id onto the
+lesson (`historyEntryId` — how the timeline knows it's taught), and moves
+the group's placement onto that topic. Teaching a topic *is* the group
+being there, so there's no separate step on the curriculum board.
+
+`WeeklyPlanDoc` gained `links`, `takeaways` and `historyEntryId`, and
+stopped using `excalidrawPath`. The dead field is just ignored on read, so
+no migration was needed. Lesson *folders* went too — a group plus a date
+already files a lesson; the `weeklyPlanFolders` collection is simply
+orphaned rather than migrated.
 
 ## Running it daily
 

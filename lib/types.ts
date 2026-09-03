@@ -94,7 +94,7 @@ export interface Student {
   // student to their parent's payments".
   parentEmail?: string;
   plan?: "Main Course" | "Initial Demo";
-  photoUrl?: string; // profile picture — a URL/path, same convention as GameDoc.cover
+  photoUrl?: string; // profile picture — a URL or path, same convention as ResourceFile.storagePath
   notes?: string; // free-text — "things to remember" about this student/parent
   tags?: string[];
   source?: string; // e.g. "meta_lead_ad" when created by a webhook
@@ -311,17 +311,6 @@ export interface PlatformGrowth {
   followers: PeriodComparison; // net new followers over the period, not a running total
 }
 
-/** Firestore `lessons` document shape. */
-export interface Lesson {
-  id: string;
-  date: string;
-  topic: string;
-  studentId: string;
-  status: "Scheduled" | "Completed" | "Cancelled";
-  createdAt?: string;
-  updatedAt?: string;
-}
-
 export interface ResourceFolder {
   id: string;
   name: string;
@@ -399,44 +388,48 @@ export interface GroupHistoryEntry {
 }
 
 /**
- * Firestore `weeklyPlans` document shape — one manually-created lesson plan,
- * replacing the folder-scanning of /lessons/[group]/week-[date]/ that
- * scripts/generate-week.ts used to produce. `excalidrawPath` is the Firebase
- * Storage key of the .excalidraw scene (created blank by the "New Lesson"
- * modal) — only the plan's metadata and scheduling live in Firestore. It kept
- * its "lessons/..." shape from when scenes were local files, so existing docs
- * needed no migration; see lib/firebase/weeklyPlans.ts.
+ * One saved link on a lesson — a YouTube video, a flashcard site, an image,
+ * a Google Doc, or the `/api/resources/files/{id}/raw` URL of something
+ * already in the Resources library. Deliberately just a URL plus a label:
+ * whiteboards now live in local Excalidraw files opened straight from the
+ * browser, so a lesson's job is to point at material, not to host it.
+ */
+export interface LessonLink {
+  id: string;
+  url: string;
+  title: string;
+}
+
+/**
+ * Firestore `weeklyPlans` document shape — one lesson, from planned to
+ * taught. Created against a group and a syllabus topic, filled in with links
+ * and a plan while preparing, then closed out with takeaways and a
+ * Mastered / Review Pending verdict — which writes the matching
+ * `groups/{groupId}/history` entry and records its id here
+ * (`historyEntryId`, "" while the lesson is still only a plan).
+ *
+ * The embedded Excalidraw board this used to carry (`excalidrawPath`) is
+ * gone: boards are local .excalidraw files now, linked like any other
+ * material. Existing docs keep the dead field, nothing reads it.
  */
 export interface WeeklyPlanDoc {
   id: string;
   groupId: string;
   date: string; // ISO date
   topic: string;
-  excalidrawPath: string;
-  teacherNotes: string;
+  teacherNotes: string; // the plan — what to run, in what order
+  takeaways: string; // written after the lesson: what actually mattered
+  links: LessonLink[];
+  historyEntryId: string; // "" until the lesson is marked taught
   emojis: string[];
-  // The sidebar's "Weekly Plans" queue is drag-reorderable (Phase 3) — a
-  // sparse ordering key, not an array index, so reordering one plan never
-  // requires rewriting every other doc.
+  // A sparse ordering key, not an array index, so reordering one lesson
+  // never requires rewriting every other doc.
   order?: number;
-  // Which `weeklyPlanFolders` doc this plan is filed under — "" (not
-  // undefined) means unfiled, so every doc always has a plain string here
-  // and Firestore writes never need to special-case a missing field.
-  folderId: string;
-  // Which `weeklyPlanTags` doc ids this plan carries — always an array
-  // (never undefined), same "no missing field" convention as folderId.
+  // Which `weeklyPlanTags` doc ids this lesson carries — always an array
+  // (never undefined) so Firestore writes never special-case a missing field.
   tagIds: string[];
   createdAt?: string;
   updatedAt?: string;
-}
-
-/** Firestore `weeklyPlanFolders` document shape — a folder in the Teaching sidebar's "Weekly Plans" queue. Nestable (parentId, Obsidian-vault-style tree) and colorable (preset palette or a custom hex, null = default neutral). */
-export interface WeeklyPlanFolderDoc {
-  id: string;
-  name: string;
-  order: number;
-  parentId: string | null;
-  color: string | null;
 }
 
 /** Firestore `weeklyPlanTags` document shape — a reusable tag a weekly plan can carry. Created once via the tag picker's "+ new tag", then attached to plans by id (WeeklyPlanDoc.tagIds) — never freeform text. */
@@ -445,112 +438,3 @@ export interface WeeklyPlanTagDoc {
   name: string;
   color: string;
 }
-
-// ---------------------------------------------------------------------------
-// Games — interactive classroom activities. One `GameDoc` per game, in the
-// `games` Firestore collection. Only the field matching `type` is populated;
-// a flat optional field per type (rather than a generic `data: unknown` or a
-// discriminated union) keeps every game's shape simple and directly typed
-// without cast gymnastics, matching the existing flat-optional-field
-// convention (e.g. GameDoc.memoryCards).
-// ---------------------------------------------------------------------------
-
-export type GameType =
-  | "memory-cards"
-  | "fill-in-the-gaps"
-  | "match-word-image"
-  | "hangman"
-  | "sort-categories"
-  | "spelling-bee";
-
-/** One Memory Cards item — duplicated into two face-down cards at play time. */
-export interface MemoryCardsItem {
-  id: string;
-  kind: "text" | "image";
-  value: string; // text to show, or an image URL/path
-}
-export interface MemoryCardsData {
-  items: MemoryCardsItem[];
-}
-
-/** One Fill in the Gaps sentence — `text` contains "___" as the blank marker. */
-export interface FillGapsSentence {
-  id: string;
-  text: string;
-  answer: string;
-}
-export interface FillGapsData {
-  sentences: FillGapsSentence[]; // word bank at play time = shuffled list of every sentence's answer
-}
-
-/** One Match Word ↔ Image pair. */
-export interface MatchPair {
-  id: string;
-  word: string;
-  image: string; // URL/path
-}
-export interface MatchWordImageData {
-  pairs: MatchPair[];
-}
-
-/** One Hangman word, played in list order. */
-export interface HangmanWord {
-  id: string;
-  word: string;
-  hint?: string;
-}
-export interface HangmanData {
-  words: HangmanWord[];
-}
-
-/** One bin a Sort into Categories item can be dragged into. */
-export interface SortCategory {
-  id: string;
-  name: string;
-}
-/** One sortable item — kind mirrors MemoryCardsItem (text or image), plus which category it belongs to. */
-export interface SortItem {
-  id: string;
-  kind: "text" | "image";
-  value: string;
-  categoryId: string;
-}
-export interface SortCategoriesData {
-  categories: SortCategory[];
-  items: SortItem[]; // word bank at play time = every item, shuffled
-}
-
-/**
- * One Spelling Bee word. `audioUrl` points at `/api/games/{gameId}/audio/{wordId}`
- * (a signed-URL redirect over Firebase Storage — see that route) once a clip
- * has been recorded or uploaded; absent until then, in which case the
- * player just skips the "play sound" step.
- */
-export interface SpellingWord {
-  id: string;
-  word: string;
-  hint?: string;
-  audioUrl?: string;
-}
-export interface SpellingBeeData {
-  words: SpellingWord[];
-}
-
-/** Firestore `games` document shape. */
-export interface GameDoc {
-  id: string;
-  type: GameType;
-  title: string;
-  description: string;
-  tags: string[];
-  cover: string; // URL/path, same convention as GameDoc.cover
-  memoryCards?: MemoryCardsData;
-  fillGaps?: FillGapsData;
-  matchWordImage?: MatchWordImageData;
-  hangman?: HangmanData;
-  sortCategories?: SortCategoriesData;
-  spellingBee?: SpellingBeeData;
-  createdAt?: string;
-  updatedAt?: string;
-}
-

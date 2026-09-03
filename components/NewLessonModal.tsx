@@ -17,6 +17,8 @@ export default function NewLessonModal({
   groups,
   tags,
   editPlan,
+  defaultGroupId,
+  defaultTopic,
   onTagCreated,
   onClose,
   onCreated,
@@ -25,14 +27,17 @@ export default function NewLessonModal({
   tags: WeeklyPlanTagDoc[];
   /** When set, the modal edits this existing plan (PATCH) instead of creating a new one (POST) — same form, "Edit Lesson" title/button. */
   editPlan?: WeeklyPlanDoc;
+  /** Prefills for a lesson created from a group card or straight off the Curriculum Board — so "plan this topic for this group" is one click, not a form. */
+  defaultGroupId?: string;
+  defaultTopic?: string;
   onTagCreated: (tag: WeeklyPlanTagDoc) => void;
   onClose: () => void;
   onCreated: (plan: WeeklyPlanDoc) => void;
 }) {
   const { data: levels } = useFirestoreCollection<CurriculumLevelDoc>("curriculum", { orderByField: "levelNumber" });
-  const [groupId, setGroupId] = useState(editPlan?.groupId ?? groups[0]?.id ?? "");
+  const [groupId, setGroupId] = useState(editPlan?.groupId ?? defaultGroupId ?? groups[0]?.id ?? "");
   const [date, setDate] = useState(editPlan?.date ?? localDateIso());
-  const [topic, setTopic] = useState(editPlan?.topic ?? "");
+  const [topic, setTopic] = useState(editPlan?.topic ?? defaultTopic ?? "");
   const [emojis, setEmojis] = useState<string[]>(editPlan?.emojis ?? []);
   const [tagIds, setTagIds] = useState<string[]>(editPlan?.tagIds ?? []);
   const [saving, setSaving] = useState(false);

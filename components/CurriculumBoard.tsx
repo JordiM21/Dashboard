@@ -5,19 +5,18 @@ import { authFetch } from "@/lib/firebase/authFetch";
 import { useFirestoreCollection } from "@/lib/firebase/useFirestoreCollection";
 import { FetchFailedState, EmptyState } from "@/components/StateBox";
 import PromptModal from "@/components/PromptModal";
-import AddHistoryModal from "@/components/AddHistoryModal";
 import LevelEditModal from "@/components/LevelEditModal";
+import NewLessonModal from "@/components/NewLessonModal";
 import LoadingLabel from "@/components/LoadingLabel";
 import { formatDateDMY } from "@/lib/dateUtils";
-import type { CurriculumLevelDoc, GroupDocWithRecall, GroupHistoryEntry } from "@/lib/types";
+import type { CurriculumLevelDoc, GroupDocWithRecall, GroupHistoryEntry, WeeklyPlanTagDoc } from "@/lib/types";
 
-/** Which prompt-style modal (if any) is currently open — one shared PromptModal instance covers all three, plus AddHistoryModal for backfilling a group's past topics and LevelEditModal for a level's full details. */
+/** Which prompt-style modal (if any) is currently open — one shared PromptModal instance covers the text-entry ones, plus LevelEditModal for a level's full details. */
 type ActiveModal =
   | { kind: "newGroup" }
   | { kind: "newStage" }
   | { kind: "addTopic"; level: CurriculumLevelDoc }
   | { kind: "editTopic"; level: CurriculumLevelDoc; topic: string }
-  | { kind: "addHistory"; group: GroupDocWithRecall; entry?: GroupHistoryEntry }
   | { kind: "levelEdit"; level: CurriculumLevelDoc };
 
 // Cycled by a group's position in the list — plenty of visual distinction for the
@@ -32,7 +31,6 @@ const STAGE_COLORS = ["#e07a5f", "#5b9bd1", "#8a63d2", "#3aa679"];
 // mastery badges and the "recent history" card can read from one cache
 // instead of each firing their own request.
 const ALL_TIME_SINCE = "0000-01-01";
-const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** Compact Apple-style pill switch — replaces the raw checkbox for "Edit Syllabus". */
 function ToggleSwitch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
@@ -102,8 +100,6 @@ export default function CurriculumBoard() {
   const [groups, setGroups] = useState<GroupDocWithRecall[] | null>(null);
   const [groupsError, setGroupsError] = useState<string | null>(null);
   const [assigning, setAssigning] = useState(false);
-  const [reportingGroupId, setReportingGroupId] = useState<string | null>(null);
-  const [reportFlashGroupId, setReportFlashGroupId] = useState<string | null>(null);
   const [historyByGroup, setHistoryByGroup] = useState<Record<string, GroupHistoryEntry[]>>({});
 
   const [editMode, setEditMode] = useState(false);
@@ -123,6 +119,18 @@ export default function CurriculumBoard() {
   const [activeGroup, setActiveGroup] = useState<string | null>(null);
 
   const [activeModal, setActiveModal] = useState<ActiveModal | null>(null);
+
+  // "Plan a lesson on this topic" — the "+" that appears on every subtopic
+  // while a group's brush is up. Planning from the board is the point of the
+  // board, so it doesn't hand you off to another tab to do it.
+  const [planTopic, setPlanTopic] = useState<string | null>(null);
+  const [tags, setTags] = useState<WeeklyPlanTagDoc[]>([]);
+  useEffect(() => {
+    authFetch("/api/board/weekly-plan-tags")
+      .then((res) => (res.ok ? res.json() : { tags: [] }))
+      .then((body: { tags?: WeeklyPlanTagDoc[] }) => setTags(body.tags ?? []))
+      .catch(() => {});
+  }, []);
 
   const loadGroupHistory = useCallback((groupId: string) => {
     authFetch(`/api/board/groups/${groupId}/history?since=${ALL_TIME_SINCE}`)
@@ -162,14 +170,6 @@ export default function CurriculumBoard() {
     }
     return map;
   }, [historyByGroup]);
-
-  /** A group's history entries from the last 30 days, newest first — sliced client-side from the cached all-time list. */
-  function recentHistory(groupId: string): GroupHistoryEntry[] | undefined {
-    const all = historyByGroup[groupId];
-    if (!all) return undefined;
-    const cutoff = new Date(Date.now() - THIRTY_DAYS_MS).toISOString().slice(0, 10);
-    return all.filter((e) => e.date >= cutoff);
-  }
 
   const stages = useMemo(() => {
     if (!levels) return [];
@@ -341,34 +341,6 @@ export default function CurriculumBoard() {
     }).catch(() => {});
   }
 
-  /** Builds a celebratory summary of a group's last 30 days from the cached history and copies it to the clipboard — the "Generate Parent Report" button. */
-  async function generateParentReport(group: GroupDocWithRecall) {
-    setReportingGroupId(group.id);
-    try {
-      const entries = (recentHistory(group.id) ?? []).slice().sort((a, b) => a.date.localeCompare(b.date));
-
-      const lines = [`🎉 Progress Update — ${group.name} 🎉`, ""];
-      if (entries.length === 0) {
-        lines.push("No lessons logged in the last 30 days yet — check back soon!");
-      } else {
-        lines.push(`Over the last 30 days, ${group.name} covered ${entries.length} topic${entries.length === 1 ? "" : "s"}:`, "");
-        for (const e of entries) {
-          const icon = e.status === "Mastered" ? "✅" : "🔁";
-          lines.push(`${icon} ${e.topic} — ${e.status}${e.teacherNotes ? ` (${e.teacherNotes})` : ""}`);
-        }
-        lines.push("", "Great work this month — keep it up! 🌟");
-      }
-
-      await navigator.clipboard.writeText(lines.join("\n"));
-      setReportFlashGroupId(group.id);
-      setTimeout(() => setReportFlashGroupId((cur) => (cur === group.id ? null : cur)), 2000);
-    } catch (err) {
-      window.alert(err instanceof Error ? err.message : "Couldn't generate the report.");
-    } finally {
-      setReportingGroupId(null);
-    }
-  }
-
   return (
     <div>
       <section
@@ -376,7 +348,7 @@ export default function CurriculumBoard() {
           position: "sticky",
           // Below #floating-nav's own sticky top:16px + its pill height, so
           // the two stack instead of overlapping — see app/globals.css.
-          top: 72,
+          top: "calc(72px + env(safe-area-inset-top))",
           zIndex: 40,
           background: "var(--cream)",
           paddingTop: 12,
@@ -388,7 +360,7 @@ export default function CurriculumBoard() {
           <div>
             <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 4 }}>Groups</div>
             <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>
-              Click a group to pick up the brush, then click any subtopic to assign it there.
+              Click a group to pick up the brush, then click any subtopic to move them there — or its "+" to plan a lesson on it.
             </div>
           </div>
           <ToggleSwitch checked={editMode} onChange={setEditMode} label="Edit Syllabus" />
@@ -452,105 +424,6 @@ export default function CurriculumBoard() {
           </button>
         </div>
         {assigning && <div style={{ fontSize: 12, color: "var(--ink-soft)", marginTop: 8 }}>Saving…</div>}
-      </section>
-
-      <section style={{ marginBottom: 28 }}>
-        <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 4 }}>Group Progress</div>
-        <div style={{ fontSize: 13, color: "var(--ink-soft)", marginBottom: 14 }}>
-          Copy a celebratory parent-ready summary of the last 30 days straight to your clipboard.
-        </div>
-        {groups && groups.length > 0 && (
-          <div className="grid grid-cards">
-            {groups.map((g) => {
-              const level = (levels ?? []).find((l) => l.levelNumber === g.currentLevel);
-              const recent = recentHistory(g.id);
-              return (
-                <div key={g.id} className="card card-pad">
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                    <div style={{ fontWeight: 700, fontSize: 16 }}>{g.name}</div>
-                    <span className="tag" style={{ background: groupColor(g.id), color: "#fff", flexShrink: 0 }}>
-                      Level {g.currentLevel}/{levels?.length ?? 20}
-                    </span>
-                  </div>
-                  <div style={{ fontWeight: 600, fontSize: 14, marginTop: 10 }}>{level?.title ?? `Level ${g.currentLevel}`}</div>
-                  {g.currentTopic && <div style={{ fontSize: 13, color: "var(--ink-soft)", marginTop: 4 }}>{g.currentTopic}</div>}
-                  {g.reviewSuggested && (
-                    <div style={{ fontSize: 12, marginTop: 8, color: "var(--warning)", fontWeight: 600 }}>
-                      🔁 Review suggested — mastered 90+ days ago
-                    </div>
-                  )}
-                  <div className="modal-actions" style={{ justifyContent: "flex-start", marginTop: 12, paddingTop: 0, flexWrap: "wrap" }}>
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => generateParentReport(g)}
-                      disabled={reportingGroupId === g.id}
-                    >
-                      <LoadingLabel loading={reportingGroupId === g.id}>
-                        {reportFlashGroupId === g.id ? "Copied! 📋" : "📋 Generate Parent Report"}
-                      </LoadingLabel>
-                    </button>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setActiveModal({ kind: "addHistory", group: g })}>
-                      + Add Past Topic
-                    </button>
-                  </div>
-
-                  <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--line)" }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-soft)", marginBottom: 6 }}>
-                      RECENT HISTORY (LAST 30 DAYS)
-                    </div>
-                    {recent === undefined ? (
-                      <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>Loading…</div>
-                    ) : recent.length === 0 ? (
-                      <div style={{ fontSize: 12, color: "var(--ink-soft)", fontStyle: "italic" }}>Nothing logged yet.</div>
-                    ) : (
-                      <div style={{ maxHeight: 140, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
-                        {recent.map((entry) => {
-                          const row = (
-                            <>
-                              <span style={{ color: "var(--ink-soft)", flexShrink: 0 }}>{formatDateDMY(entry.date)}</span>
-                              <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                {entry.topic}
-                              </span>
-                              <span style={{ flexShrink: 0 }}>{entry.status === "Mastered" ? "✅" : "🔁"}</span>
-                            </>
-                          );
-                          return editMode ? (
-                            <button
-                              key={entry.id}
-                              type="button"
-                              className="subtopic-chip interactive"
-                              onClick={() => setActiveModal({ kind: "addHistory", group: g, entry })}
-                              style={{
-                                fontSize: 12,
-                                display: "flex",
-                                justifyContent: "space-between",
-                                gap: 8,
-                                width: "100%",
-                                padding: "3px 6px",
-                                borderRadius: "var(--radius-sm)",
-                                background: "transparent",
-                                border: "1px solid transparent",
-                                textAlign: "left",
-                                font: "inherit",
-                                cursor: "pointer",
-                              }}
-                            >
-                              {row}
-                            </button>
-                          ) : (
-                            <div key={entry.id} style={{ fontSize: 12, display: "flex", justifyContent: "space-between", gap: 8 }}>
-                              {row}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
       </section>
 
       <section>
@@ -665,8 +538,8 @@ export default function CurriculumBoard() {
                             (g) => masteredTopicsByGroup[g.id]?.has(topic) && !here.some((h) => h.id === g.id)
                           );
                           return (
+                            <div key={topic} className="subtopic-row">
                             <button
-                              key={topic}
                               type="button"
                               className={`subtopic-chip${editMode || activeGroup ? " interactive" : ""}`}
                               onClick={() =>
@@ -733,6 +606,17 @@ export default function CurriculumBoard() {
                                 </span>
                               )}
                             </button>
+                            {activeGroup && !editMode && (
+                              <button
+                                type="button"
+                                className="subtopic-plan"
+                                title={`Plan a lesson on "${topic}" for ${(groups ?? []).find((g) => g.id === activeGroup)?.name ?? "this group"}`}
+                                onClick={() => setPlanTopic(topic)}
+                              >
+                                +
+                              </button>
+                            )}
+                            </div>
                           );
                         })}
 
@@ -844,23 +728,15 @@ export default function CurriculumBoard() {
           onDelete={() => deleteTopic(activeModal.level, activeModal.topic)}
         />
       )}
-      {activeModal?.kind === "addHistory" && (
-        <AddHistoryModal
-          group={activeModal.group}
-          entry={activeModal.entry}
-          onClose={() => setActiveModal(null)}
-          onSaved={() => {
-            loadGroupHistory(activeModal.group.id);
-            setActiveModal(null);
-          }}
-          onDeleted={
-            activeModal.entry
-              ? () => {
-                  loadGroupHistory(activeModal.group.id);
-                  setActiveModal(null);
-                }
-              : undefined
-          }
+      {planTopic !== null && activeGroup && (
+        <NewLessonModal
+          groups={groups ?? []}
+          tags={tags}
+          defaultGroupId={activeGroup}
+          defaultTopic={planTopic}
+          onTagCreated={(t) => setTags((prev) => [...prev, t])}
+          onClose={() => setPlanTopic(null)}
+          onCreated={() => setPlanTopic(null)}
         />
       )}
     </div>

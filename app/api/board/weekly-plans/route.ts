@@ -9,7 +9,7 @@ function unauthorized(err: unknown) {
   return NextResponse.json({ error: "unauthorized", message: err instanceof Error ? err.message : "Unauthorized" }, { status: 401 });
 }
 
-/** Every lesson plan — the Teaching view sidebar's "Weekly Plans" queue. */
+/** Every lesson — the Classroom view groups these per class itself. */
 export async function GET(req: NextRequest) {
   try {
     await requireAuth(req);
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-/** The "+ New Lesson" modal's Save action — body is `{ groupId, date, topic, teacherNotes, emojis }`. Creates the Firestore doc and a blank .excalidraw file on disk. */
+/** The "+ New Lesson" modal's Save action — body is `{ groupId, date, topic, teacherNotes, emojis }`. Creates the Firestore doc. */
 export async function POST(req: NextRequest) {
   try {
     await requireAuth(req);

@@ -22,9 +22,9 @@ const DRAG_MIME = "application/x-resource-drag";
 
 /**
  * Files, folders, images, video, PDFs, markdown notes, and text files —
- * backed by Firebase Storage. Lives full-width inside the Teaching view's
- * "Resources" tab (see TeachingView.tsx) — there's no standalone /resources
- * route anymore, this is the only place it's used.
+ * backed by Firebase Storage. Lives full-width inside the Classroom view's
+ * "Resources" tab (see app/students/page.tsx) — there's no standalone
+ * /resources route, this is the only place it's used.
  */
 export default function ResourcesBrowser() {
   const {

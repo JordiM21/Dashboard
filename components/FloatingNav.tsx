@@ -10,24 +10,6 @@ import { ALL_NAV_TABS, DEFAULT_VISIBLE_TAB_IDS, NAV_STORAGE_KEY } from "@/lib/na
 
 type Theme = "light" | "dark";
 
-// Warms a tab's JS chunk as soon as the user shows intent to visit it
-// (hover/focus/touch — before the actual click), instead of waiting for
-// navigation to start the download. Teaching is by far the heaviest route
-// (Excalidraw drags in mermaid/cytoscape/d3/rough.js), so this is what
-// turns its multi-second first-compile into a wait that mostly happens
-// while the mouse is still moving toward the tab, not after the click.
-// Next dedupes the underlying import() itself, so calling this more than
-// once (re-hovering, focus then click) costs nothing extra.
-const TAB_PRELOADERS: Partial<Record<string, () => void>> = {
-  teaching: () => {
-    void import("@/components/TeachingView");
-  },
-};
-
-function preloadTab(id: string) {
-  TAB_PRELOADERS[id]?.();
-}
-
 // How many tabs get their own slot in the mobile bottom bar. Three plus the
 // add button and More fills a phone's width without shrinking labels past
 // legibility; everything else is one tap away behind More.
@@ -106,9 +88,7 @@ export default function FloatingNav() {
             <Link
               key={tab.id}
               href={tab.href}
-              className={`nav-tab${isActive(tab.href) ? " active" : ""}`}
-              onMouseEnter={() => preloadTab(tab.id)}
-              onFocus={() => preloadTab(tab.id)}
+              className={`nav-tab${isActive(tab.href) ? " active" : ""}`}
             >
               {tab.label}
             </Link>
@@ -157,8 +137,7 @@ export default function FloatingNav() {
           <Link
             key={tab.id}
             href={tab.href}
-            className={`nav-bottom-item${isActive(tab.href) ? " active" : ""}`}
-            onTouchStart={() => preloadTab(tab.id)}
+            className={`nav-bottom-item${isActive(tab.href) ? " active" : ""}`}
           >
             <span className="nav-bottom-icon">{tab.icon}</span>
             <span className="nav-bottom-label">{tab.label}</span>
@@ -187,8 +166,7 @@ export default function FloatingNav() {
                   <Link
                     key={tab.id}
                     href={tab.href}
-                    className={`nav-sheet-tile${isActive(tab.href) ? " active" : ""}`}
-                    onTouchStart={() => preloadTab(tab.id)}
+                    className={`nav-sheet-tile${isActive(tab.href) ? " active" : ""}`}
                   >
                     <span className="nav-sheet-tile-icon">{tab.icon}</span>
                     {tab.label}

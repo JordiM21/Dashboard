@@ -4,12 +4,10 @@ import { addOneMonth, localDateIso } from "@/lib/dateUtils";
 import type {
   Student,
   FinanceEntry,
-  Lesson,
   Project,
   Task,
   RecurringTransaction,
   MetaAudienceSnapshotRecord,
-  GameDoc,
 } from "@/lib/types";
 
 /**
@@ -25,10 +23,8 @@ import type {
 
 const STUDENTS = "students";
 const TRANSACTIONS = "transactions";
-const LESSONS = "lessons";
 const PROJECTS = "projects";
 const TASKS = "tasks";
-const GAMES = "games";
 const RECURRING_TRANSACTIONS = "recurringTransactions";
 const META_AUDIENCE_SNAPSHOTS = "metaAudienceSnapshots";
 
@@ -180,54 +176,6 @@ export async function deleteTransaction(id: string): Promise<boolean> {
 }
 
 // ---------------------------------------------------------------------------
-// Lessons
-// ---------------------------------------------------------------------------
-
-export async function listLessons(): Promise<Lesson[]> {
-  const snap = await getAdminDb().collection(LESSONS).orderBy("date", "desc").get();
-  return snap.docs.map((doc) => fromDoc<Lesson>(doc));
-}
-
-export async function listLessonsForStudent(studentId: string): Promise<Lesson[]> {
-  const snap = await getAdminDb()
-    .collection(LESSONS)
-    .where("studentId", "==", studentId)
-    .orderBy("date", "desc")
-    .get();
-  return snap.docs.map((doc) => fromDoc<Lesson>(doc));
-}
-
-export async function createLesson(data: Omit<Lesson, "id" | "createdAt" | "updatedAt">): Promise<Lesson> {
-  const ref = getAdminDb().collection(LESSONS).doc();
-  await ref.set({
-    ...data,
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  });
-  const doc = await ref.get();
-  return fromDoc<Lesson>(doc as QueryDocumentSnapshot<DocumentData>);
-}
-
-export async function updateLesson(id: string, updates: Partial<Lesson>): Promise<Lesson | null> {
-  const ref = getAdminDb().collection(LESSONS).doc(id);
-  const existing = await ref.get();
-  if (!existing.exists) return null;
-
-  const { id: _ignoredId, createdAt: _ignoredCreatedAt, ...safeUpdates } = updates;
-  await ref.update({ ...safeUpdates, updatedAt: FieldValue.serverTimestamp() });
-  const doc = await ref.get();
-  return fromDoc<Lesson>(doc as QueryDocumentSnapshot<DocumentData>);
-}
-
-export async function deleteLesson(id: string): Promise<boolean> {
-  const ref = getAdminDb().collection(LESSONS).doc(id);
-  const existing = await ref.get();
-  if (!existing.exists) return false;
-  await ref.delete();
-  return true;
-}
-
-// ---------------------------------------------------------------------------
 // Projects
 // ---------------------------------------------------------------------------
 
@@ -306,41 +254,6 @@ export async function detachTasksFromProject(projectId: string): Promise<number>
   for (const doc of snap.docs) batch.update(doc.ref, { projectId: null, updatedAt: FieldValue.serverTimestamp() });
   await batch.commit();
   return snap.size;
-}
-
-// ---------------------------------------------------------------------------
-// Games
-// ---------------------------------------------------------------------------
-
-export async function listGames(): Promise<GameDoc[]> {
-  const snap = await getAdminDb().collection(GAMES).orderBy("createdAt", "desc").get();
-  return snap.docs.map((doc) => fromDoc<GameDoc>(doc));
-}
-
-export async function createGame(data: Omit<GameDoc, "id" | "createdAt" | "updatedAt">): Promise<GameDoc> {
-  const ref = getAdminDb().collection(GAMES).doc();
-  await ref.set({ ...data, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
-  const doc = await ref.get();
-  return fromDoc<GameDoc>(doc as QueryDocumentSnapshot<DocumentData>);
-}
-
-export async function updateGame(id: string, updates: Partial<GameDoc>): Promise<GameDoc | null> {
-  const ref = getAdminDb().collection(GAMES).doc(id);
-  const existing = await ref.get();
-  if (!existing.exists) return null;
-
-  const { id: _ignoredId, createdAt: _ignoredCreatedAt, ...safeUpdates } = updates;
-  await ref.update({ ...safeUpdates, updatedAt: FieldValue.serverTimestamp() });
-  const doc = await ref.get();
-  return fromDoc<GameDoc>(doc as QueryDocumentSnapshot<DocumentData>);
-}
-
-export async function deleteGame(id: string): Promise<boolean> {
-  const ref = getAdminDb().collection(GAMES).doc(id);
-  const existing = await ref.get();
-  if (!existing.exists) return false;
-  await ref.delete();
-  return true;
 }
 
 // ---------------------------------------------------------------------------

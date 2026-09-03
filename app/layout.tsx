@@ -17,7 +17,20 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0b1220",
+  // The installed app's own chrome (iOS status bar tint, Android task
+  // switcher header) follows the page's theme-color, so a single dark value
+  // left a black bar sitting above a cream page all day in light mode.
+  // These are --cream's two values from globals.css — keep them in sync.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#faf6f0" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a1220" },
+  ],
+  // Paired with appleWebApp.statusBarStyle "black-translucent" above: that
+  // style lets the page draw under the status bar, which only looks right
+  // if the viewport actually extends into the notch/home-indicator area and
+  // the layout then insets itself back out (see #app-shell and
+  // #floating-nav's env(safe-area-inset-*) in globals.css).
+  viewportFit: "cover",
 };
 
 const SW_REGISTER_SCRIPT = `
