@@ -20,6 +20,18 @@ import type { Project, Task } from "@/lib/types";
  * A failed write rolls its overlay back and surfaces the message — silently
  * keeping a local-only "done" would be worse than the delay it saves.
  */
+/**
+ * Fills in what an older document does not carry: tasks written before
+ * tags were an array have a single `category` string, and one written
+ * straight into the Firestore console might have neither. Doing it here,
+ * on read, is why none of those documents needed a migration.
+ */
+function normalize(task: Task): Task {
+  const legacyCategory = (task as Task & { category?: string }).category;
+  if (Array.isArray(task.tags) && (task.tags.length > 0 || !legacyCategory)) return task;
+  return { ...task, tags: legacyCategory ? [legacyCategory] : [] };
+}
+
 export function useTaskStore() {
   const tasksQuery = useFirestoreCollection<Task>("tasks", { orderByField: "createdAt", orderByDirection: "desc" });
   const projectsQuery = useFirestoreCollection<Project>("projects", { orderByField: "createdAt", orderByDirection: "desc" });
@@ -40,7 +52,7 @@ export function useTaskStore() {
   const tasks = useMemo(() => {
     const live = (serverTasks ?? [])
       .filter((t) => !deleted.includes(t.id))
-      .map((t) => (overlay[t.id] ? { ...t, ...overlay[t.id] } : t));
+      .map((t) => normalize(overlay[t.id] ? { ...t, ...overlay[t.id] } : t));
     return [...creating, ...live];
   }, [serverTasks, overlay, deleted, creating]);
 
@@ -80,9 +92,8 @@ export function useTaskStore() {
       id: tempId,
       title: fields.title ?? "",
       notes: fields.notes ?? "",
-      category: fields.category ?? "",
+      tags: fields.tags ?? [],
       priority: fields.priority ?? "Medium",
-      size: fields.size ?? "M",
       status: fields.status ?? "todo",
       due: fields.due ?? null,
       projectId: fields.projectId ?? null,

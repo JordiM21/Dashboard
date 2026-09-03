@@ -31,9 +31,8 @@ export async function POST(req: NextRequest) {
   const task = await createTask({
     title,
     notes: body.notes ?? "",
-    category: body.category ?? "",
+    tags: body.tags ?? [],
     priority: body.priority ?? "Medium",
-    size: body.size ?? "M",
     status: body.status ?? "todo",
     due: body.due ?? null,
     projectId: body.projectId ?? null,

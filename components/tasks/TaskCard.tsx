@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import CardMenu from "@/components/tasks/CardMenu";
-import { SIZE_LABEL, subtaskProgress } from "@/lib/tasks";
+import { subtaskProgress } from "@/lib/tasks";
 import { addDays, formatDateDMY, localDateIso } from "@/lib/dateUtils";
 import type { Project, Task } from "@/lib/types";
 
@@ -103,11 +103,12 @@ export default function TaskCard({
                 {project.title}
               </span>
             )}
-            {task.category && <span className="chip">#{task.category}</span>}
+            {task.tags.map((tag) => (
+              <span key={tag} className="chip">
+                #{tag}
+              </span>
+            ))}
             <span className={`badge badge-${task.priority.toLowerCase()}`}>{task.priority}</span>
-            <span className="chip chip-size" title={SIZE_LABEL[task.size]}>
-              {SIZE_LABEL[task.size]}
-            </span>
           </div>
 
           {task.subtasks.length > 0 && (

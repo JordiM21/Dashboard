@@ -1230,37 +1230,85 @@ button {
   max-width: 150px;
 }
 
-.capture-sizes {
+/* Second row of the capture box: priority and project. Giving these their
+   own line is what stops the text field collapsing to a stub on a phone. */
+.capture-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.capture-submit {
+  margin-left: auto;
+}
+
+.capture-tags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+/* Segmented control — the priority picker, and the shape any future
+   pick-one-of-four should take. The sliding pill is the active item's own
+   background rather than a separate element, so it can never desync. */
+.segmented {
   display: inline-flex;
   background: var(--cake);
   border-radius: 999px;
   padding: 3px;
   gap: 2px;
+  max-width: 100%;
 }
 
-.capture-size {
+.segmented-item {
+  flex: 1 1 auto;
   border: none;
   background: transparent;
   color: var(--ink-soft);
   font-family: inherit;
   font-size: 12px;
-  font-weight: 700;
-  width: 26px;
-  height: 24px;
+  font-weight: 600;
+  padding: 6px 12px;
   border-radius: 999px;
   cursor: pointer;
+  white-space: nowrap;
   transition: background-color 0.2s var(--ease-out), color 0.2s var(--ease-out), transform 0.2s var(--ease-spring);
 }
 
-.capture-size:hover {
+.segmented-item:hover {
   color: var(--ink);
 }
 
-.capture-size.active {
+.segmented-item.active {
   background: var(--white);
   color: var(--ink);
-  transform: scale(1.06);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+/* The active priority carries its own colour, so the control reads at a
+   glance instead of only when you read the words. */
+.segmented-item.priority-urgent.active {
+  background: var(--danger);
+  color: #fff;
+}
+
+.segmented-item.priority-high.active {
+  background: var(--orange);
+  color: #fff;
+}
+
+.segmented-item.priority-medium.active {
+  background: var(--warning);
+  color: #3a2e28;
+}
+
+.segmented-item.priority-low.active {
+  background: var(--white);
+  color: var(--ink-soft);
 }
 
 .capture-preview {
@@ -1297,8 +1345,7 @@ button {
 }
 
 @media (max-width: 620px) {
-  .capture-hint,
-  .capture-submit {
+  .capture-hint {
     display: none;
   }
 }
@@ -1365,9 +1412,16 @@ button {
   color: var(--ink);
 }
 
-.chip-size {
+.chip-ghost {
   background: transparent;
-  border: 1px solid var(--line);
+  border: 1px dashed var(--line);
+  color: var(--ink-soft);
+}
+
+.chip-ghost:hover {
+  border-style: solid;
+  border-color: var(--accent);
+  color: var(--ink);
 }
 
 /* Project rail — a horizontal strip of containers, each doubling as a
@@ -1591,12 +1645,6 @@ button {
 
 .task-card-compact .task-card-title {
   font-size: 13px;
-}
-
-/* The Overview's narrower cards drop the size chip — at a glance in the
-   morning, when and how urgent are the only two labels worth the width. */
-.task-card-compact .chip-size {
-  display: none;
 }
 
 .task-card-meta {
@@ -3593,9 +3641,49 @@ button {
    repositions it, so this is safe to apply broadly rather than chasing
    every undersized button individually. */
 @media (max-width: 760px) {
-  button:not(.theme-toggle):not(.theme-switch):not(.task-check),
+  button:not(.theme-toggle):not(.theme-switch):not(.task-check):not(.chip-button):not(.segmented-item):not(.card-menu-trigger):not(.task-action):not(.view-toggle button),
   a.btn {
     min-height: 44px;
+  }
+
+  /* The controls above opt out of the blanket rule and set their own
+     height: stretching a pill to 44px does not make it a better target,
+     it makes it a lozenge. They get there by growing their padding
+     instead, which keeps the shape and still clears the 44px guidance
+     the rule exists to enforce. */
+  .chip-button,
+  .segmented-item,
+  .view-toggle button {
+    min-height: 38px;
+    padding-top: 9px;
+    padding-bottom: 9px;
+  }
+
+  .task-action,
+  .card-menu-trigger {
+    width: 34px;
+    height: 34px;
+  }
+
+  .segmented {
+    width: 100%;
+  }
+
+  .segmented-item {
+    flex: 1 1 0;
+    padding-left: 4px;
+    padding-right: 4px;
+    text-align: center;
+  }
+
+  .capture-select {
+    flex: 1 1 140px;
+    max-width: none;
+    min-height: 38px;
+  }
+
+  .capture-row {
+    row-gap: 8px;
   }
 }
 

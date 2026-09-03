@@ -9,16 +9,9 @@
  */
 
 import { addDays, localDateIso } from "@/lib/dateUtils";
-import type { Project, Task, TaskPriority, TaskSize } from "@/lib/types";
+import type { Project, Task, TaskPriority } from "@/lib/types";
 
 export const PRIORITIES: TaskPriority[] = ["Urgent", "High", "Medium", "Low"];
-export const SIZES: TaskSize[] = ["S", "M", "L"];
-
-export const SIZE_LABEL: Record<TaskSize, string> = {
-  S: "Quick",
-  M: "Chunk",
-  L: "Big rock",
-};
 
 /** Where a task lands in the day view. Ordered — the UI renders these top to bottom. */
 export type Bucket = "overdue" | "today" | "tomorrow" | "week" | "later" | "someday" | "done";
@@ -51,14 +44,19 @@ export function bucketOf(task: Task, today = localDateIso()): Bucket {
 }
 
 const PRIORITY_WEIGHT: Record<TaskPriority, number> = { Urgent: 0, High: 1, Medium: 2, Low: 3 };
-const SIZE_WEIGHT: Record<TaskSize, number> = { L: 0, M: 1, S: 2 };
 
 /**
  * The morning order: what's already in flight first (finishing beats
  * starting), then by how overdue/soon it is, then by priority, and only
- * then biggest-chunk-first — the "eat the big rock while you still have
- * the energy" rule. Small quick wins deliberately sink to the bottom of
- * an equal-priority group instead of being done first because they're easy.
+ * then the biggest chunk — the "eat the big rock while you still have the
+ * energy" rule.
+ *
+ * Size is measured, not declared: a task broken into five steps is a
+ * bigger chunk than a bare one-liner, and the step count is already there
+ * for free. An explicit S/M/L field used to fill this slot; it cost a
+ * decision on every capture to settle a tie this rare, which is a bad
+ * trade, and the two axes people actually act on are "does it matter"
+ * (priority) and "when is it due".
  */
 export function compareTasks(a: Task, b: Task, today = localDateIso()): number {
   const doing = Number(b.status === "doing") - Number(a.status === "doing");
@@ -71,8 +69,8 @@ export function compareTasks(a: Task, b: Task, today = localDateIso()): number {
   const prio = PRIORITY_WEIGHT[a.priority] - PRIORITY_WEIGHT[b.priority];
   if (prio) return prio;
 
-  const size = SIZE_WEIGHT[a.size] - SIZE_WEIGHT[b.size];
-  if (size) return size;
+  const chunk = b.subtasks.length - a.subtasks.length;
+  if (chunk) return chunk;
 
   return a.title.localeCompare(b.title);
 }
@@ -126,26 +124,46 @@ export function projectProgress(project: Project, tasks: Task[]): { pct: number;
   return { pct: mine.length === 0 ? 0 : Math.round((done / mine.length) * 100), done, total: mine.length };
 }
 
-/** Every category in use, plus every project's field — one vocabulary, so the filter chips and the category datalist match. */
-export function allCategories(tasks: Task[], projects: Project[]): string[] {
-  const set = new Set<string>();
-  for (const t of tasks) if (t.category) set.add(t.category);
-  for (const p of projects) if (p.field) set.add(p.field);
-  return Array.from(set).sort((a, b) => a.localeCompare(b));
+/**
+ * Every tag already in use, plus every project's category — one shared
+ * vocabulary, offered back in the capture box and the edit modal so a
+ * second "#marketing" never gets typed next to "#Marketing".
+ */
+export function allTags(tasks: Task[], projects: Project[]): string[] {
+  const map = new Map<string, string>(); // lowercase -> first spelling seen
+  for (const t of tasks) for (const tag of t.tags) if (!map.has(tag.toLowerCase())) map.set(tag.toLowerCase(), tag);
+  for (const p of projects) if (p.field && !map.has(p.field.toLowerCase())) map.set(p.field.toLowerCase(), p.field);
+  return Array.from(map.values()).sort((a, b) => a.localeCompare(b));
+}
+
+/** True when the task carries this tag, ignoring case — the filter chips and "already added?" checks both go through here. */
+export function hasTag(task: Task, tag: string): boolean {
+  return task.tags.some((t) => t.toLowerCase() === tag.toLowerCase());
 }
 
 /**
- * Natural-language dates typed straight into the capture box: "buy domain
- * tomorrow", "invoice friday !urgent #admin". Parsing happens on the way
- * in so capturing never costs a trip to a date picker — the token is
- * stripped from the title, and anything unrecognized is just part of the
- * title.
+ * Natural-language tokens typed straight into the capture box: "buy domain
+ * tomorrow #admin #legal". Parsing happens on the way in so capturing never
+ * costs a trip to a date picker — each token is stripped from the title,
+ * and anything unrecognized is just part of the title.
+ *
+ * Priority also has a "!urgent" shorthand, but it is a shortcut, not the
+ * only door: the capture box has a visible priority control, because a
+ * feature you can only reach by remembering a syntax is a feature most
+ * days you don't use.
+ *
+ * `priority` comes back undefined when no "!" token was typed, so a caller
+ * with its own priority control can tell "they didn't say" apart from
+ * "they said Medium".
  */
-export function parseQuickTask(input: string, today = localDateIso()): Pick<Task, "title" | "due" | "priority" | "category"> {
+export function parseQuickTask(
+  input: string,
+  today = localDateIso()
+): { title: string; due: string | null; priority?: TaskPriority; tags: string[] } {
   let title = input;
   let due: string | null = null;
-  let priority: TaskPriority = "Medium";
-  let category = "";
+  let priority: TaskPriority | undefined;
+  const tags: string[] = [];
 
   const priorityMatch = title.match(/(^|\s)!(urgent|high|medium|low)\b/i);
   if (priorityMatch) {
@@ -154,11 +172,12 @@ export function parseQuickTask(input: string, today = localDateIso()): Pick<Task
     title = title.replace(priorityMatch[0], " ");
   }
 
-  const categoryMatch = title.match(/(^|\s)#([\w-]+)/);
-  if (categoryMatch) {
-    category = categoryMatch[2];
-    title = title.replace(categoryMatch[0], " ");
+  // Every "#tag", not just the first — dropping the extras silently is
+  // worse than not supporting them at all.
+  for (const match of Array.from(title.matchAll(/(^|\s)#([\w-]+)/g))) {
+    if (!tags.some((t) => t.toLowerCase() === match[2].toLowerCase())) tags.push(match[2]);
   }
+  title = title.replace(/(^|\s)#[\w-]+/g, " ");
 
   const dateMatch = title.match(/(^|\s)(today|tomorrow|tonight|mon|tue|wed|thu|fri|sat|sun)\b/i);
   if (dateMatch) {
@@ -169,7 +188,7 @@ export function parseQuickTask(input: string, today = localDateIso()): Pick<Task
     title = title.replace(dateMatch[0], " ");
   }
 
-  return { title: title.replace(/\s+/g, " ").trim(), due, priority, category };
+  return { title: title.replace(/\s+/g, " ").trim(), due, priority, tags };
 }
 
 /** The next occurrence of a weekday strictly after `today` (so "fri" typed on a Friday means next Friday, not this morning). */

@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import Modal from "@/components/Modal";
-import { PRIORITIES, SIZE_LABEL, SIZES } from "@/lib/tasks";
+import { PRIORITIES } from "@/lib/tasks";
 import { addDays, localDateIso } from "@/lib/dateUtils";
-import type { Project, Subtask, Task, TaskPriority, TaskSize } from "@/lib/types";
+import type { Project, Subtask, Task, TaskPriority } from "@/lib/types";
 
 /**
  * The full edit surface — everything the card's one-tap actions don't
@@ -16,16 +16,36 @@ import type { Project, Subtask, Task, TaskPriority, TaskSize } from "@/lib/types
 export default function TaskEditModal({
   task,
   projects,
+  knownTags,
   onPatch,
   onClose,
 }: {
   task: Task;
   projects: Project[];
+  /** Every tag already in use — offered as chips here too, so this modal reuses the vocabulary instead of quietly growing it. */
+  knownTags: string[];
   onPatch: (id: string, updates: Partial<Task>) => void;
   onClose: () => void;
 }) {
   const [draft, setDraft] = useState<Task>(task);
   const [newSubtask, setNewSubtask] = useState("");
+  const [newTag, setNewTag] = useState("");
+
+  function toggleTag(tag: string) {
+    setDraft((d) => ({
+      ...d,
+      tags: d.tags.some((t) => t.toLowerCase() === tag.toLowerCase())
+        ? d.tags.filter((t) => t.toLowerCase() !== tag.toLowerCase())
+        : [...d.tags, tag],
+    }));
+  }
+
+  function addTypedTag() {
+    const tag = newTag.trim().replace(/^#/, "");
+    if (!tag) return;
+    if (!draft.tags.some((t) => t.toLowerCase() === tag.toLowerCase())) toggleTag(tag);
+    setNewTag("");
+  }
 
   function set<K extends keyof Task>(key: K, value: Task[K]) {
     setDraft((d) => ({ ...d, [key]: value }));
@@ -47,9 +67,8 @@ export default function TaskEditModal({
     onPatch(task.id, {
       title: draft.title.trim() || task.title,
       notes: draft.notes,
-      category: draft.category.trim(),
+      tags: draft.tags,
       priority: draft.priority,
-      size: draft.size,
       due: draft.due,
       projectId: draft.projectId,
     });
@@ -94,35 +113,50 @@ export default function TaskEditModal({
         </div>
       </div>
 
-      <div className="form-grid-2">
-        <div className="form-row">
-          <label>Priority</label>
-          <select value={draft.priority} onChange={(e) => set("priority", e.target.value as TaskPriority)}>
-            {PRIORITIES.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="form-row">
-          <label>Size</label>
-          <select value={draft.size} onChange={(e) => set("size", e.target.value as TaskSize)}>
-            {SIZES.map((s) => (
-              <option key={s} value={s}>
-                {SIZE_LABEL[s]}
-              </option>
-            ))}
-          </select>
+      <div className="form-row">
+        <label>Priority</label>
+        <div className="segmented" role="group" aria-label="Priority">
+          {PRIORITIES.map((p) => (
+            <button
+              key={p}
+              type="button"
+              className={`segmented-item priority-${p.toLowerCase()}${draft.priority === p ? " active" : ""}`}
+              aria-pressed={draft.priority === p}
+              onClick={() => set("priority", p as TaskPriority)}
+            >
+              {p}
+            </button>
+          ))}
         </div>
       </div>
 
       <div className="form-row">
-        <label>Category</label>
+        <label>Tags</label>
+        <div className="chip-row">
+          {draft.tags.map((t) => (
+            <button key={t} type="button" className="chip chip-button active" onClick={() => toggleTag(t)} title="Remove tag">
+              #{t} ×
+            </button>
+          ))}
+          {knownTags
+            .filter((t) => !draft.tags.some((d) => d.toLowerCase() === t.toLowerCase()))
+            .map((t) => (
+              <button key={t} type="button" className="chip chip-button chip-ghost" onClick={() => toggleTag(t)}>
+                #{t}
+              </button>
+            ))}
+        </div>
         <input
-          value={draft.category}
-          placeholder="Marketing, Admin, Teaching…"
-          onChange={(e) => set("category", e.target.value)}
+          value={newTag}
+          placeholder="New tag, then Enter…"
+          onChange={(e) => setNewTag(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addTypedTag();
+            }
+          }}
+          onBlur={addTypedTag}
         />
       </div>
 

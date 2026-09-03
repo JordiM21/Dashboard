@@ -28,8 +28,6 @@ export interface Subtask {
 
 export type TaskStatus = "todo" | "doing" | "done";
 export type TaskPriority = "Low" | "Medium" | "High" | "Urgent";
-/** How big a chunk this is — S under ~30min, M a couple of hours, L a half-day+. Drives the morning ordering (big rocks before small ones at equal priority), not a time estimate anyone has to be accurate about. */
-export type TaskSize = "S" | "M" | "L";
 
 /**
  * Firestore `tasks` document shape — the unit of work everything else in
@@ -47,9 +45,12 @@ export interface Task {
   id: string;
   title: string;
   notes: string;
-  category: string; // free-text label, e.g. "Marketing" — grouped/filtered on, never validated
+  // Free-text labels, typed as "#marketing" in the capture box or picked
+  // from the tags already in use. Older docs carry a single `category`
+  // string instead; lib/useTaskStore.ts folds that into this array on read,
+  // so nothing had to be migrated.
+  tags: string[];
   priority: TaskPriority;
-  size: TaskSize;
   status: TaskStatus;
   due: string | null;
   projectId: string | null; // optional parent — a task never has to belong to a project

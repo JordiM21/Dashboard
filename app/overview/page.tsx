@@ -30,7 +30,7 @@ import TaskCapture from "@/components/tasks/TaskCapture";
 import TaskCard from "@/components/tasks/TaskCard";
 import TaskEditModal from "@/components/tasks/TaskEditModal";
 import { useTaskStore } from "@/lib/useTaskStore";
-import { compareTasks, completedToday, isOnDeck } from "@/lib/tasks";
+import { allTags, compareTasks, completedToday, isOnDeck } from "@/lib/tasks";
 import type { FinanceEntry, Student, Task } from "@/lib/types";
 import type { StripeDailyRevenue, StripeBalanceOverview } from "@/lib/api/stripe";
 import type { KommoLead } from "@/lib/api/kommo";
@@ -193,6 +193,7 @@ export default function OverviewPage() {
     [taskStore.tasks, today]
   );
   const finishedToday = useMemo(() => completedToday(taskStore.tasks, today), [taskStore.tasks, today]);
+  const knownTags = useMemo(() => allTags(taskStore.tasks, taskStore.projects), [taskStore.tasks, taskStore.projects]);
 
   useEffect(() => {
     fetch("/api/kpis")
@@ -296,6 +297,7 @@ export default function OverviewPage() {
           <TaskCapture
             compact
             projects={taskStore.projects.filter((p) => !p.archived)}
+            knownTags={knownTags}
             defaultDue={today}
             onCreate={taskStore.create}
             placeholder="Add to today — Enter to save, Shift+Enter for tomorrow"
@@ -592,6 +594,7 @@ export default function OverviewPage() {
         <TaskEditModal
           task={taskStore.tasks.find((t) => t.id === editingTask.id) ?? editingTask}
           projects={taskStore.projects.filter((p) => !p.archived)}
+          knownTags={knownTags}
           onPatch={taskStore.patch}
           onClose={() => setEditingTask(null)}
         />

@@ -1,15 +1,17 @@
 /**
- * Self-check for lib/tasks.ts — the bucketing, the working order, and the
- * capture-box shorthand. These three are what every task view agrees on,
- * so a silent change here quietly reshuffles someone's day.
+ * Self-check for lib/tasks.ts — the bucketing, the working order, the tag
+ * vocabulary, and the capture-box shorthand. These are what every task view
+ * agrees on, so a silent change here quietly reshuffles someone's day.
  *
  *   npx tsx scripts/testTasks.ts
  */
 
 import assert from "assert";
 import {
+  allTags,
   bucketOf,
   compareTasks,
+  hasTag,
   isOnDeck,
   parseQuickTask,
   projectProgress,
@@ -22,14 +24,14 @@ const base: Task = {
   id: "x",
   title: "t",
   notes: "",
-  category: "",
+  tags: [],
   priority: "Medium",
-  size: "M",
   status: "todo",
   due: null,
   projectId: null,
   subtasks: [],
 };
+const project: Project = { id: "p1", title: "P", field: "", archived: false, content: "" };
 
 // --- Bucketing --------------------------------------------------------------
 assert.equal(bucketOf({ ...base, due: null }, today), "someday", "no due date is someday, never today");
@@ -41,16 +43,32 @@ assert.equal(bucketOf({ ...base, due: "2026-11-01" }, today), "later");
 assert.equal(bucketOf({ ...base, due: "2026-09-01", status: "done" }, today), "done", "done outranks overdue");
 
 // --- Working order ----------------------------------------------------------
-const doing: Task = { ...base, id: "doing", status: "doing", priority: "Low", size: "S" };
+const doing: Task = { ...base, id: "doing", status: "doing", priority: "Low" };
 const urgent: Task = { ...base, id: "urgent", priority: "Urgent", due: today };
 assert.equal([urgent, doing].sort((a, b) => compareTasks(a, b, today))[0].id, "doing", "in-flight work sorts first");
 
-const bigRock: Task = { ...base, id: "big", due: today, priority: "High", size: "L" };
-const quickWin: Task = { ...base, id: "small", due: today, priority: "High", size: "S" };
+// "Big" is measured from the step count rather than declared with a size
+// field — the task someone bothered to break down is the bigger chunk.
+const bigRock: Task = {
+  ...base,
+  id: "big",
+  due: today,
+  priority: "High",
+  subtasks: [
+    { id: "s1", title: "one", done: false },
+    { id: "s2", title: "two", done: false },
+  ],
+};
+const quickWin: Task = { ...base, id: "small", due: today, priority: "High" };
 assert.equal(
   [quickWin, bigRock].sort((a, b) => compareTasks(a, b, today))[0].id,
   "big",
-  "big rocks come before quick wins at equal priority"
+  "the broken-down task comes first at equal priority and date"
+);
+assert.equal(
+  [{ ...quickWin, priority: "Urgent" as const }, bigRock].sort((a, b) => compareTasks(a, b, today))[0].id,
+  "small",
+  "priority still outranks chunk size"
 );
 
 // --- On deck ----------------------------------------------------------------
@@ -66,7 +84,6 @@ assert.equal(
   50
 );
 
-const project: Project = { id: "p1", title: "P", field: "", archived: false, content: "" };
 const progress = projectProgress(project, [
   { ...base, id: "1", projectId: "p1", status: "done" },
   { ...base, id: "2", projectId: "p1" },
@@ -76,12 +93,33 @@ assert.deepEqual({ ...progress }, { pct: 50, done: 1, total: 2 }, "project progr
 assert.equal(projectProgress(project, []).total, 0, "an empty project is 0 of 0, not a division by zero");
 
 // --- Capture shorthand ------------------------------------------------------
-const parsed = parseQuickTask("email the parents tomorrow !urgent #admin", today);
+const parsed = parseQuickTask("email the parents tomorrow !urgent #admin #legal", today);
 assert.equal(parsed.title, "email the parents", "every token is stripped out of the title");
 assert.equal(parsed.due, "2026-09-04");
 assert.equal(parsed.priority, "Urgent");
-assert.equal(parsed.category, "admin");
+assert.deepEqual(parsed.tags, ["admin", "legal"], "every #tag is kept, not just the first");
 assert.equal(parseQuickTask("just a plain task", today).due, null, "a plain title gets no due date");
+assert.equal(
+  parseQuickTask("just a plain task", today).priority,
+  undefined,
+  "with no ! token, the visible priority control decides"
+);
 assert.equal(parseQuickTask("ship it thu", today).due, "2026-09-10", "a weekday typed on that weekday means next week");
+assert.deepEqual(parseQuickTask("dedupe #Admin #admin", today).tags, ["Admin"], "the same tag twice is one tag");
+
+// --- Tag vocabulary ---------------------------------------------------------
+const tagged = (id: string, tags: string[]): Task => ({ ...base, id, tags });
+assert.deepEqual(
+  allTags([tagged("1", ["Marketing"]), tagged("2", ["admin", "marketing"])], [project]),
+  ["admin", "Marketing"],
+  "one spelling per tag, case-insensitively, sorted"
+);
+assert.deepEqual(
+  allTags([], [{ ...project, field: "Sales" }]),
+  ["Sales"],
+  "a project's category joins the same vocabulary"
+);
+assert.ok(hasTag(tagged("1", ["Marketing"]), "marketing"), "tag matching ignores case");
+assert.ok(!hasTag(tagged("1", ["Marketing"]), "sales"));
 
 console.log("lib/tasks.ts — all checks passed");

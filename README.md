@@ -864,16 +864,27 @@ record progress, which is a lot of hand movement for "I finished that".
 
 **The model** (`lib/types.ts`)
 
-- A **task** is the unit: title, optional due date, priority, size,
-  category, `status` (`todo` / `doing` / `done`), a `subtasks[]` checklist,
-  and an optional `projectId`.
+- A **task** is the unit: title, optional due date, priority, `tags[]`,
+  `status` (`todo` / `doing` / `done`), a `subtasks[]` checklist, and an
+  optional `projectId`.
 - A **project** is just a container and a label. It stores no progress —
   `lib/tasks.ts`'s `projectProgress` derives it from its tasks, so the only
   way progress moves is by finishing work. Deleting a project unfiles its
   tasks instead of deleting them (`detachTasksFromProject`).
-- **Size** (Quick / Chunk / Big rock) is not a time estimate. It is the
-  tiebreak that puts the big rock above the quick win when both are equally
-  urgent — see `compareTasks`.
+- **Tags** are free text and reusable. Both the capture box and the edit
+  modal show every tag already in use as a chip you can tap
+  (`allTags`), which is what keeps "#marketing" and "#Marketing" from
+  becoming two things; matching is case-insensitive throughout (`hasTag`).
+
+There is deliberately **no size field**. An explicit S/M/L once filled the
+last slot in `compareTasks`, and it was a bad trade: a decision on every
+single capture to settle a tie between tasks that were already equal on
+priority *and* due date. The order uses the subtask count instead — the
+task someone bothered to break into five steps is the bigger chunk, and
+that signal is already there for free. Old documents still carrying `size`
+(or a single `category` string from before tags were an array) are read
+fine; `lib/useTaskStore.ts`'s `normalize` folds the latter into `tags`, so
+nothing needed migrating.
 
 **Capture shorthand** — everything is typeable into the one always-visible
 box, so adding a task never costs a trip to a form (`parseQuickTask`):
@@ -882,9 +893,15 @@ box, so adding a task never costs a trip to a form (`parseQuickTask`):
 | --- | --- |
 | `call the bank` | a task, due today on Overview, undated on `/tasks` |
 | `... tomorrow` / `today` / `fri` | that due date, word stripped from the title |
+| `... #admin #legal` | both tags — every `#token` is kept, not just the first |
 | `... !urgent` | priority Urgent (also `!high`, `!medium`, `!low`) |
-| `... #admin` | category `admin` |
 | Shift+Enter | saves it on tomorrow, whatever the text says |
+
+Priority and project are **visible controls** under the field as well, and
+the tags already in use sit beside them as tappable chips. The `!` and
+`#` shorthands are shortcuts for when your hands are already typing, never
+the only door — `parseQuickTask` returns `priority: undefined` when no
+`!` token was typed precisely so the control can stay in charge otherwise.
 
 **Where things show up**
 

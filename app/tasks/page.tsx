@@ -11,7 +11,7 @@ import CardMenu from "@/components/tasks/CardMenu";
 import TaskEditModal from "@/components/tasks/TaskEditModal";
 import ProjectModal from "@/components/tasks/ProjectModal";
 import { useTaskStore } from "@/lib/useTaskStore";
-import { allCategories, BUCKET_LABEL, compareTasks, completedToday, groupByBucket, isOnDeck, projectProgress } from "@/lib/tasks";
+import { allTags, BUCKET_LABEL, compareTasks, completedToday, groupByBucket, hasTag, isOnDeck, projectProgress } from "@/lib/tasks";
 import { localDateIso } from "@/lib/dateUtils";
 import type { Project, Task } from "@/lib/types";
 
@@ -28,7 +28,7 @@ export default function TasksPage() {
   const { tasks, projects } = store;
 
   const [lens, setLens] = useState<Lens>("focus");
-  const [category, setCategory] = useState<string>("all");
+  const [tagFilter, setTagFilter] = useState<string>("all");
   const [projectFilter, setProjectFilter] = useState<string | null>(null);
   const [editing, setEditing] = useState<Task | null>(null);
   const [projectModal, setProjectModal] = useState<{ project: Project | null } | null>(null);
@@ -48,17 +48,17 @@ export default function TasksPage() {
     }
   }, []);
 
-  const categories = useMemo(() => allCategories(tasks, projects), [tasks, projects]);
+  const tags = useMemo(() => allTags(tasks, projects), [tasks, projects]);
 
   const visible = useMemo(() => {
     return tasks.filter((t) => {
       if (projectFilter && t.projectId !== projectFilter) return false;
-      if (category !== "all" && t.category !== category) return false;
+      if (tagFilter !== "all" && !hasTag(t, tagFilter)) return false;
       if (lens === "done") return t.status === "done";
       if (t.status === "done") return false;
       return lens === "all" || isOnDeck(t, today);
     });
-  }, [tasks, lens, category, projectFilter, today]);
+  }, [tasks, lens, tagFilter, projectFilter, today]);
 
   const sections = useMemo(() => {
     if (lens === "done") {
@@ -100,6 +100,7 @@ export default function TasksPage() {
 
         <TaskCapture
           projects={activeProjects}
+          knownTags={tags}
           defaultProjectId={projectFilter}
           onCreate={store.create}
           autoFocus={captureFocus}
@@ -168,23 +169,23 @@ export default function TasksPage() {
               { value: "done", label: "Done" },
             ]}
           />
-          {categories.length > 0 && (
+          {tags.length > 0 && (
             <div className="chip-row">
               <button
                 type="button"
-                className={`chip chip-button${category === "all" ? " active" : ""}`}
-                onClick={() => setCategory("all")}
+                className={`chip chip-button${tagFilter === "all" ? " active" : ""}`}
+                onClick={() => setTagFilter("all")}
               >
-                All categories
+                All tags
               </button>
-              {categories.map((c) => (
+              {tags.map((t) => (
                 <button
-                  key={c}
+                  key={t}
                   type="button"
-                  className={`chip chip-button${category === c ? " active" : ""}`}
-                  onClick={() => setCategory((cur) => (cur === c ? "all" : c))}
+                  className={`chip chip-button${tagFilter === t ? " active" : ""}`}
+                  onClick={() => setTagFilter((cur) => (cur === t ? "all" : t))}
                 >
-                  #{c}
+                  #{t}
                 </button>
               ))}
             </div>
@@ -232,6 +233,7 @@ export default function TasksPage() {
         <TaskEditModal
           task={tasks.find((t) => t.id === editing.id) ?? editing}
           projects={activeProjects}
+          knownTags={tags}
           onPatch={store.patch}
           onClose={() => setEditing(null)}
         />
