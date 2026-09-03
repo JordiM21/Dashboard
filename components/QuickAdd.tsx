@@ -8,17 +8,20 @@ import AddTransactionModal from "@/components/AddTransactionModal";
 /**
  * One "+" that creates anything, from anywhere.
  *
- * Adding a project used to mean: navigate to Projects, find the button,
- * open the modal. The two entities whose create-modals are already
- * self-contained (student, transaction) open right here without leaving
- * the page; the two that live inside their page's own state (project,
- * note) are deep-linked with `?new=1`, which those pages read on mount —
- * still one click, and the URL is shareable/bookmarkable as a side effect.
+ * The two entities whose create-modals are already self-contained
+ * (student, transaction) open right here without leaving the page; task
+ * and project live inside the Tasks page's own state, so they are
+ * deep-linked with `?new=1` / `?newProject=1`, which that page reads on
+ * mount — still one click, and the URL is shareable as a side effect.
+ *
+ * Tasks are the exception to needing this at all: the Tasks page and the
+ * Overview both carry an always-visible capture box, so this menu is the
+ * long way round for a task, kept only for the pages that don't.
  */
 
 const ITEMS = [
-  { id: "project", icon: "🗂️", label: "Project", hint: "Board card with progress" },
-  { id: "note", icon: "📝", label: "Note", hint: "Markdown doc in the library" },
+  { id: "task", icon: "✅", label: "Task", hint: "Anything you need to get done" },
+  { id: "project", icon: "🗂️", label: "Project", hint: "A container tasks can belong to" },
   { id: "student", icon: "🎓", label: "Student", hint: "Enrollment and tuition" },
   { id: "transaction", icon: "💰", label: "Transaction", hint: "Income or expense" },
 ] as const;
@@ -49,8 +52,8 @@ export default function QuickAdd({ variant }: { variant: "pill" | "tab" }) {
 
   function pick(id: ItemId) {
     setOpen(false);
-    if (id === "project") router.push("/projects?new=1");
-    else if (id === "note") router.push("/content?new=1");
+    if (id === "task") router.push("/tasks?new=1");
+    else if (id === "project") router.push("/tasks?newProject=1");
     else setModal(id);
   }
 

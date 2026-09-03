@@ -1,40 +1,60 @@
-/** Firestore `projects` document shape. */
+/**
+ * Firestore `projects` document shape — the OPTIONAL parent a task can
+ * belong to. A project is a container and a label, nothing more: its
+ * progress is derived from its tasks (see lib/tasks.ts's projectProgress),
+ * never stored, so ticking a task off is the only way progress ever moves.
+ *
+ * Older docs (from the kanban this replaced) still carry status/priority/
+ * progress fields — they are simply ignored on read, so no migration was
+ * needed.
+ */
 export interface Project {
   id: string;
   title: string;
-  priority: "Low" | "Medium" | "High" | "Urgent";
-  field: string;
-  status: "To Do" | "In Progress" | "Paused" | "Done";
-  progress: number; // 0-100
   icon?: string; // single emoji chosen by the user
+  field: string; // category label, shared vocabulary with Task.category
+  archived: boolean; // finished/shelved — hidden from the rail, its tasks still searchable
   content: string; // free-text notes
   createdAt?: string;
   updatedAt?: string;
 }
 
-/** Firestore `content` document shape. */
-export interface ContentItem {
+/** One checklist line inside a Task. Ids are generated client-side (crypto.randomUUID) — Firestore only ever sees the whole array. */
+export interface Subtask {
   id: string;
   title: string;
-  cover: string; // path or URL to cover image
-  tags?: string[];
-  publishedAt?: string;
-  content: string; // markdown body
-  createdAt?: string;
-  updatedAt?: string;
+  done: boolean;
 }
 
-/** Firestore `agents` document shape — read-only in the UI, seeded via scripts/migrateMarkdownToFirebase.ts. */
-export interface AgentDoc {
+export type TaskStatus = "todo" | "doing" | "done";
+export type TaskPriority = "Low" | "Medium" | "High" | "Urgent";
+/** How big a chunk this is — S under ~30min, M a couple of hours, L a half-day+. Drives the morning ordering (big rocks before small ones at equal priority), not a time estimate anyone has to be accurate about. */
+export type TaskSize = "S" | "M" | "L";
+
+/**
+ * Firestore `tasks` document shape — the unit of work everything else in
+ * this app's to-do flow is built on. `due` is a plain local calendar date
+ * ("YYYY-MM-DD", same convention as Student.nextPayment), null when the
+ * task is a someday/backlog item with no commitment attached.
+ *
+ * `status` is deliberately three-valued rather than a kanban column: at
+ * night you mark what's done, what's still in flight ("doing"), and what
+ * you're starting tomorrow (todo + due = tomorrow). That's the entire
+ * ritual, and it's the reason "doing" survives across days instead of
+ * being reset.
+ */
+export interface Task {
   id: string;
-  name: string;
-  role: string;
-  model: string;
-  effort: "low" | "medium" | "high" | "xhigh" | "max";
-  schedule: string; // cron or human readable
-  status: "active" | "paused" | "error";
-  summary: string;
-  content: string;
+  title: string;
+  notes: string;
+  category: string; // free-text label, e.g. "Marketing" — grouped/filtered on, never validated
+  priority: TaskPriority;
+  size: TaskSize;
+  status: TaskStatus;
+  due: string | null;
+  projectId: string | null; // optional parent — a task never has to belong to a project
+  subtasks: Subtask[];
+  completedAt?: string | null; // ISO timestamp of the tick that set status to "done"
   createdAt?: string;
   updatedAt?: string;
 }
@@ -73,7 +93,7 @@ export interface Student {
   // student to their parent's payments".
   parentEmail?: string;
   plan?: "Main Course" | "Initial Demo";
-  photoUrl?: string; // profile picture — a URL/path, same convention as ContentItem.cover
+  photoUrl?: string; // profile picture — a URL/path, same convention as GameDoc.cover
   notes?: string; // free-text — "things to remember" about this student/parent
   tags?: string[];
   source?: string; // e.g. "meta_lead_ad" when created by a webhook
@@ -522,7 +542,7 @@ export interface GameDoc {
   title: string;
   description: string;
   tags: string[];
-  cover: string; // URL/path, same convention as ContentItem.cover
+  cover: string; // URL/path, same convention as GameDoc.cover
   memoryCards?: MemoryCardsData;
   fillGaps?: FillGapsData;
   matchWordImage?: MatchWordImageData;

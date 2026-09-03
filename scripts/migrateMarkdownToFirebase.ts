@@ -1,16 +1,9 @@
 /**
- * One-time migration: uploads data/projects/*.md, data/content/*.md, and
- * data/agents/*.md into Firestore (collections "projects", "content",
- * "agents"), so the Projects/Content/Agents pages can move off fs reads —
- * the same problem Resources had: a typical deployed host's filesystem is
- * read-only/ephemeral, so these pages would break (or silently fail to
- * persist writes) once deployed anywhere but your own machine.
- *
- * (This file also did one one-time migration of curriculum-20-levels.md and
- * group-history.md into the "curriculum"/"groups" collections, back when
- * this app moved off that vault-markdown workflow onto the Curriculum
- * Board — see lib/firebase/curriculumBoard.ts. That data has already been
- * migrated and lib/curriculum.ts is gone now, so that half was removed.)
+ * One-time migration: uploads data/projects/*.md into Firestore (collection
+ * "projects"), so the Projects page can move off fs reads — the same problem
+ * Resources had: a typical deployed host's filesystem is read-only/ephemeral,
+ * so the page would break (or silently fail to persist writes) once deployed
+ * anywhere but your own machine.
  *
  * Safe to run more than once — skips any doc whose title already exists in
  * the matching Firestore collection.
@@ -76,14 +69,7 @@ async function migrateCollection(dirName: string, firestoreCollection: string) {
 
 async function main() {
   const projects = await migrateCollection("projects", "projects");
-  const content = await migrateCollection("content", "content");
-  const agents = await migrateCollection("agents", "agents");
-
-  console.log(
-    `\nDone. Projects: ${projects.created} created, ${projects.skipped} already existed. ` +
-      `Content: ${content.created} created, ${content.skipped} already existed. ` +
-      `Agents: ${agents.created} created, ${agents.skipped} already existed.`
-  );
+  console.log(`\nDone. Projects: ${projects.created} created, ${projects.skipped} already existed.`);
 }
 
 main()

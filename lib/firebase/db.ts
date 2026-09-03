@@ -6,8 +6,7 @@ import type {
   FinanceEntry,
   Lesson,
   Project,
-  ContentItem,
-  AgentDoc,
+  Task,
   RecurringTransaction,
   MetaAudienceSnapshotRecord,
   GameDoc,
@@ -28,9 +27,8 @@ const STUDENTS = "students";
 const TRANSACTIONS = "transactions";
 const LESSONS = "lessons";
 const PROJECTS = "projects";
+const TASKS = "tasks";
 const GAMES = "games";
-const CONTENT = "content";
-const AGENTS = "agents";
 const RECURRING_TRANSACTIONS = "recurringTransactions";
 const META_AUDIENCE_SNAPSHOTS = "metaAudienceSnapshots";
 
@@ -265,6 +263,52 @@ export async function deleteProject(id: string): Promise<boolean> {
 }
 
 // ---------------------------------------------------------------------------
+// Tasks (the to-do unit — a task's optional parent is a project, above)
+// ---------------------------------------------------------------------------
+
+export async function listTasks(): Promise<Task[]> {
+  const snap = await getAdminDb().collection(TASKS).orderBy("createdAt", "desc").get();
+  return snap.docs.map((doc) => fromDoc<Task>(doc));
+}
+
+export async function createTask(data: Omit<Task, "id" | "createdAt" | "updatedAt">): Promise<Task> {
+  const ref = getAdminDb().collection(TASKS).doc();
+  await ref.set({ ...data, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+  const doc = await ref.get();
+  return fromDoc<Task>(doc as QueryDocumentSnapshot<DocumentData>);
+}
+
+export async function updateTask(id: string, updates: Partial<Task>): Promise<Task | null> {
+  const ref = getAdminDb().collection(TASKS).doc(id);
+  const existing = await ref.get();
+  if (!existing.exists) return null;
+
+  const { id: _ignoredId, createdAt: _ignoredCreatedAt, ...safeUpdates } = updates;
+  await ref.update({ ...safeUpdates, updatedAt: FieldValue.serverTimestamp() });
+  const doc = await ref.get();
+  return fromDoc<Task>(doc as QueryDocumentSnapshot<DocumentData>);
+}
+
+export async function deleteTask(id: string): Promise<boolean> {
+  const ref = getAdminDb().collection(TASKS).doc(id);
+  const existing = await ref.get();
+  if (!existing.exists) return false;
+  await ref.delete();
+  return true;
+}
+
+/** Detaches every task from a deleted project instead of deleting them — losing real work because its container went away is never what you meant. */
+export async function detachTasksFromProject(projectId: string): Promise<number> {
+  const db = getAdminDb();
+  const snap = await db.collection(TASKS).where("projectId", "==", projectId).get();
+  if (snap.empty) return 0;
+  const batch = db.batch();
+  for (const doc of snap.docs) batch.update(doc.ref, { projectId: null, updatedAt: FieldValue.serverTimestamp() });
+  await batch.commit();
+  return snap.size;
+}
+
+// ---------------------------------------------------------------------------
 // Games
 // ---------------------------------------------------------------------------
 
@@ -297,59 +341,6 @@ export async function deleteGame(id: string): Promise<boolean> {
   if (!existing.exists) return false;
   await ref.delete();
   return true;
-}
-
-// ---------------------------------------------------------------------------
-// Content
-// ---------------------------------------------------------------------------
-
-export async function listContent(): Promise<ContentItem[]> {
-  const snap = await getAdminDb().collection(CONTENT).orderBy("createdAt", "desc").get();
-  return snap.docs.map((doc) => fromDoc<ContentItem>(doc));
-}
-
-export async function createContent(
-  data: Omit<ContentItem, "id" | "createdAt" | "updatedAt">
-): Promise<ContentItem> {
-  const ref = getAdminDb().collection(CONTENT).doc();
-  await ref.set({ ...data, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
-  const doc = await ref.get();
-  return fromDoc<ContentItem>(doc as QueryDocumentSnapshot<DocumentData>);
-}
-
-export async function updateContent(id: string, updates: Partial<ContentItem>): Promise<ContentItem | null> {
-  const ref = getAdminDb().collection(CONTENT).doc(id);
-  const existing = await ref.get();
-  if (!existing.exists) return null;
-
-  const { id: _ignoredId, createdAt: _ignoredCreatedAt, ...safeUpdates } = updates;
-  await ref.update({ ...safeUpdates, updatedAt: FieldValue.serverTimestamp() });
-  const doc = await ref.get();
-  return fromDoc<ContentItem>(doc as QueryDocumentSnapshot<DocumentData>);
-}
-
-export async function deleteContent(id: string): Promise<boolean> {
-  const ref = getAdminDb().collection(CONTENT).doc(id);
-  const existing = await ref.get();
-  if (!existing.exists) return false;
-  await ref.delete();
-  return true;
-}
-
-// ---------------------------------------------------------------------------
-// Agents (read-only in the UI — seeded via scripts/migrateMarkdownToFirebase.ts)
-// ---------------------------------------------------------------------------
-
-export async function listAgents(): Promise<AgentDoc[]> {
-  const snap = await getAdminDb().collection(AGENTS).orderBy("name").get();
-  return snap.docs.map((doc) => fromDoc<AgentDoc>(doc));
-}
-
-export async function createAgent(data: Omit<AgentDoc, "id" | "createdAt" | "updatedAt">): Promise<AgentDoc> {
-  const ref = getAdminDb().collection(AGENTS).doc();
-  await ref.set({ ...data, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
-  const doc = await ref.get();
-  return fromDoc<AgentDoc>(doc as QueryDocumentSnapshot<DocumentData>);
 }
 
 // ---------------------------------------------------------------------------

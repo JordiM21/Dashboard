@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { updateProject, deleteProject } from "@/lib/firebase/db";
+import { updateProject, deleteProject, detachTasksFromProject } from "@/lib/firebase/db";
 import { requireAuth } from "@/lib/firebase/verifyAuth";
 import type { Project } from "@/lib/types";
 
@@ -13,13 +13,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     );
   }
 
-  const body = await req.json();
-  const { frontmatter, content } = body as { frontmatter: Partial<Project>; content: string };
-  const project = await updateProject(params.id, { ...frontmatter, content });
+  const updates = (await req.json()) as Partial<Project>;
+  const project = await updateProject(params.id, updates);
   if (!project) return NextResponse.json({ error: "not_found" }, { status: 404 });
   return NextResponse.json(project);
 }
 
+/** Deleting a project keeps its tasks — they just become unfiled. See detachTasksFromProject. */
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     await requireAuth(req);
@@ -32,5 +32,6 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
   const ok = await deleteProject(params.id);
   if (!ok) return NextResponse.json({ error: "not_found" }, { status: 404 });
-  return NextResponse.json({ ok: true });
+  const detached = await detachTasksFromProject(params.id);
+  return NextResponse.json({ ok: true, detached });
 }

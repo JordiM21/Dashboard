@@ -12,10 +12,11 @@ export const ALL_NAV_TABS: NavTab[] = [
   { id: "finance", href: "/finance", label: "Finance", icon: "💰" },
   { id: "kommo", href: "/kommo", label: "Kommo", icon: "📈" },
   { id: "meta", href: "/meta", label: "Meta", icon: "📣" },
-  { id: "projects", href: "/projects", label: "Projects", icon: "🗂️" },
+  // Tab id stays "projects" even though this is the Tasks view now — the
+  // id is what a saved nav layout in localStorage refers to, so renaming
+  // it would quietly drop the tab for anyone who has customized theirs.
+  { id: "projects", href: "/tasks", label: "Tasks", icon: "✅" },
   { id: "games", href: "/games", label: "Games", icon: "🎮" },
-  { id: "content", href: "/content", label: "Content", icon: "🖼️" },
-  { id: "agents", href: "/agents", label: "Agents", icon: "🤖" },
 ];
 
 export const DEFAULT_VISIBLE_TAB_IDS = ALL_NAV_TABS.map((t) => t.id);

@@ -18,20 +18,16 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const body = await req.json();
-  const { frontmatter, content } = body as { frontmatter: Partial<Project>; content: string };
-  if (!frontmatter?.title) {
-    return NextResponse.json({ error: "title is required" }, { status: 400 });
-  }
+  const body = (await req.json()) as Partial<Project>;
+  const title = body.title?.trim();
+  if (!title) return NextResponse.json({ error: "title is required" }, { status: 400 });
 
   const project = await createProject({
-    title: frontmatter.title,
-    priority: frontmatter.priority ?? "Medium",
-    field: frontmatter.field ?? "",
-    status: frontmatter.status ?? "To Do",
-    progress: frontmatter.progress ?? 0,
-    icon: frontmatter.icon ?? "",
-    content: content ?? "",
+    title,
+    icon: body.icon ?? "",
+    field: body.field ?? "",
+    archived: body.archived ?? false,
+    content: body.content ?? "",
   });
   return NextResponse.json(project, { status: 201 });
 }

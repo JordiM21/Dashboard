@@ -20,11 +20,11 @@
   --shadow: 0 8px 24px rgba(58, 46, 40, 0.08);
   --shadow-hover: 0 14px 32px rgba(58, 46, 40, 0.14);
 
-  /* Kanban column backgrounds — soft/cream-muted, distinct per stage */
-  --col-todo: #eeece7;
-  --col-in-progress: #e2ecf5;
-  --col-paused: #f7e6d2;
-  --col-done: #e2f0e3;
+  /* Motion — one spring and one decelerating curve for the whole app, so
+     every card, chip and checkbox settles the same way. */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+
 }
 
 :root[data-theme="dark"] {
@@ -46,10 +46,6 @@
   --shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   --shadow-hover: 0 14px 34px rgba(0, 0, 0, 0.55);
 
-  --col-todo: #182338;
-  --col-in-progress: #16283f;
-  --col-paused: #2a2438;
-  --col-done: #15281f;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -72,10 +68,6 @@
     --shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
     --shadow-hover: 0 14px 34px rgba(0, 0, 0, 0.55);
 
-    --col-todo: #182338;
-    --col-in-progress: #16283f;
-    --col-paused: #2a2438;
-    --col-done: #15281f;
   }
 }
 
@@ -1135,105 +1127,7 @@ button {
 
 /* ---------- Kanban ---------- */
 
-.kanban {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(240px, 1fr));
-  gap: 16px;
-  overflow-x: auto;
-}
-
-.kanban-col {
-  background: var(--cake);
-  border-radius: var(--radius-lg);
-  padding: 14px;
-  min-height: 200px;
-  transition: background-color 0.3s ease, outline-color 0.15s ease;
-  outline: 2px solid transparent;
-  outline-offset: -2px;
-}
-
-.kanban-col-todo {
-  background: var(--col-todo);
-}
-
-.kanban-col-in-progress {
-  background: var(--col-in-progress);
-}
-
-.kanban-col-paused {
-  background: var(--col-paused);
-}
-
-.kanban-col-done {
-  background: var(--col-done);
-}
-
-.kanban-col-drop-target {
-  outline-color: var(--accent);
-}
-
-.kanban-col-title {
-  font-weight: 700;
-  font-size: 14px;
-  margin-bottom: 12px;
-  padding: 0 4px;
-}
-
-.kanban-card {
-  background: var(--white);
-  border-radius: var(--radius-md);
-  padding: 14px;
-  margin-bottom: 10px;
-  box-shadow: var(--shadow);
-  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease, background-color 0.3s ease;
-  cursor: grab;
-  display: flex;
-  flex-direction: column;
-  min-height: 132px;
-}
-
-.kanban-card-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.kanban-card-icon {
-  font-size: 18px;
-  line-height: 1;
-  flex-shrink: 0;
-}
-
-.kanban-card-title {
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.kanban-card-field {
-  font-size: 12px;
-  color: var(--ink-soft);
-  margin-top: 4px;
-}
-
-.kanban-card-footer {
-  margin-top: auto;
-  padding-top: 10px;
-}
-
-.kanban-card:hover {
-  transform: translateY(-2px) scale(1.02);
-  box-shadow: var(--shadow-hover);
-}
-
-.kanban-card:active {
-  cursor: grabbing;
-}
-
-.kanban-card-dragging {
-  opacity: 0.4;
-}
+/* ---------- Progress bar (Stripe payout meter) ---------- */
 
 .progress-bar {
   position: relative;
@@ -1241,64 +1135,779 @@ button {
   background: var(--cake);
   border-radius: 999px;
   margin-top: 8px;
-  cursor: pointer;
-}
-
-/* Taller invisible hit area so the draggable track is easy to grab without
-   visually thickening the bar itself. */
-.progress-bar::before {
-  content: "";
-  position: absolute;
-  inset: -7px 0;
+  overflow: hidden;
 }
 
 .progress-bar-fill {
-  width: 100%;
   height: 100%;
   background: var(--accent);
   border-radius: 999px;
-  transform: scaleX(var(--pct, 0));
-  transform-origin: left;
-  transition: transform 0.12s ease;
-  pointer-events: none;
+  transition: width 0.4s var(--ease-out);
 }
 
-/* Sibling of the fill (not nested in it) so scaling the fill's width via
-   transform doesn't squish this dot along with it. */
-.progress-bar-knob {
-  position: absolute;
-  top: 50%;
-  left: var(--pct-100, 0%);
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
+/* ---------- Tasks ---------- */
+
+/* Capture box — the one control the whole workflow leans on, so it gets
+   the page's only always-focused, full-width input. */
+.capture {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  box-shadow: var(--shadow);
+  margin: 12px 0 20px;
+  transition: box-shadow 0.25s var(--ease-out), border-color 0.25s var(--ease-out), transform 0.25s var(--ease-spring);
+}
+
+.capture:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-hover);
+}
+
+.capture-compact {
+  margin: 10px 0 14px;
+  padding: 10px 12px;
+}
+
+/* One green pulse on save — the whole confirmation that a task landed,
+   since the input clears and refocuses rather than showing a toast. */
+.capture-flash {
+  animation: captureFlash 0.7s var(--ease-out);
+}
+
+@keyframes captureFlash {
+  0% {
+    box-shadow: 0 0 0 0 rgba(111, 174, 124, 0.55);
+  }
+  100% {
+    box-shadow: 0 0 0 14px rgba(111, 174, 124, 0);
+  }
+}
+
+.capture-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.capture-plus {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.capture-input {
+  flex: 1 1 240px;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 15px;
+  color: var(--ink);
+  padding: 6px 0;
+}
+
+.capture-input:focus {
+  outline: none;
+}
+
+.capture-input::placeholder {
+  color: var(--ink-soft);
+  opacity: 0.75;
+}
+
+.capture-select {
+  border: 1px solid var(--line);
+  background: var(--cream);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  max-width: 150px;
+}
+
+.capture-sizes {
+  display: inline-flex;
+  background: var(--cake);
+  border-radius: 999px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.capture-size {
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  width: 26px;
+  height: 24px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 0.2s var(--ease-out), color 0.2s var(--ease-out), transform 0.2s var(--ease-spring);
+}
+
+.capture-size:hover {
+  color: var(--ink);
+}
+
+.capture-size.active {
+  background: var(--white);
+  color: var(--ink);
+  transform: scale(1.06);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+.capture-preview {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+  animation: previewIn 0.22s var(--ease-out) both;
+}
+
+@keyframes previewIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.capture-preview-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.capture-hint {
+  font-size: 11px;
+  color: var(--ink-soft);
+  margin-left: auto;
+}
+
+@media (max-width: 620px) {
+  .capture-hint,
+  .capture-submit {
+    display: none;
+  }
+}
+
+/* Chips — the shared vocabulary for a task's labels and for filter pills. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--cake);
+  color: var(--ink-soft);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.chip-button {
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background-color 0.2s var(--ease-out), color 0.2s var(--ease-out), transform 0.2s var(--ease-spring);
+}
+
+.chip-button:hover {
+  color: var(--ink);
+  transform: translateY(-1px);
+}
+
+.chip-button:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.chip-button.active {
   background: var(--accent);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
-  transform: translate(-50%, -50%);
-  opacity: 0;
-  transition: opacity 0.15s ease, left 0.12s ease;
-  pointer-events: none;
+  color: #fff;
 }
 
-.progress-bar:hover .progress-bar-knob,
-.progress-bar-dragging .progress-bar-knob {
+.chip-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.chip-due {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent-dark);
+}
+
+.chip-overdue {
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  color: var(--danger);
+}
+
+.chip-doing {
+  background: color-mix(in srgb, var(--success) 20%, transparent);
+  color: var(--success);
+}
+
+.chip-project {
+  background: var(--cake-dark);
+  color: var(--ink);
+}
+
+.chip-size {
+  background: transparent;
+  border: 1px solid var(--line);
+}
+
+/* Project rail — a horizontal strip of containers, each doubling as a
+   filter. Progress is derived from tasks, never dragged. */
+.project-rail {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 2px 2px 10px;
+  scroll-snap-type: x proximity;
+}
+
+.project-chip-card {
+  flex: 0 0 auto;
+  width: 165px;
+  text-align: left;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--ink);
+  scroll-snap-align: start;
+  transition: transform 0.25s var(--ease-spring), box-shadow 0.25s var(--ease-out), border-color 0.2s var(--ease-out);
+}
+
+.project-chip-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+.project-chip-card:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.project-chip-card.active {
+  border-color: var(--accent);
+  box-shadow: var(--shadow);
+}
+
+.project-chip-icon {
+  display: block;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.project-chip-title {
+  display: block;
+  font-weight: 700;
+  font-size: 13px;
+  margin-top: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-chip-meta {
+  display: block;
+  font-size: 11px;
+  color: var(--ink-soft);
+  margin-top: 2px;
+}
+
+.project-chip-track {
+  display: block;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--cake);
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.project-chip-fill {
+  display: block;
+  height: 100%;
+  background: var(--success);
+  border-radius: 999px;
+  transition: width 0.45s var(--ease-out);
+}
+
+.lens-hint {
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin: -4px 0 14px;
+}
+
+.task-section {
+  margin-bottom: 26px;
+}
+
+.task-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.task-section-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  background: var(--cake);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.task-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.task-grid-compact {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+/* Staggered entrance — the delay is set inline per card, capped so a long
+   list doesn't take a second and a half to finish appearing. */
+.task-grid-item {
+  animation: taskIn 0.32s var(--ease-out) both;
+}
+
+@keyframes taskIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.task-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-left: 3px solid transparent;
+  border-radius: var(--radius-md);
+  padding: 12px 12px 12px 13px;
+  cursor: pointer;
+  transition: transform 0.25s var(--ease-spring), box-shadow 0.25s var(--ease-out), border-color 0.25s var(--ease-out),
+    opacity 0.3s var(--ease-out), background-color 0.3s var(--ease-out);
+}
+
+.task-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-hover);
+}
+
+.task-card:active {
+  transform: translateY(0) scale(0.99);
+}
+
+.task-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.task-card-doing {
+  border-left-color: var(--success);
+  background: color-mix(in srgb, var(--success) 6%, var(--white));
+}
+
+.task-card-overdue {
+  border-left-color: var(--danger);
+}
+
+.task-card-done {
+  opacity: 0.55;
+}
+
+.task-card-done .task-card-title {
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+  color: var(--ink-soft);
+}
+
+/* The half-second after a tick: the card settles rather than vanishing, so
+   the eye can follow what just happened before the list re-sorts. */
+.task-card-ticked {
+  animation: taskTick 0.45s var(--ease-spring);
+}
+
+@keyframes taskTick {
+  30% {
+    transform: scale(0.97);
+  }
+  70% {
+    transform: scale(1.01);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+.task-card-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.task-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-card-title {
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  transition: color 0.25s var(--ease-out);
+}
+
+.task-card-compact .task-card-title {
+  font-size: 13px;
+}
+
+/* The Overview's narrower cards drop the size chip — at a glance in the
+   morning, when and how urgent are the only two labels worth the width. */
+.task-card-compact .chip-size {
+  display: none;
+}
+
+.task-card-meta {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 7px;
+}
+
+/* Round checkbox with a drawn-on check — an SVG stroke rather than a glyph
+   so the tick can animate itself in. */
+.task-check {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  transition: background-color 0.22s var(--ease-out), border-color 0.22s var(--ease-out), transform 0.22s var(--ease-spring);
+}
+
+.task-check:hover {
+  border-color: var(--success);
+  transform: scale(1.12);
+}
+
+.task-check:active {
+  transform: scale(0.92);
+}
+
+.task-check svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  transition: stroke-dashoffset 0.28s var(--ease-out) 0.05s;
+}
+
+.task-check[aria-pressed="true"] {
+  background: var(--success);
+  border-color: var(--success);
+}
+
+.task-check[aria-pressed="true"] svg {
+  stroke-dashoffset: 0;
+}
+
+/* The blanket 44px mobile touch-target rule below would stretch this
+   circle into an oval, so it opts out and grows an invisible hit area
+   instead — same trick the progress bar uses. */
+.task-check::after {
+  content: "";
+  position: absolute;
+  inset: -11px;
+}
+
+.task-check {
+  position: relative;
+}
+
+.task-check-sm {
+  width: 18px;
+  height: 18px;
+}
+
+.task-check-sm svg {
+  width: 11px;
+  stroke-width: 3.6;
+}
+
+.task-subprogress {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.task-subprogress-track {
+  flex: 1;
+  height: 4px;
+  background: var(--cake);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.task-subprogress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.45s var(--ease-out);
+}
+
+.task-subprogress-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+/* Secondary actions stay out of the way on a mouse and stay present on
+   touch, where there is no hover to reveal them. */
+.task-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  opacity: 0;
+  transform: translateX(4px);
+  transition: opacity 0.2s var(--ease-out), transform 0.2s var(--ease-out);
+}
+
+.task-card:hover .task-card-actions,
+.task-card:focus-within .task-card-actions {
+  opacity: 1;
+  transform: none;
+}
+
+@media (hover: none) {
+  .task-card-actions {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Stacked actions add ~40px of dead height to every card on a phone;
+   side by side they cost nothing. */
+@media (max-width: 620px) {
+  .task-card {
+    flex-wrap: wrap;
+  }
+
+  .task-card-actions {
+    flex-direction: row;
+    margin-left: auto;
+  }
+}
+
+.task-action {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--cream);
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.18s var(--ease-out), color 0.18s var(--ease-out), transform 0.18s var(--ease-spring);
+}
+
+.task-action:hover {
+  background: var(--cake);
+  color: var(--ink);
+  transform: scale(1.08);
+}
+
+.task-action:active {
+  transform: scale(0.92);
+}
+
+.task-action.active {
+  background: var(--success);
+  border-color: var(--success);
+  color: #fff;
+}
+
+/* ---------- Subtasks (inside the task modal) ---------- */
+
+.subtask-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.subtask-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  transition: background-color 0.2s var(--ease-out);
+}
+
+.subtask-row:hover {
+  background: var(--cream);
+}
+
+.subtask-row-done .subtask-input {
+  text-decoration: line-through;
+  color: var(--ink-soft);
+}
+
+.subtask-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  padding: 4px 0;
+}
+
+.subtask-input:focus {
+  outline: none;
+  border-bottom: 1px solid var(--accent);
+}
+
+.subtask-plus {
+  width: 18px;
+  text-align: center;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.subtask-remove {
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.18s var(--ease-out), color 0.18s var(--ease-out);
+}
+
+.subtask-row:hover .subtask-remove,
+.subtask-remove:focus-visible {
   opacity: 1;
 }
 
-.progress-bar-label {
+.subtask-remove:hover {
+  color: var(--danger);
+}
+
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+@media (max-width: 560px) {
+  .form-grid-2 {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}
+
+/* ---------- Overview "Today" panel ---------- */
+
+.today-panel {
+  background: linear-gradient(180deg, var(--white), var(--cream));
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  box-shadow: var(--shadow);
+  margin: 16px 0 24px;
+}
+
+.today-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.today-sub {
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin-top: 2px;
+}
+
+.today-more {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.today-more:hover {
+  text-decoration: underline;
+}
+
+.today-tomorrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+
+.today-tomorrow-label {
   font-size: 11px;
   font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   color: var(--ink-soft);
-  margin-top: 4px;
-  text-align: right;
 }
 
-/* ---------- Content grid ---------- */
-
-.content-card {
-  overflow: hidden;
-  cursor: pointer;
-}
+/* ---------- Card cover image (Games) ---------- */
 
 .content-cover {
   width: 100%;
@@ -2799,8 +3408,21 @@ button {
    repositions it, so this is safe to apply broadly rather than chasing
    every undersized button individually. */
 @media (max-width: 760px) {
-  button:not(.theme-toggle):not(.theme-switch),
+  button:not(.theme-toggle):not(.theme-switch):not(.task-check),
   a.btn {
     min-height: 44px;
+  }
+}
+
+/* Everything above animates for feel, not for meaning — so a reader who
+   asked the OS for less motion loses nothing but the movement. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

@@ -25,8 +25,13 @@ import { useFirestoreCollection } from "@/lib/firebase/useFirestoreCollection";
 import { authFetch } from "@/lib/firebase/authFetch";
 import { summarizeFinance } from "@/lib/finance";
 import { studentPaymentStatus, PAYMENT_STATUS_LABEL, PAYMENT_STATUS_BADGE_CLASS } from "@/lib/studentStatus";
-import { formatDateDMY, formatDayMonth } from "@/lib/dateUtils";
-import type { FinanceEntry, Student } from "@/lib/types";
+import { addDays, formatDateDMY, formatDayMonth } from "@/lib/dateUtils";
+import TaskCapture from "@/components/tasks/TaskCapture";
+import TaskCard from "@/components/tasks/TaskCard";
+import TaskEditModal from "@/components/tasks/TaskEditModal";
+import { useTaskStore } from "@/lib/useTaskStore";
+import { compareTasks, completedToday, isOnDeck } from "@/lib/tasks";
+import type { FinanceEntry, Student, Task } from "@/lib/types";
 import type { StripeDailyRevenue, StripeBalanceOverview } from "@/lib/api/stripe";
 import type { KommoLead } from "@/lib/api/kommo";
 import type { MetaAdsSummary } from "@/lib/api/meta";
@@ -173,6 +178,22 @@ export default function OverviewPage() {
   const [range, setRange] = useState<RangeOption>(30);
   const [stripeBalance, setStripeBalance] = useState<StripeBalanceOverview | null>(null);
 
+  // The day's work sits above every chart on purpose: this page is the
+  // first thing opened in the morning, and a KPI you can only read is worth
+  // less at 8am than the three things you actually have to do.
+  const taskStore = useTaskStore();
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const today = localDateIso(new Date());
+  const onDeck = useMemo(
+    () => taskStore.tasks.filter((t) => isOnDeck(t, today)).sort((a, b) => compareTasks(a, b, today)),
+    [taskStore.tasks, today]
+  );
+  const tomorrow = useMemo(
+    () => taskStore.tasks.filter((t) => t.status !== "done" && t.due === addDays(today, 1)).sort((a, b) => compareTasks(a, b, today)),
+    [taskStore.tasks, today]
+  );
+  const finishedToday = useMemo(() => completedToday(taskStore.tasks, today), [taskStore.tasks, today]);
+
   useEffect(() => {
     fetch("/api/kpis")
       .then(async (res) => {
@@ -254,6 +275,74 @@ export default function OverviewPage() {
       <LiveBadge lastUpdated={lastUpdated} loading={studentsLoading || financeLoading} />
 
       {financeError && <FetchFailedState message={financeError} />}
+
+      <ErrorBoundary label="the Today panel">
+        <section className="today-panel">
+          <div className="today-head">
+            <div>
+              <h2 className="section-title" style={{ marginTop: 0 }}>
+                Today
+              </h2>
+              <div className="today-sub">
+                {formatDateDMY(today)} · {onDeck.length} on deck
+                {finishedToday.length > 0 ? ` · ${finishedToday.length} finished` : ""}
+              </div>
+            </div>
+            <Link href="/tasks" className="section-link">
+              All tasks →
+            </Link>
+          </div>
+
+          <TaskCapture
+            compact
+            projects={taskStore.projects.filter((p) => !p.archived)}
+            defaultDue={today}
+            onCreate={taskStore.create}
+            placeholder="Add to today — Enter to save, Shift+Enter for tomorrow"
+          />
+
+          {onDeck.length === 0 ? (
+            <EmptyState
+              title="Nothing on deck"
+              hint="Nothing is overdue or due today. Add something above, or pull work forward from All tasks."
+            />
+          ) : (
+            <div className="task-grid task-grid-compact">
+              {onDeck.slice(0, 6).map((task, i) => (
+                <div key={task.id} className="task-grid-item" style={{ animationDelay: `${Math.min(i, 12) * 28}ms` }}>
+                  <TaskCard
+                    compact
+                    task={task}
+                    project={taskStore.projects.find((p) => p.id === task.projectId)}
+                    onToggleDone={taskStore.toggleDone}
+                    onToggleDoing={taskStore.toggleDoing}
+                    onPatch={taskStore.patch}
+                    onOpen={setEditingTask}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {onDeck.length > 6 && (
+            <Link href="/tasks" className="today-more">
+              + {onDeck.length - 6} more on deck →
+            </Link>
+          )}
+
+          {tomorrow.length > 0 && (
+            <div className="today-tomorrow">
+              <span className="today-tomorrow-label">Tomorrow</span>
+              {tomorrow.slice(0, 5).map((t) => (
+                <button key={t.id} type="button" className="chip chip-button" onClick={() => setEditingTask(t)}>
+                  {t.title}
+                </button>
+              ))}
+              {tomorrow.length > 5 && <span className="chip">+{tomorrow.length - 5}</span>}
+            </div>
+          )}
+        </section>
+      </ErrorBoundary>
 
       <ErrorBoundary label="the Overview KPI grid">
         <div className="grid grid-kpis" style={{ marginTop: 16, marginBottom: 12 }}>
@@ -498,6 +587,15 @@ export default function OverviewPage() {
         </ErrorBoundary>
       )}
 
+      {editingTask && (
+        <TaskEditModal
+          task={taskStore.tasks.find((t) => t.id === editingTask.id) ?? editingTask}
+          projects={taskStore.projects.filter((p) => !p.archived)}
+          onPatch={taskStore.patch}
+          onDelete={taskStore.remove}
+          onClose={() => setEditingTask(null)}
+        />
+      )}
     </main>
   );
 }

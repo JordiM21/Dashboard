@@ -1,11 +1,11 @@
 # My Dashboard
 
 A Next.js dashboard for running a small language-school business: a single
-company-wide **Overview** (KPIs, cash flow, channel performance, students,
-projects — all in one place), a dedicated **Kommo pipeline view**, a student
-roster, an income/expense ledger with recurring/subscription payments, an
-internal project board, a Firebase-backed file manager, a content library,
-and a directory of scheduled AI agents.
+company-wide **Overview** (today's tasks, KPIs, cash flow, channel
+performance, students — all in one place), a dedicated **Kommo pipeline
+view**, a student roster, an income/expense ledger with recurring/
+subscription payments, a **task board** with optional parent projects, and
+a Firebase-backed file manager.
 
 There used to be a separate "Manager" page for channel KPIs (Stripe/Kommo/
 Meta/Gmail) alongside Overview — it was folded into Overview's "Channel
@@ -19,7 +19,7 @@ lead-gen forms and a payment gateway can write directly into the dashboard
 (no more manual spreadsheet entry, no Zapier/Make, no local-disk-only data).
 See "Firebase migration status" below for details, and "Data on a deployed
 / mobile build" further down for why this mattered — every collection that
-used to live on local disk (Resources, Projects, Content, Agents) would
+used to live on local disk (Resources, Projects) would
 silently break or lose data once actually deployed, not just when accessed
 from a phone.
 
@@ -32,14 +32,12 @@ My Dashboard/
 │   ├── globals.css           # design system (cream/cake, rounded, floating tabs)
 │   ├── page.tsx               # redirects to /overview
 │   ├── login/page.tsx         # email/password sign-in (only page not behind the auth gate)
-│   ├── overview/page.tsx      # THE dashboard: Finance/Students/Projects/channel KPIs, all real data
+│   ├── overview/page.tsx      # THE dashboard: today's tasks, Finance/Students/channel KPIs
 │   ├── kommo/page.tsx         # dedicated Kommo pipeline view — every lead, stage, tag, date filter
 │   ├── students/page.tsx      # student roster, backed by Firestore
 │   ├── finance/page.tsx       # income/expense ledger + recurring payments, backed by Firestore
-│   ├── projects/page.tsx      # project kanban/list, backed by Firestore, drag-and-drop status
+│   ├── tasks/page.tsx         # task grid: capture box, buckets by due date, optional projects
 │   ├── resources/page.tsx     # file manager: folders, images, video, docs (Firebase, CRUD)
-│   ├── content/page.tsx       # content grid/library, backed by Firestore
-│   ├── agents/page.tsx        # agent directory, backed by Firestore, read-only
 │   └── api/
 │       ├── kpis/route.ts              # aggregates Stripe/Kommo/Meta/Gmail — consumed by Overview
 │       ├── kommo/route.ts             # full Kommo leads + pipelines pull — consumed by /kommo
@@ -48,9 +46,9 @@ My Dashboard/
 │       ├── students/route.ts          # GET + POST, via lib/firebase/db.ts (admin SDK)
 │       ├── finance/route.ts           # GET (+ computed summary) + POST, same pattern
 │       ├── finance/recurring/...      # recurring payment template CRUD (requireAuth)
-│       ├── projects/...               # GET (public) + POST/PUT/DELETE (requireAuth), same pattern
-│       ├── resources/...              # folder + file CRUD, upload, signed-URL file serving
-│       └── content/...                # GET (public) + POST/PUT/DELETE (requireAuth), same pattern
+│       ├── tasks/...                  # GET (public) + POST/PUT/DELETE (requireAuth), same pattern
+│       ├── projects/...               # task containers — same pattern; DELETE unfiles its tasks
+│       └── resources/...              # folder + file CRUD, upload, signed-URL file serving
 ├── components/                # FloatingNav, Modal, LiveBadge, KpiCard, ViewToggle, StateBox,
 │                               # ErrorBoundary, ResourceDetailModal, AddStudentModal,
 │                               # AddTransactionModal, AddRecurringModal, AppShell
@@ -61,7 +59,7 @@ My Dashboard/
 │   │   ├── client.ts                    # client SDK init (NEXT_PUBLIC_* config)
 │   │   ├── admin.ts                     # firebase-admin init (service account) — Route Handlers
 │   │   ├── db.ts                         # Firestore CRUD: students / transactions / lessons /
-│   │   │                                 # projects / content / agents / recurringTransactions
+│   │   │                                 # tasks / projects / recurringTransactions
 │   │   ├── useFirestoreCollection.ts    # reusable onSnapshot hook (client-side, read-only)
 │   │   ├── AuthContext.tsx              # onAuthStateChanged -> { user, loading } via useAuth()
 │   │   ├── authFetch.ts                  # fetch() wrapper that attaches the Firebase ID token
@@ -89,10 +87,8 @@ My Dashboard/
 │   ├── migrateResourcesToFirebase.ts   # one-time local->Firebase migration — npm run migrate:resources
 │   └── migrateMarkdownToFirebase.ts    # one-time local->Firebase migration — npm run migrate:markdown
 ├── data/                        # migration SOURCE ONLY — the app no longer reads these at runtime
-│   ├── projects/*.md
-│   ├── content/*.md
-│   └── agents/*.md
-└── public/covers/               # placeholder cover images for Content
+│   └── projects/*.md
+└── public/covers/               # placeholder cover images for Games
 ```
 
 ## Firebase migration status
@@ -108,7 +104,7 @@ This is being migrated in phases:
 | 5 | `onSnapshot` real-time updates + in-app Add forms | ✅ Done |
 | 6 | Firebase Authentication (login, route protection, locked-down rules) | ✅ Written — **rules not yet deployed, see below** |
 | 7 | Resources moved from local disk to Firestore + Storage | ✅ Done — see "Data on a deployed / mobile build" |
-| 8 | Projects / Content / Agents moved from local markdown files to Firestore | ✅ Done — same section |
+| 8 | Projects moved from local markdown files to Firestore | ✅ Done — same section |
 | 9 | Manager page folded into Overview (was a redundant second dashboard) | ✅ Done |
 
 **Reads** — `/students` and `/finance` subscribe directly to Firestore from
@@ -601,7 +597,7 @@ later if push-based updates matter more than a manual refresh.)
   Month/All time), and free-text search.
 - **Sort**: newest, value, or name.
 - **Two views** (`ViewToggle`): "By Stage" — read-only kanban-style columns,
-  one per pipeline stage, mirroring the Projects board's visual style; and
+  one per pipeline stage, mirroring the task board's visual style; and
   "List" — a sortable table.
 
 ## Recurring payments (subscriptions, ad spend, etc)
@@ -825,7 +821,7 @@ network round-trip — no manual refresh.
 
 Every page in this app used to fall into one of two buckets: backed by
 Firestore (Students, Finance — worked fine deployed), or backed by the
-local filesystem under `data/` (Resources, Projects, Content, Agents —
+local filesystem under `data/` (Resources, Projects —
 **did not**). Hosts like Vercel run your server as short-lived, mostly
 read-only functions with no persistent local disk, so a local-disk write
 (uploading a file, creating a project, editing content) would either fail
@@ -843,7 +839,7 @@ included. There is no longer any app code that reads/writes `data/` at
 request time — `lib/markdown.ts` (the old fs-based CRUD layer) was deleted.
 
 **One-time migration**: if you have existing data under the old
-`data/resources/` or `data/{projects,content,agents}/` from before this
+`data/resources/` or `data/projects/` from before this
 change, run these once (locally, with `.env.local` pointing at your
 Firebase project) to copy everything into Firestore/Storage — both are
 safe to run more than once, they skip anything already migrated:
@@ -858,54 +854,75 @@ to Storage, so very large files (multi-GB video) will be slower and use
 more RAM than a true streaming upload — fine for typical images/PDFs/short
 clips.
 
-## Frontmatter templates (Projects, Content, Agents seed files)
+## Tasks (and the projects they optionally belong to)
 
-These `data/**/*.md` files are no longer read by the running app — they
-exist solely as input for `scripts/migrateMarkdownToFirebase.ts` (see
-above). To add a new project/content item/agent before running that
-script, drop a file matching one of these templates into the matching
-folder; anything added after the last migration run just needs the script
-run again.
+`/tasks` replaced the old four-column project kanban. The kanban made two
+things impossible that mattered more than the columns did: there was
+nowhere to put a plain to-do that wasn't a project, and nowhere to put the
+steps inside one. Dragging a card between columns was also the only way to
+record progress, which is a lot of hand movement for "I finished that".
 
-**Projects** (`data/projects/<slug>.md`)
+**The model** (`lib/types.ts`)
+
+- A **task** is the unit: title, optional due date, priority, size,
+  category, `status` (`todo` / `doing` / `done`), a `subtasks[]` checklist,
+  and an optional `projectId`.
+- A **project** is just a container and a label. It stores no progress —
+  `lib/tasks.ts`'s `projectProgress` derives it from its tasks, so the only
+  way progress moves is by finishing work. Deleting a project unfiles its
+  tasks instead of deleting them (`detachTasksFromProject`).
+- **Size** (Quick / Chunk / Big rock) is not a time estimate. It is the
+  tiebreak that puts the big rock above the quick win when both are equally
+  urgent — see `compareTasks`.
+
+**Capture shorthand** — everything is typeable into the one always-visible
+box, so adding a task never costs a trip to a form (`parseQuickTask`):
+
+| You type | You get |
+| --- | --- |
+| `call the bank` | a task, due today on Overview, undated on `/tasks` |
+| `... tomorrow` / `today` / `fri` | that due date, word stripped from the title |
+| `... !urgent` | priority Urgent (also `!high`, `!medium`, `!low`) |
+| `... #admin` | category `admin` |
+| Shift+Enter | saves it on tomorrow, whatever the text says |
+
+**Where things show up**
+
+- **Overview → Today** — everything overdue, due today, or already started
+  (`isOnDeck`), plus a capture box that defaults to today, plus tomorrow's
+  list as chips. This sits above every chart deliberately: at 8am the three
+  things you have to do are worth more than a KPI you can only read.
+- **`/tasks` → Focus** — the same set as one flat ranked list.
+- **`/tasks` → Everything** — grouped Overdue / Today / Tomorrow / This week
+  / Later / Someday (`groupByBucket`). A task with no due date is *Someday*,
+  never Today.
+- **`/tasks` → Done** — most recently finished first.
+
+The ordering inside every group is one function, `compareTasks`: in-flight
+work first, then by due date, then priority, then biggest chunk. Its
+self-check is `npx tsx scripts/testTasks.ts`.
+
+## Frontmatter template (Projects seed files)
+
+These `data/projects/*.md` files are no longer read by the running app —
+they exist solely as input for `scripts/migrateMarkdownToFirebase.ts` (see
+above). To add a new project before running that script, drop a file
+matching this template into `data/projects/`; anything added after the last
+migration run just needs the script run again.
 
 ```yaml
 ---
 title: Redesign landing page
-priority: High            # Low | Medium | High | Urgent
-field: Marketing
-status: In Progress       # To Do | In Progress | Paused | Done
-progress: 60               # 0-100
+icon: "🚀"                 # optional single emoji
+field: Marketing           # category label, shared with a task's category
+archived: false            # true hides it from the project rail
 ---
-Free-text notes / task details.
+Free-text notes about the project.
 ```
 
-**Content** (`data/content/<slug>.md`)
-
-```yaml
----
-title: Welcome email sequence
-cover: /covers/placeholder.svg   # path in /public or a full URL
-tags: ["email", "onboarding"]
-publishedAt: "2026-06-01"
----
-Full markdown body — shown when you click the cover image.
-```
-
-**Agents** (`data/agents/<slug>.md`)
-
-```yaml
----
-name: Daily KPI Digest
-role: Summarizes revenue, leads, and ad spend into a morning digest
-model: claude-sonnet-5
-effort: low                # low | medium | high | xhigh | max
-schedule: "0 7 * * *"      # cron expression or human-readable
-status: active              # active | paused | error
-summary: One-sentence description shown on the card.
----
-Optional longer notes about what the agent does.
-```
+Old seed files still carry `priority`/`status`/`progress` from the kanban
+this replaced. Those fields are ignored — a project's progress is derived
+from its tasks now (`lib/tasks.ts`'s `projectProgress`), never stored.
 
 ## Local setup
 
@@ -916,14 +933,18 @@ npm run dev
 
 Open http://localhost:3000 — it redirects to `/overview`.
 
-Every collection (Students, Finance, Projects, Content, Agents, Resources)
+Every collection (Students, Finance, Tasks, Projects, Resources)
 reads/writes Firestore in real time via `onSnapshot` — no manual refresh
-anywhere. Every page with editable records (Students, Finance, Projects,
-Content) has full Add/Edit/Delete in the UI, deletes gated behind a
-confirmation dialog (`components/ConfirmModal.tsx`) so a stray click can't
-lose data; Finance also supports selecting multiple rows via checkbox for a
-bulk delete. Agents is read-only, seeded via `npm run migrate:markdown` —
-see "Firebase migration status" above.
+anywhere. Every page with editable records has full Add/Edit/Delete in the
+UI, deletes gated behind a confirmation dialog
+(`components/ConfirmModal.tsx`) so a stray click can't lose data; Finance
+also supports selecting multiple rows via checkbox for a bulk delete.
+
+Tasks are the one exception, in a single direction: ticking a task done,
+starting it, or pushing it to tomorrow writes immediately and *shows*
+immediately (`lib/useTaskStore.ts` applies the change locally before the
+round trip), because all three are reversible with one tap and happen
+dozens of times a day. Deleting a task still asks.
 
 ## API key integration (channel KPIs)
 
