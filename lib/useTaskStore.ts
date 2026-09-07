@@ -72,10 +72,20 @@ export function useTaskStore() {
       });
       if (!res.ok) throw new Error(`Save failed (${res.status})`);
       // The snapshot carries the truth from here — including completedAt,
-      // which the server stamps and the overlay never knew about.
+      // which the server stamps and the overlay never knew about. Only the
+      // keys this request actually carried get dropped: a second patch fired
+      // while this one was in flight (ticking a step off while the title
+      // saves) shares the same overlay entry, and clearing the whole entry
+      // would snap that newer edit back to the stale snapshot.
       setOverlay((prev) => {
-        const { [id]: _applied, ...rest } = prev;
-        return rest;
+        const entry = prev[id];
+        if (!entry) return prev;
+        const remaining = Object.fromEntries(Object.entries(entry).filter(([k]) => !(k in updates)));
+        if (Object.keys(remaining).length === 0) {
+          const { [id]: _applied, ...rest } = prev;
+          return rest;
+        }
+        return { ...prev, [id]: remaining };
       });
     } catch (err) {
       setOverlay((prev) => {
@@ -86,7 +96,9 @@ export function useTaskStore() {
     }
   }, []);
 
-  const create = useCallback(async (fields: Partial<Task>): Promise<void> => {
+  /** Resolves with the saved task so the caller can open it — the capture box
+   *  drops you straight into the edit sheet, and that needs the real id. */
+  const create = useCallback(async (fields: Partial<Task>): Promise<Task | null> => {
     const tempId = `temp-${Math.random().toString(36).slice(2)}`;
     const temp: Task = {
       id: tempId,
@@ -109,8 +121,10 @@ export function useTaskStore() {
         body: JSON.stringify(fields),
       });
       if (!res.ok) throw new Error(`Couldn't create the task (${res.status})`);
+      return (await res.json()) as Task;
     } catch (err) {
       setWriteError(err instanceof Error ? err.message : "Couldn't create the task");
+      return null;
     } finally {
       setCreating((prev) => prev.filter((c) => c.id !== tempId));
     }

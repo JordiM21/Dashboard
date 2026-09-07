@@ -103,11 +103,9 @@ export default function TaskCard({
                 {project.title}
               </span>
             )}
-            {task.tags.map((tag) => (
-              <span key={tag} className="chip">
-                #{tag}
-              </span>
-            ))}
+            {/* Tags are for filtering, not for reading: three of them on
+                every card turned the grid into a wall of chips. They stay
+                on the capture box, in the sheet, and in the filter bar. */}
             <span className={`badge badge-${task.priority.toLowerCase()}`}>{task.priority}</span>
           </div>
 

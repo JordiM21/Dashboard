@@ -71,6 +71,18 @@
         "value": "transition: width 0.45s var(--ease-out)",
         "createdAt": "2026-09-03T17:21:08.923Z",
         "reason": "Same: .project-chip-fill and .task-subprogress-fill progress bars. Pre-existing. Not user confirmed."
+      },
+      {
+        "rule": "layout-transition",
+        "value": "width 0.4s var(--ease-out)",
+        "createdAt": "2026-09-07T10:43:32.770Z",
+        "reason": "progress-bar fill: the animated width IS the value being shown; no layout siblings to thrash"
+      },
+      {
+        "rule": "layout-transition",
+        "value": "width 0.45s var(--ease-out)",
+        "createdAt": "2026-09-07T10:43:32.853Z",
+        "reason": "progress-bar fill: the animated width IS the value being shown; no layout siblings to thrash"
       }
     ]
   }

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Modal from "@/components/Modal";
+import SelectMenu from "@/components/SelectMenu";
 import { PRIORITIES } from "@/lib/tasks";
 import { addDays, localDateIso } from "@/lib/dateUtils";
 import type { Project, Subtask, Task, TaskPriority } from "@/lib/types";
@@ -63,14 +64,34 @@ export default function TaskEditModal({
     setNewSubtask("");
   }
 
+  /**
+   * Whatever is sitting in the "add a step" and "new tag" boxes counts as
+   * typed, not as a draft you meant to throw away — so closing, however you
+   * close, commits it. Losing a step because you clicked Done instead of
+   * pressing Enter first is the kind of thing that stops you trusting the
+   * sheet at all.
+   */
   function saveAndClose() {
+    const pendingTag = newTag.trim().replace(/^#/, "");
+    const tags =
+      pendingTag && !draft.tags.some((t) => t.toLowerCase() === pendingTag.toLowerCase())
+        ? [...draft.tags, pendingTag]
+        : draft.tags;
+    const pendingStep = newSubtask.trim();
+    const subtasks = pendingStep
+      ? [...draft.subtasks, { id: crypto.randomUUID(), title: pendingStep, done: false }]
+      : draft.subtasks;
+
     onPatch(task.id, {
       title: draft.title.trim() || task.title,
       notes: draft.notes,
-      tags: draft.tags,
+      tags,
       priority: draft.priority,
       due: draft.due,
       projectId: draft.projectId,
+      // Steps write through as you tick them, but inline title edits only
+      // live in the draft until now — so they ship with everything else.
+      subtasks,
     });
     onClose();
   }
@@ -101,15 +122,16 @@ export default function TaskEditModal({
 
         <div className="form-row">
           <label>Project (optional)</label>
-          <select value={draft.projectId ?? ""} onChange={(e) => set("projectId", e.target.value || null)}>
-            <option value="">No project</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.icon ? `${p.icon} ` : ""}
-                {p.title}
-              </option>
-            ))}
-          </select>
+          <SelectMenu
+            className="select-field"
+            ariaLabel="Project"
+            value={draft.projectId ?? ""}
+            onChange={(v) => set("projectId", v || null)}
+            options={[
+              { value: "", label: "No project" },
+              ...projects.map((p) => ({ value: p.id, label: `${p.icon ? `${p.icon} ` : ""}${p.title}` })),
+            ]}
+          />
         </div>
       </div>
 

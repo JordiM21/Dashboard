@@ -41,7 +41,15 @@ export default function Modal({
   if (!mounted) return null;
 
   return createPortal(
-    <div className="modal-backdrop" onClick={onClose}>
+    // Closing on the *press*, not just the release: selecting text in a
+    // field and letting go past the edge of the sheet used to count as a
+    // click on the backdrop and dismissed it mid-edit.
+    <div
+      className="modal-backdrop"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div className="modal" onClick={(e) => e.stopPropagation()} style={maxWidth ? { maxWidth } : undefined}>
         <div className="modal-title">{title}</div>
         {children}

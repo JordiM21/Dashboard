@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import SelectMenu from "@/components/SelectMenu";
 import { parseQuickTask, PRIORITIES } from "@/lib/tasks";
 import { formatDateDMY, localDateIso, addDays } from "@/lib/dateUtils";
 import type { Project, Task, TaskPriority } from "@/lib/types";
@@ -31,7 +32,8 @@ export default function TaskCapture({
   defaultProjectId?: string | null;
   /** Where an undated capture lands. The Overview passes today — something typed into the day's own panel is for the day, not the backlog. */
   defaultDue?: string | null;
-  onCreate: (fields: Partial<Task>) => void | Promise<void>;
+  /** May resolve with the saved task; the pages use that to open it for editing. */
+  onCreate: (fields: Partial<Task>) => void | Promise<unknown>;
   placeholder?: string;
   autoFocus?: boolean;
   compact?: boolean;
@@ -127,20 +129,16 @@ export default function TaskCapture({
         </div>
 
         {projects.length > 0 && (
-          <select
+          <SelectMenu
             className="capture-select"
+            ariaLabel="Project"
             value={projectId ?? ""}
-            onChange={(e) => setProjectId(e.target.value || null)}
-            aria-label="Project"
-          >
-            <option value="">No project</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.icon ? `${p.icon} ` : ""}
-                {p.title}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setProjectId(v || null)}
+            options={[
+              { value: "", label: "No project" },
+              ...projects.map((p) => ({ value: p.id, label: `${p.icon ? `${p.icon} ` : ""}${p.title}` })),
+            ]}
+          />
         )}
 
         <button type="button" className="btn btn-primary btn-sm capture-submit" onClick={() => submit()} disabled={!parsed?.title}>

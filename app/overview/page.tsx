@@ -299,7 +299,10 @@ export default function OverviewPage() {
             projects={taskStore.projects.filter((p) => !p.archived)}
             knownTags={knownTags}
             defaultDue={today}
-            onCreate={taskStore.create}
+            onCreate={async (fields) => {
+              const created = await taskStore.create(fields);
+              if (created) setEditingTask(created);
+            }}
             placeholder="Add to today — Enter to save, Shift+Enter for tomorrow"
           />
 

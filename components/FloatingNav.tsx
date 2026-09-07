@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
 import QuickAdd from "@/components/QuickAdd";
-import { ALL_NAV_TABS, DEFAULT_VISIBLE_TAB_IDS, NAV_STORAGE_KEY } from "@/lib/navConfig";
+import { ALL_NAV_TABS, DEFAULT_VISIBLE_TAB_IDS, NAV_STORAGE_KEY, type NavTab } from "@/lib/navConfig";
 
 type Theme = "light" | "dark";
 
@@ -68,6 +68,8 @@ export default function FloatingNav() {
 
   function toggleTabVisible(id: string) {
     setVisibleIds((prev) => {
+      // Turning a tab back on appends it rather than restoring some original
+      // slot — the order is yours now, and it lands where you can drag it.
       const next = prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id];
       if (next.length === 0) return prev; // always keep at least one tab visible
       localStorage.setItem(NAV_STORAGE_KEY, JSON.stringify(next));
@@ -75,7 +77,16 @@ export default function FloatingNav() {
     });
   }
 
-  const visibleTabs = ALL_NAV_TABS.filter((t) => visibleIds.includes(t.id));
+  function reorderTabs(next: string[]) {
+    setVisibleIds(next);
+    localStorage.setItem(NAV_STORAGE_KEY, JSON.stringify(next));
+  }
+
+  // The stored list *is* the order — so a tab dragged to second place is
+  // second everywhere: the desktop pill, and the phone's bottom bar.
+  const visibleTabs = visibleIds
+    .map((id) => ALL_NAV_TABS.find((t) => t.id === id))
+    .filter((t): t is (typeof ALL_NAV_TABS)[number] => Boolean(t));
   const isActive = (href: string) => pathname?.startsWith(href) ?? false;
   const barTabs = visibleTabs.slice(0, MOBILE_BAR_TABS);
   const sheetTabs = visibleTabs.slice(MOBILE_BAR_TABS);
@@ -88,7 +99,7 @@ export default function FloatingNav() {
             <Link
               key={tab.id}
               href={tab.href}
-              className={`nav-tab${isActive(tab.href) ? " active" : ""}`}
+              className={`nav-tab${isActive(tab.href) ? " active" : ""}`}
             >
               {tab.label}
             </Link>
@@ -104,7 +115,11 @@ export default function FloatingNav() {
             >
               ⚙
             </button>
-            {customizeOpen && <CustomizePanel visibleIds={visibleIds} onToggle={toggleTabVisible} />}
+            {customizeOpen && (
+              <div className="popover-menu popover-menu-wide">
+                <NavTabsEditor visibleIds={visibleIds} onToggle={toggleTabVisible} onReorder={reorderTabs} />
+              </div>
+            )}
           </div>
           <button
             type="button"
@@ -137,7 +152,7 @@ export default function FloatingNav() {
           <Link
             key={tab.id}
             href={tab.href}
-            className={`nav-bottom-item${isActive(tab.href) ? " active" : ""}`}
+            className={`nav-bottom-item${isActive(tab.href) ? " active" : ""}`}
           >
             <span className="nav-bottom-icon">{tab.icon}</span>
             <span className="nav-bottom-label">{tab.label}</span>
@@ -166,7 +181,7 @@ export default function FloatingNav() {
                   <Link
                     key={tab.id}
                     href={tab.href}
-                    className={`nav-sheet-tile${isActive(tab.href) ? " active" : ""}`}
+                    className={`nav-sheet-tile${isActive(tab.href) ? " active" : ""}`}
                   >
                     <span className="nav-sheet-tile-icon">{tab.icon}</span>
                     {tab.label}
@@ -184,13 +199,8 @@ export default function FloatingNav() {
               </button>
             </div>
 
-            <div className="nav-mobile-label">Show on navbar — first {MOBILE_BAR_TABS} become the bottom tabs</div>
-            {ALL_NAV_TABS.map((tab) => (
-              <label key={tab.id} className="nav-mobile-checkbox">
-                <input type="checkbox" checked={visibleIds.includes(tab.id)} onChange={() => toggleTabVisible(tab.id)} />
-                <span>{tab.icon}</span> {tab.label}
-              </label>
-            ))}
+            <div className="nav-mobile-label">The first {MOBILE_BAR_TABS} become the bottom tabs</div>
+            <NavTabsEditor visibleIds={visibleIds} onToggle={toggleTabVisible} onReorder={reorderTabs} />
           </div>
         </>
       )}
@@ -198,16 +208,110 @@ export default function FloatingNav() {
   );
 }
 
-function CustomizePanel({ visibleIds, onToggle }: { visibleIds: string[]; onToggle: (id: string) => void }) {
+/**
+ * Which tabs show, and in what order. Visible tabs come first, in your
+ * order, each with a grip you can drag; hidden ones sit below until you
+ * switch them on.
+ *
+ * The drag runs on Pointer Events rather than HTML5 drag-and-drop, which
+ * simply does not fire on a touchscreen — and this is installed as a PWA,
+ * so a phone is the main way it gets used. `touch-action: none` on the grip
+ * is what stops the sheet scrolling away under your finger; everywhere else
+ * in the list scrolls normally.
+ *
+ * Rows swap as soon as the pointer crosses into another row, so what you
+ * see mid-drag is already the result — there is no separate drop step to
+ * get wrong.
+ */
+function NavTabsEditor({
+  visibleIds,
+  onToggle,
+  onReorder,
+}: {
+  visibleIds: string[];
+  onToggle: (id: string) => void;
+  onReorder: (next: string[]) => void;
+}) {
+  const [dragId, setDragId] = useState<string | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  const visible = visibleIds
+    .map((id) => ALL_NAV_TABS.find((t) => t.id === id))
+    .filter((t): t is NavTab => Boolean(t));
+  const hidden = ALL_NAV_TABS.filter((t) => !visibleIds.includes(t.id));
+
+  function startDrag(e: React.PointerEvent, id: string) {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDragId(id);
+  }
+
+  function onDragMove(e: React.PointerEvent) {
+    if (!dragId) return;
+    const rows = Array.from(listRef.current?.querySelectorAll<HTMLElement>("[data-visible-row]") ?? []);
+    const from = visibleIds.indexOf(dragId);
+    const to = rows.findIndex((row) => {
+      const r = row.getBoundingClientRect();
+      return e.clientY >= r.top && e.clientY <= r.bottom;
+    });
+    if (to === -1 || to === from) return;
+    const next = [...visibleIds];
+    next.splice(from, 1);
+    next.splice(to, 0, dragId);
+    onReorder(next);
+  }
+
   return (
-    <div className="popover-menu">
-      <div className="popover-menu-title">Show on navbar</div>
-      {ALL_NAV_TABS.map((tab) => (
-        <label key={tab.id} className="popover-menu-row">
-          <input type="checkbox" checked={visibleIds.includes(tab.id)} onChange={() => onToggle(tab.id)} />
-          <span>{tab.icon}</span> {tab.label}
-        </label>
+    <div className="nav-tabs-editor" ref={listRef}>
+      <div className="nav-tabs-editor-title">On the navbar — drag to reorder</div>
+      {visible.map((tab) => (
+        <div
+          key={tab.id}
+          data-visible-row
+          className={`nav-tab-row${dragId === tab.id ? " dragging" : ""}`}
+        >
+          <button
+            type="button"
+            className="nav-tab-grip"
+            aria-label={`Reorder ${tab.label}`}
+            onPointerDown={(e) => startDrag(e, tab.id)}
+            onPointerMove={onDragMove}
+            onPointerUp={() => setDragId(null)}
+            onPointerCancel={() => setDragId(null)}
+          >
+            ⠿
+          </button>
+          <span className="nav-tab-row-icon" aria-hidden>
+            {tab.icon}
+          </span>
+          <span className="nav-tab-row-label">{tab.label}</span>
+          <button
+            type="button"
+            className="nav-tab-remove"
+            aria-label={`Hide ${tab.label} from the navbar`}
+            onClick={() => onToggle(tab.id)}
+          >
+            −
+          </button>
+        </div>
       ))}
+
+      {hidden.length > 0 && (
+        <>
+          <div className="nav-tabs-editor-title">Hidden</div>
+          {hidden.map((tab) => (
+            <button key={tab.id} type="button" className="nav-tab-row nav-tab-row-hidden" onClick={() => onToggle(tab.id)}>
+              <span className="nav-tab-row-icon" aria-hidden>
+                {tab.icon}
+              </span>
+              <span className="nav-tab-row-label">{tab.label}</span>
+              <span className="nav-tab-add" aria-hidden>
+                +
+              </span>
+            </button>
+          ))}
+        </>
+      )}
     </div>
   );
 }

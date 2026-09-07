@@ -25,6 +25,9 @@
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
 
+  /* The chevron drawn on every <select>. A data URI can't inherit
+     currentColor, so the stroke is baked in and the dark theme redefines it. */
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1.5 1.75 6 6.25l4.5-4.5' fill='none' stroke='%237a6a5e' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
 :root[data-theme="dark"] {
@@ -45,6 +48,7 @@
   --nav-bg: rgba(16, 28, 51, 0.75);
   --shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   --shadow-hover: 0 14px 34px rgba(0, 0, 0, 0.55);
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1.5 1.75 6 6.25l4.5-4.5' fill='none' stroke='%2394a6c4' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 
 }
 
@@ -67,6 +71,7 @@
     --nav-bg: rgba(16, 28, 51, 0.75);
     --shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
     --shadow-hover: 0 14px 34px rgba(0, 0, 0, 0.55);
+    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1.5 1.75 6 6.25l4.5-4.5' fill='none' stroke='%2394a6c4' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 
   }
 }
@@ -511,19 +516,113 @@ button {
   padding: 0 4px 6px;
 }
 
-.nav-mobile-checkbox {
+/* ---------- Navbar tab editor (shown in the desktop popover and the
+   mobile More sheet) — a reorderable list, iOS-Settings style: grip on the
+   left, the row itself a plain surface, and one round button to add or
+   remove. ---------- */
+
+.nav-tabs-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nav-tabs-editor-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  padding: 8px 6px 4px;
+}
+
+.nav-tab-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 4px;
+  width: 100%;
+  padding: 8px 8px 8px 4px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--cream);
+  color: var(--ink);
+  font: inherit;
   font-size: 14.5px;
+  text-align: left;
+  /* No transform transition: the row under a dragging finger is re-rendered
+     into its new slot, and animating that lags the pointer. */
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+/* The row being dragged lifts off the list, so it reads as "held". */
+.nav-tab-row.dragging {
+  background: var(--white);
+  border-color: var(--line);
+  box-shadow: var(--shadow-hover);
+}
+
+.nav-tab-grip {
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 1;
+  padding: 6px;
+  cursor: grab;
+  /* The one thing that makes this work on a phone: without it the browser
+     claims the gesture as a scroll and the drag never starts. */
+  touch-action: none;
+}
+
+.nav-tab-grip:active {
+  cursor: grabbing;
+}
+
+.nav-tab-row-icon {
+  font-size: 15px;
+}
+
+.nav-tab-row-label {
+  flex: 1;
+}
+
+.nav-tab-remove,
+.nav-tab-add {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--white);
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.nav-tab-remove:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.nav-tab-row-hidden {
+  background: transparent;
+  color: var(--ink-soft);
+  padding-left: 10px;
+  cursor: pointer;
+}
+
+.nav-tab-row-hidden:hover {
+  background: var(--cream);
   color: var(--ink);
 }
 
-.nav-mobile-checkbox input {
-  accent-color: var(--accent);
-  width: 18px;
-  height: 18px;
+.popover-menu-wide {
+  min-width: 250px;
 }
 
 /* ---------- Quick add ---------- */
@@ -1198,15 +1297,110 @@ button {
   opacity: 0.75;
 }
 
-.capture-select {
+/* ---------- Popup select (components/SelectMenu.tsx) ----------
+   A native <select> can be styled shut but not open — the option list is
+   drawn by the OS. These classes dress the trigger; the list itself reuses
+   .popover-menu on a pointer device and .card-menu-sheet on a phone. */
+
+.select-menu {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+}
+
+.select-menu-trigger {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* The label is the only thing that can grow, so a long project title
+   ellipsises instead of stretching the control past its row. */
+.select-menu-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.select-menu-list {
+  left: 0;
+  right: auto;
+  /* At least as wide as the trigger, but never so narrow that "Kommo
+     Optimization" wraps onto two lines the way it does at the pill's 170px. */
+  min-width: max(100%, 210px);
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.select-menu-list .popover-menu-row {
+  white-space: nowrap;
+}
+
+/* This menu opens over the capture card, which is the same colour as the
+   menu's own surface — the default hairline all but disappears there, so
+   the edge gets the stronger line. */
+.select-menu-list {
+  border-color: var(--cake-dark);
+}
+
+/* Above the modal (.modal-backdrop is 100): this picker is opened from
+   inside the task sheet, and at the card menu's own z-index of 96 its
+   options came up behind the modal's dimming layer — invisible, and
+   untappable. Both selectors are doubled up so these win over .card-menu-*,
+   which is defined further down the file at the same specificity. */
+.card-menu-backdrop.select-menu-backdrop {
+  z-index: 104;
+}
+
+.card-menu-sheet.select-menu-sheet {
+  z-index: 105;
+}
+
+/* The trigger inside a modal's form row — matches the inputs beside it. */
+.select-field {
   border: 1px solid var(--line);
-  background: var(--cream);
+  border-radius: var(--radius-sm);
+  background: var(--cream) var(--select-chevron) no-repeat right 13px center;
+  background-size: 12px;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 14px;
+  padding: 9px 34px 9px 12px;
+}
+
+/* Project picker in the capture row. */
+.capture-select {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid var(--line);
+  background: var(--cream) var(--select-chevron) no-repeat right 10px center;
+  background-size: 11px;
   color: var(--ink);
   border-radius: 999px;
-  padding: 6px 10px;
+  padding: 6px 28px 6px 12px;
   font-size: 12px;
   font-family: inherit;
-  max-width: 150px;
+  font-weight: 500;
+  max-width: 170px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.capture-select:hover {
+  border-color: var(--ink-soft);
+}
+
+.capture-select:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 /* Second row of the capture box: priority and project. Giving these their
@@ -1800,6 +1994,13 @@ button {
 
 /* ---------- Card "⋯" menu (tasks + projects) ---------- */
 
+/* Only a place to catch the clicks escaping the menu's portals — it must not
+   become a box of its own, or the trigger stops being a flex child of the
+   card's action row. */
+.card-menu-root {
+  display: contents;
+}
+
 .card-menu-trigger {
   width: 26px;
   height: 26px;
@@ -2325,12 +2526,27 @@ button {
   color: var(--ink);
 }
 
+/* Same rounded shell and chevron as the capture row's picker — one select
+   look across the app, no OS rectangle anywhere. */
+.form-row select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 34px;
+  background-image: var(--select-chevron);
+  background-repeat: no-repeat;
+  background-position: right 13px center;
+  background-size: 12px;
+  cursor: pointer;
+}
+
 .form-row input:focus,
 .form-row select:focus,
 .form-row textarea:focus {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
-  background: var(--white);
+  /* background-color, not the shorthand — the shorthand would wipe the
+     select's chevron background-image on focus. */
+  background-color: var(--white);
 }
 
 .form-row.checkbox {
@@ -3319,8 +3535,13 @@ button {
     text-align: center;
   }
 
-  .capture-select {
+  /* The flex sizing belongs to the wrapper now that the picker is a
+     button inside .select-menu rather than the row's own <select>. */
+  .capture-controls .select-menu {
     flex: 1 1 140px;
+  }
+
+  .capture-select {
     max-width: none;
     min-height: 38px;
   }

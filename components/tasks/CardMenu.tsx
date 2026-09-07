@@ -110,7 +110,12 @@ export default function CardMenu({
   );
 
   return (
-    <>
+    // A portal escapes the DOM but not React's tree: a click on "Delete", or
+    // anywhere in the confirmation sheet, still bubbles up to the card's own
+    // onClick — which is why confirming a delete also opened the editor.
+    // One stop here covers the menu, the sheet and the confirmation.
+    // display:contents keeps the trigger a direct flex child of the card.
+    <span className="card-menu-root" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
       <button
         ref={buttonRef}
         type="button"
@@ -163,6 +168,6 @@ export default function CardMenu({
           onCancel={() => setConfirming(false)}
         />
       )}
-    </>
+    </span>
   );
 }

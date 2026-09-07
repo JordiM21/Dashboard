@@ -102,7 +102,13 @@ export default function TasksPage() {
           projects={activeProjects}
           knownTags={tags}
           defaultProjectId={projectFilter}
-          onCreate={store.create}
+          // Enter saves and drops you straight into the sheet: a task worth
+          // typing usually has steps, and having to find the new card and
+          // tap it again is where that intent gets lost.
+          onCreate={async (fields) => {
+            const created = await store.create(fields);
+            if (created) setEditing(created);
+          }}
           autoFocus={captureFocus}
         />
 
