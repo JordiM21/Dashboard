@@ -93,34 +93,46 @@ export async function updateStudent(id: string, updates: Partial<Student>): Prom
  * "up_to_date", since the new due date is now in the future. No-ops
  * silently if neither identifier matches a student — most transactions
  * (ad spend, non-tuition income) aren't tied to a student at all.
+ *
+ * Siblings/cousins on one combined tuition (see README "Linked students —
+ * siblings sharing one payment") share their parentEmail, so ONE payment —
+ * whichever student it's matched to first — advances every student with
+ * that same parentEmail, not just the one directly matched. A student with
+ * no parentEmail set only ever advances themself.
  */
 export async function applyPaymentToStudent(opts: {
   studentId?: string | null;
   payerEmail?: string | null;
 }): Promise<void> {
   const db = getAdminDb();
-  let ref;
+  const targetIds = new Set<string>();
+  let email = opts.payerEmail?.trim().toLowerCase() || null;
 
   if (opts.studentId) {
-    ref = db.collection(STUDENTS).doc(opts.studentId);
-  } else if (opts.payerEmail) {
-    const snap = await db
-      .collection(STUDENTS)
-      .where("parentEmail", "==", opts.payerEmail.trim().toLowerCase())
-      .limit(1)
-      .get();
-    if (snap.empty) return;
-    ref = snap.docs[0]!.ref;
-  } else {
-    return;
+    const doc = await db.collection(STUDENTS).doc(opts.studentId).get();
+    if (doc.exists) {
+      targetIds.add(doc.id);
+      email = email ?? (fromDoc<Student>(doc as QueryDocumentSnapshot<DocumentData>).parentEmail?.trim().toLowerCase() || null);
+    }
   }
 
-  const doc = await ref.get();
-  if (!doc.exists) return;
-  const student = fromDoc<Student>(doc as QueryDocumentSnapshot<DocumentData>);
+  if (email) {
+    const snap = await db.collection(STUDENTS).where("parentEmail", "==", email).get();
+    for (const d of snap.docs) targetIds.add(d.id);
+  }
 
-  const nextPayment = addOneMonth(student.nextPayment ?? localDateIso());
-  await ref.update({ nextPayment, updatedAt: FieldValue.serverTimestamp() });
+  if (targetIds.size === 0) return;
+
+  await Promise.all(
+    Array.from(targetIds).map(async (id) => {
+      const ref = db.collection(STUDENTS).doc(id);
+      const doc = await ref.get();
+      if (!doc.exists) return;
+      const student = fromDoc<Student>(doc as QueryDocumentSnapshot<DocumentData>);
+      const nextPayment = addOneMonth(student.nextPayment ?? localDateIso());
+      await ref.update({ nextPayment, updatedAt: FieldValue.serverTimestamp() });
+    })
+  );
 }
 
 export async function deleteStudent(id: string): Promise<boolean> {

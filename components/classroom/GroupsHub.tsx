@@ -5,9 +5,12 @@ import NewLessonModal from "@/components/NewLessonModal";
 import PromptModal from "@/components/PromptModal";
 import AddHistoryModal from "@/components/AddHistoryModal";
 import TagFilterDropdown from "@/components/TagFilterDropdown";
-import LoadingLabel from "@/components/LoadingLabel";
 import LessonSheet from "@/components/classroom/LessonSheet";
-import { StudentAvatar } from "@/components/classroom/StudentsRoster";
+import StudentsRoster, { StudentCard } from "@/components/classroom/StudentsRoster";
+import CurriculumPicker from "@/components/classroom/CurriculumPicker";
+import CurriculumBoard from "@/components/CurriculumBoard";
+import ParentReportModal from "@/components/classroom/ParentReportModal";
+import Modal from "@/components/Modal";
 import { EmptyState, FetchFailedState } from "@/components/StateBox";
 import { useFirestoreCollection } from "@/lib/firebase/useFirestoreCollection";
 import { authFetch } from "@/lib/firebase/authFetch";
@@ -29,17 +32,25 @@ const GROUP_COLORS = ["var(--accent)", "var(--success)", "var(--warning)", "var(
 
 const ALL_TIME_SINCE = "0000-01-01";
 
+/** Rail selection sentinel for "every student, every group" — same rail,
+    same rest-of-page structure as picking one group, just a different
+    panel. Folds what used to be the Classroom's separate Students tab in
+    here, since both were really "who's in this program", one view deep. */
+const ALL_STUDENTS_ID = "__all_students__";
+
 /** One row in a group's timeline: a lesson (planned or taught), or a backfilled history entry that never had a lesson behind it. */
 type TimelineItem =
   | { kind: "lesson"; date: string; lesson: WeeklyPlanDoc }
   | { kind: "history"; date: string; entry: GroupHistoryEntry };
 
 /**
- * The Classroom's home: every teaching group at a glance, and — once you
- * pick one — everything about it in one column. Where they are in the
- * syllabus, who's in the class, what's planned next, and every lesson
- * already taught with the plan, the material and the takeaways still
- * attached to it.
+ * The Classroom's home: every teaching group at a glance, plus an "All
+ * Students" entry in the same rail for the full roster — one place to pick
+ * who you want to see, a class or everyone, instead of a separate top-level
+ * tab for each. Once you pick a group: where it is in the syllabus, who's
+ * in it (as real roster cards, not name chips), what's planned next, and
+ * every lesson already taught with the plan, the material and the
+ * takeaways still attached to it.
  *
  * This replaces the old split where lessons lived in a whiteboard sidebar
  * on one tab and group progress lived on another.
@@ -63,8 +74,9 @@ export default function GroupsHub() {
   const [editLesson, setEditLesson] = useState<WeeklyPlanDoc | null>(null);
   const [newGroupOpen, setNewGroupOpen] = useState(false);
   const [historyModal, setHistoryModal] = useState<{ group: GroupDocWithRecall; entry?: GroupHistoryEntry } | null>(null);
-  const [reportingId, setReportingId] = useState<string | null>(null);
-  const [reportFlashId, setReportFlashId] = useState<string | null>(null);
+  const [reportOpenFor, setReportOpenFor] = useState<GroupDocWithRecall | null>(null);
+  const [fullBoardOpen, setFullBoardOpen] = useState(false);
+  const [assigningTopic, setAssigningTopic] = useState(false);
 
   const loadGroups = useCallback(() => {
     setGroupsError(null);
@@ -108,9 +120,10 @@ export default function GroupsHub() {
   }, []);
 
   // Only the group you're looking at — every group's whole history at once
-  // is a request per group for data that's off-screen.
+  // is a request per group for data that's off-screen. ALL_STUDENTS_ID isn't
+  // a real group, so there's no history to fetch for it.
   useEffect(() => {
-    if (selectedId) loadHistory(selectedId);
+    if (selectedId && selectedId !== ALL_STUDENTS_ID) loadHistory(selectedId);
   }, [selectedId, loadHistory]);
 
   // Land on the first group rather than an empty shell, but never fight a
@@ -177,6 +190,24 @@ export default function GroupsHub() {
     setOpenLesson((cur) => (cur?.id === lesson.id ? lesson : cur));
   }
 
+  /** Moves a group's curriculum position — same PATCH the full syllabus board's "paintbrush" makes, just triggered from the CurriculumPicker inline in this group's own panel instead of a separate tab. Optimistic, with a revert-by-refetch on failure. */
+  async function assignCurrentTopic(groupId: string, levelNumber: number, topic: string) {
+    setAssigningTopic(true);
+    setGroups((prev) => prev?.map((g) => (g.id === groupId ? { ...g, currentLevel: levelNumber, currentTopic: topic } : g)) ?? prev);
+    try {
+      const res = await authFetch(`/api/board/groups/${groupId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentLevel: levelNumber, currentTopic: topic }),
+      });
+      if (!res.ok) throw new Error(`Assign failed with ${res.status}`);
+    } catch {
+      loadGroups();
+    } finally {
+      setAssigningTopic(false);
+    }
+  }
+
   async function createGroup(name: string) {
     const res = await authFetch("/api/board/groups", {
       method: "POST",
@@ -191,40 +222,13 @@ export default function GroupsHub() {
     }
   }
 
-  /** Builds a celebratory, parent-ready summary of a group's last 30 days and copies it to the clipboard — the same output the Curriculum Board used to produce, now reading the history this view already has cached. */
-  async function generateParentReport(group: GroupDocWithRecall) {
-    setReportingId(group.id);
-    try {
-      const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      const entries = (historyByGroup[group.id] ?? [])
-        .filter((e) => e.date >= cutoff)
-        .slice()
-        .sort((a, b) => a.date.localeCompare(b.date));
-
-      const lines = [`🎉 Progress Update — ${group.name} 🎉`, ""];
-      if (entries.length === 0) {
-        lines.push("No lessons logged in the last 30 days yet — check back soon!");
-      } else {
-        lines.push(`Over the last 30 days, ${group.name} covered ${entries.length} topic${entries.length === 1 ? "" : "s"}:`, "");
-        for (const e of entries) {
-          lines.push(`${e.status === "Mastered" ? "✅" : "🔁"} ${e.topic} — ${e.status}${e.teacherNotes ? ` (${e.teacherNotes})` : ""}`);
-        }
-        lines.push("", "Great work this month — keep it up! 🌟");
-      }
-
-      await navigator.clipboard.writeText(lines.join("\n"));
-      setReportFlashId(group.id);
-      setTimeout(() => setReportFlashId((cur) => (cur === group.id ? null : cur)), 2000);
-    } catch (err) {
-      window.alert(err instanceof Error ? err.message : "Couldn't generate the report.");
-    } finally {
-      setReportingId(null);
-    }
-  }
-
   const currentLevel = (levels ?? []).find((l) => l.levelNumber === selected?.currentLevel);
   const roster = selected ? studentsIn(selected.name) : [];
   const lastTaught = timeline[0]; // timeline is sorted newest-first
+  const masteredTopics = useMemo(
+    () => new Set((historyByGroup[selectedId ?? ""] ?? []).filter((e) => e.status === "Mastered").map((e) => e.topic)),
+    [historyByGroup, selectedId]
+  );
 
   return (
     <div className="hub">
@@ -232,6 +236,19 @@ export default function GroupsHub() {
       {lessonsError && <FetchFailedState message={lessonsError} />}
 
       <div ref={railRef} className="group-rail" role="tablist" aria-label="Teaching groups">
+        <button
+          role="tab"
+          aria-selected={selectedId === ALL_STUDENTS_ID}
+          className={`group-chip${selectedId === ALL_STUDENTS_ID ? " active" : ""}`}
+          style={{ ["--chip" as string]: "var(--sky)" }}
+          onClick={() => setSelectedId(ALL_STUDENTS_ID)}
+        >
+          <span className="group-chip-dot" />
+          <span className="group-chip-body">
+            <span className="group-chip-name">All Students</span>
+            <span className="group-chip-meta">{(students ?? []).length} total, every group</span>
+          </span>
+        </button>
         {(groups ?? []).map((g) => {
           const active = g.id === selectedId;
           const count = (lessons ?? []).filter((l) => l.groupId === g.id).length;
@@ -269,20 +286,29 @@ export default function GroupsHub() {
         <EmptyState title="No groups yet" hint='Create one above — a group is what lessons, students and progress all hang off.' />
       )}
 
+      {selectedId === ALL_STUDENTS_ID && (
+        <div className="hub-panel">
+          <StudentsRoster />
+        </div>
+      )}
+
       {selected && (
         <div key={selected.id} className="hub-panel">
           <section className="card card-pad hub-summary">
             <div className="hub-summary-head">
-              <div>
-                <div className="hub-summary-name">{selected.name}</div>
-                <div className="hub-summary-place">
-                  Level {selected.currentLevel}
-                  {currentLevel ? ` · ${currentLevel.emoji} ${currentLevel.title}` : ""}
-                  {selected.currentTopic ? ` · ${selected.currentTopic}` : ""}
-                </div>
-              </div>
+              <div className="hub-summary-name">{selected.name}</div>
               {selected.reviewSuggested && <span className="badge badge-warning">🔁 Review suggested</span>}
             </div>
+
+            <CurriculumPicker
+              levels={levels ?? []}
+              group={selected}
+              masteredTopics={masteredTopics}
+              onAssign={(levelNumber, topic) => assignCurrentTopic(selected.id, levelNumber, topic)}
+              onPlanLesson={(topic) => setNewLessonFor({ groupId: selected.id, topic })}
+              onOpenFullBoard={() => setFullBoardOpen(true)}
+            />
+            {assigningTopic && <div className="hub-saving">Saving…</div>}
 
             <div className="hub-stats">
               <div className="hub-stat">
@@ -303,17 +329,6 @@ export default function GroupsHub() {
               </div>
             </div>
 
-            {roster.length > 0 && (
-              <div className="hub-roster">
-                {roster.map((s) => (
-                  <span key={s.id} className="hub-roster-item" title={s.name}>
-                    <StudentAvatar student={s} size={26} />
-                    {s.name.split(" ")[0]}
-                  </span>
-                ))}
-              </div>
-            )}
-
             <div className="hub-actions">
               <button
                 className="btn btn-primary btn-sm"
@@ -321,10 +336,8 @@ export default function GroupsHub() {
               >
                 + Plan a lesson
               </button>
-              <button className="btn btn-secondary btn-sm" onClick={() => generateParentReport(selected)} disabled={reportingId === selected.id}>
-                <LoadingLabel loading={reportingId === selected.id}>
-                  {reportFlashId === selected.id ? "Copied! 📋" : "📋 Parent report"}
-                </LoadingLabel>
+              <button className="btn btn-secondary btn-sm" onClick={() => setReportOpenFor(selected)}>
+                📋 Parent report
               </button>
               <button className="btn btn-ghost btn-sm" onClick={() => setHistoryModal({ group: selected })}>
                 + Log a past lesson
@@ -335,6 +348,28 @@ export default function GroupsHub() {
                 </div>
               )}
             </div>
+          </section>
+
+          <section className="hub-section">
+            <div className="hub-section-head">
+              <h2 className="hub-section-title">Students</h2>
+              <span className="hub-section-count">{roster.length}</span>
+            </div>
+            {roster.length === 0 ? (
+              <div className="hub-empty">
+                Nobody's in this group yet — add a student on{" "}
+                <button className="hub-inline-btn" onClick={() => setSelectedId(ALL_STUDENTS_ID)}>
+                  All Students
+                </button>{" "}
+                and set their class to "{selected.name}".
+              </div>
+            ) : (
+              <div className="grid grid-cards">
+                {roster.map((s) => (
+                  <StudentCard key={s.id} student={s} showGroupLine={false} />
+                ))}
+              </div>
+            )}
           </section>
 
           <section className="hub-section">
@@ -474,6 +509,22 @@ export default function GroupsHub() {
             setHistoryModal(null);
             loadHistory(historyModal.group.id);
           }}
+        />
+      )}
+
+      {fullBoardOpen && (
+        <Modal title="Full syllabus board" onClose={() => setFullBoardOpen(false)} maxWidth={1040}>
+          <CurriculumBoard />
+        </Modal>
+      )}
+
+      {reportOpenFor && (
+        <ParentReportModal
+          defaultGroup={reportOpenFor}
+          groups={groups ?? []}
+          levels={levels ?? []}
+          allStudents={students ?? []}
+          onClose={() => setReportOpenFor(null)}
         />
       )}
     </div>

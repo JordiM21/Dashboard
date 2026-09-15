@@ -58,10 +58,114 @@ function StatusBadge({ nextPayment }: { nextPayment: string | undefined }) {
 }
 
 /**
- * The student roster — search/filter/grid/list, unchanged from when it was
- * the whole /students page. It's now one tab of the Classroom view, so it
- * owns its own "+ Add Student" button rather than reaching into the page
- * header for one.
+ * One student, as a card — shared by the flat roster grid below and a
+ * group's own roster in Groups (Classroom's other tab used to show a name
+ * in a group and a name+payment status on the roster as two different,
+ * thinner views of the same person; one card now backs both). `onEdit`/
+ * `onDelete` are omitted entirely (not just disabled) when the caller
+ * doesn't want editing available inline — a group's roster is a read
+ * summary, not another place to manage the record.
+ */
+export function StudentCard({
+  student: s,
+  onEdit,
+  onDelete,
+  showGroupLine = true,
+}: {
+  student: Student;
+  onEdit?: (s: Student) => void;
+  onDelete?: (s: Student) => void;
+  showGroupLine?: boolean;
+}) {
+  return (
+    <div className="card card-pad student-card">
+      <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+        <StudentAvatar student={s} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+            <div className="student-card-name" style={{ fontWeight: 700 }} title={s.name}>
+              {s.name}
+            </div>
+            <span className={`badge badge-${s.status}`} style={{ flexShrink: 0 }}>
+              {s.status}
+            </span>
+          </div>
+          {s.parentEmail && (
+            <div className="student-card-name" style={{ fontSize: 13, color: "var(--ink-soft)", marginTop: 4 }} title={s.parentEmail}>
+              {s.parentEmail}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+        {s.plan && <span className="tag">{s.plan}</span>}
+        <StatusBadge nextPayment={s.nextPayment} />
+      </div>
+
+      {showGroupLine && (s.classGroup || s.schedule) && (
+        <div style={{ fontSize: 13, color: "var(--ink-soft)", marginTop: 8 }}>
+          {[s.classGroup, s.schedule].filter(Boolean).join(" · ")}
+        </div>
+      )}
+      {(s.tuition !== undefined || s.nextPayment) && (
+        <div style={{ fontSize: 13, marginTop: 8 }}>
+          {s.tuition !== undefined && `Tuition $${s.tuition}`}
+          {s.tuition !== undefined && s.nextPayment && " · "}
+          {s.nextPayment && `Due ${formatDateDMY(s.nextPayment)}`}
+        </div>
+      )}
+      {s.notes && (
+        <div
+          className="student-card-notes"
+          title={s.notes}
+          style={{
+            fontSize: 12,
+            marginTop: 8,
+            padding: "8px 10px",
+            background: "var(--cream)",
+            borderRadius: "var(--radius-sm)",
+            color: "var(--ink-soft)",
+            fontStyle: "italic",
+          }}
+        >
+          {s.notes}
+        </div>
+      )}
+      {s.tags && s.tags.length > 0 && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+          {s.tags.map((t) => (
+            <span key={t} className="tag">
+              {t}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {(onEdit || onDelete) && (
+        <div className="modal-actions">
+          {onEdit && (
+            <button className="btn btn-secondary btn-sm" onClick={() => onEdit(s)}>
+              Edit
+            </button>
+          )}
+          {onDelete && (
+            <button className="btn btn-danger btn-sm" onClick={() => onDelete(s)}>
+              Delete
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The full searchable/filterable roster — every student, every group.
+ * Lives behind GroupsHub's "All Students" rail entry rather than its own
+ * Classroom tab now, since a second top-level tab for "people" duplicated
+ * Groups' own per-group roster. Owns its own "+ Add Student" button rather
+ * than reaching into a page header for one, since it no longer has one.
  */
 export default function StudentsRoster() {
   const { data, error, loading, lastUpdated } = useFirestoreCollection<Student>("students", { orderByField: "name" });
@@ -128,79 +232,7 @@ export default function StudentsRoster() {
       {view === "grid" && filtered.length > 0 && (
         <div className="grid grid-cards">
           {filtered.map((s) => (
-            <div key={s.id} className="card card-pad student-card">
-              <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                <StudentAvatar student={s} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                    <div className="student-card-name" style={{ fontWeight: 700 }} title={s.name}>
-                      {s.name}
-                    </div>
-                    <span className={`badge badge-${s.status}`} style={{ flexShrink: 0 }}>
-                      {s.status}
-                    </span>
-                  </div>
-                  {s.parentEmail && (
-                    <div className="student-card-name" style={{ fontSize: 13, color: "var(--ink-soft)", marginTop: 4 }} title={s.parentEmail}>
-                      {s.parentEmail}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
-                {s.plan && <span className="tag">{s.plan}</span>}
-                <StatusBadge nextPayment={s.nextPayment} />
-              </div>
-
-              {(s.classGroup || s.schedule) && (
-                <div style={{ fontSize: 13, color: "var(--ink-soft)", marginTop: 8 }}>
-                  {[s.classGroup, s.schedule].filter(Boolean).join(" · ")}
-                </div>
-              )}
-              {(s.tuition !== undefined || s.nextPayment) && (
-                <div style={{ fontSize: 13, marginTop: 8 }}>
-                  {s.tuition !== undefined && `Tuition $${s.tuition}`}
-                  {s.tuition !== undefined && s.nextPayment && " · "}
-                  {s.nextPayment && `Due ${formatDateDMY(s.nextPayment)}`}
-                </div>
-              )}
-              {s.notes && (
-                <div
-                  className="student-card-notes"
-                  title={s.notes}
-                  style={{
-                    fontSize: 12,
-                    marginTop: 8,
-                    padding: "8px 10px",
-                    background: "var(--cream)",
-                    borderRadius: "var(--radius-sm)",
-                    color: "var(--ink-soft)",
-                    fontStyle: "italic",
-                  }}
-                >
-                  {s.notes}
-                </div>
-              )}
-              {s.tags && s.tags.length > 0 && (
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
-                  {s.tags.map((t) => (
-                    <span key={t} className="tag">
-                      {t}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              <div className="modal-actions">
-                <button className="btn btn-secondary btn-sm" onClick={() => setEditingStudent(s)}>
-                  Edit
-                </button>
-                <button className="btn btn-danger btn-sm" onClick={() => setDeleteTarget(s)}>
-                  Delete
-                </button>
-              </div>
-            </div>
+            <StudentCard key={s.id} student={s} onEdit={setEditingStudent} onDelete={setDeleteTarget} />
           ))}
         </div>
       )}

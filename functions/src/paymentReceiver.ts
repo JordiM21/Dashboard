@@ -50,30 +50,43 @@ function addOneMonth(iso: string): string {
  * metadata.studentId), otherwise by the payer's email against that
  * student's parentEmail. No-ops silently if neither matches anyone — most
  * transactions aren't tuition.
+ *
+ * Siblings/cousins on one combined tuition share their parentEmail, so this
+ * advances every student with that same parentEmail, not just the one
+ * directly matched — kept in sync with the identical fix in
+ * lib/firebase/db.ts's applyPaymentToStudent (this is a separate deployable
+ * package, not sharing imports with the Next.js app).
  */
-/** Returns true only if a student was actually found and rolled forward — the caller uses that to record the payment as applied exactly once. */
+/** Returns true only if at least one student was actually found and rolled forward — the caller uses that to record the payment as applied exactly once. */
 async function applyPaymentToStudent(opts: { studentId: string | null; payerEmail: string | null }): Promise<boolean> {
   const db = getFirestore();
-  let ref;
+  const targetIds = new Set<string>();
+  let email = opts.payerEmail?.trim().toLowerCase() || null;
 
   if (opts.studentId) {
-    ref = db.collection("students").doc(opts.studentId);
-  } else if (opts.payerEmail) {
-    const snap = await db
-      .collection("students")
-      .where("parentEmail", "==", opts.payerEmail.trim().toLowerCase())
-      .limit(1)
-      .get();
-    if (snap.empty) return false;
-    ref = snap.docs[0].ref;
-  } else {
-    return false;
+    const doc = await db.collection("students").doc(opts.studentId).get();
+    if (doc.exists) {
+      targetIds.add(doc.id);
+      email = email ?? ((doc.data()?.parentEmail as string | undefined)?.trim().toLowerCase() || null);
+    }
   }
 
-  const doc = await ref.get();
-  if (!doc.exists) return false;
-  const nextPayment = addOneMonth((doc.data()?.nextPayment as string | undefined) ?? new Date().toISOString().slice(0, 10));
-  await ref.update({ nextPayment, updatedAt: FieldValue.serverTimestamp() });
+  if (email) {
+    const snap = await db.collection("students").where("parentEmail", "==", email).get();
+    for (const d of snap.docs) targetIds.add(d.id);
+  }
+
+  if (targetIds.size === 0) return false;
+
+  await Promise.all(
+    Array.from(targetIds).map(async (id) => {
+      const ref = db.collection("students").doc(id);
+      const doc = await ref.get();
+      if (!doc.exists) return;
+      const nextPayment = addOneMonth((doc.data()?.nextPayment as string | undefined) ?? new Date().toISOString().slice(0, 10));
+      await ref.update({ nextPayment, updatedAt: FieldValue.serverTimestamp() });
+    })
+  );
   return true;
 }
 

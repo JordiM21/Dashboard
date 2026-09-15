@@ -137,8 +137,8 @@ interface MetaAdAccountRaw {
  * ads are simply running somewhere else — so the account's identity and
  * lifetime spend are the only things that tell those two apart.
  *
- * No dummy fallback: the Meta view shows a real "not configured" state
- * instead, same as /kommo.
+ * No dummy fallback: the Social Network view shows a real "not configured"
+ * state instead.
  */
 export async function fetchMetaCampaigns(
   days = 30

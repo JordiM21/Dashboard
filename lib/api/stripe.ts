@@ -59,51 +59,6 @@ export async function fetchStripeRevenue(days = 14): Promise<StripeDailyRevenue[
   return out;
 }
 
-export interface StripeBalanceOverview {
-  availableUsd: number;
-  pendingUsd: number;
-  payoutThresholdUsd: number; // this account pays out automatically once available balance crosses this
-  lastPayout: { amountUsd: number; date: string } | null;
-}
-
-const PAYOUT_THRESHOLD_USD = 250;
-
-/**
- * Real Stripe balance + most recent payout — distinct from the ledger's
- * "Total Balance" (net of recorded transactions in Firestore), which is a
- * bookkeeping figure, not what Stripe actually holds. Shown side by side in
- * Overview so the two numbers aren't confused for each other.
- *
- * "Next payout" isn't a date Stripe's API exposes for a threshold-based
- * payout schedule (only fixed daily/weekly/monthly schedules have a
- * predictable next date) — so instead of guessing, this returns the current
- * available balance so the UI can show progress toward the next
- * PAYOUT_THRESHOLD_USD payout rather than fabricate a date.
- */
-export async function fetchStripeBalanceOverview(): Promise<StripeBalanceOverview | null> {
-  if (!process.env.STRIPE_SECRET_KEY) return null;
-
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-  const sumUsd = (entries: { amount: number; currency: string }[]) =>
-    entries.filter((e) => e.currency === "usd").reduce((sum, e) => sum + e.amount, 0) / 100;
-
-  const [balance, payouts] = await Promise.all([
-    stripe.balance.retrieve(),
-    stripe.payouts.list({ limit: 10 }),
-  ]);
-
-  const lastPaid = payouts.data.find((p) => p.status === "paid" && p.currency === "usd");
-
-  return {
-    availableUsd: Math.round(sumUsd(balance.available) * 100) / 100,
-    pendingUsd: Math.round(sumUsd(balance.pending) * 100) / 100,
-    payoutThresholdUsd: PAYOUT_THRESHOLD_USD,
-    lastPayout: lastPaid
-      ? { amountUsd: lastPaid.amount / 100, date: new Date(lastPaid.arrival_date * 1000).toISOString().slice(0, 10) }
-      : null,
-  };
-}
-
 function dummyStripeData(days: number): StripeDailyRevenue[] {
   const out: StripeDailyRevenue[] = [];
   const today = new Date();

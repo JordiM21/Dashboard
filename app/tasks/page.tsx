@@ -210,29 +210,31 @@ export default function TasksPage() {
           />
         )}
 
-        {sections.map((section) => (
-          <section key={section.bucket} className="task-section">
-            <div className="task-section-head">
-              <h2 className="section-title">{lens === "focus" ? "On deck" : BUCKET_LABEL[section.bucket]}</h2>
-              <span className="task-section-count">{section.tasks.length}</span>
-            </div>
-            <div className="task-grid">
-              {section.tasks.map((task, i) => (
-                <div key={task.id} className="task-grid-item" style={{ animationDelay: `${Math.min(i, 12) * 28}ms` }}>
-                  <TaskCard
-                    task={task}
-                    project={task.projectId ? projectById.get(task.projectId) : undefined}
-                    onToggleDone={store.toggleDone}
-                    onToggleDoing={store.toggleDoing}
-                    onPatch={store.patch}
-                    onOpen={setEditing}
-                    onDelete={store.remove}
-                  />
-                </div>
-              ))}
-            </div>
-          </section>
-        ))}
+        <div className="task-board">
+          {sections.map((section) => (
+            <section key={section.bucket} className="task-column">
+              <div className="task-section-head">
+                <h2 className="section-title">{lens === "focus" ? "On deck" : BUCKET_LABEL[section.bucket]}</h2>
+                <span className="task-section-count">{section.tasks.length}</span>
+              </div>
+              <div className="task-column-list">
+                {section.tasks.map((task, i) => (
+                  <div key={task.id} className="task-grid-item" style={{ animationDelay: `${Math.min(i, 12) * 28}ms` }}>
+                    <TaskCard
+                      task={task}
+                      project={task.projectId ? projectById.get(task.projectId) : undefined}
+                      onToggleDone={store.toggleDone}
+                      onToggleDoing={store.toggleDoing}
+                      onPatch={store.patch}
+                      onOpen={setEditing}
+                      onDelete={store.remove}
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
       </ErrorBoundary>
 
       {editing && (

@@ -7,10 +7,11 @@ import ViewToggle from "@/components/ViewToggle";
 import { EmptyState, FetchFailedState } from "@/components/StateBox";
 import { authFetch } from "@/lib/firebase/authFetch";
 import { formatDateDMY } from "@/lib/dateUtils";
-import type { MetaAdAccountInfo, MetaCampaign, MetaPost, PeriodComparison, PlatformGrowth } from "@/lib/types";
+import type { MetaAdAccountInfo, MetaAudienceSnapshot, MetaCampaign, MetaPost, PeriodComparison, PlatformGrowth } from "@/lib/types";
 
 /**
- * Meta — one read-only performance view.
+ * Social Network — one read-only performance view over Facebook + Instagram
+ * (still Meta's Graph API under the hood, see lib/api/meta*.ts).
  *
  * There used to be five tabs here (overview, posts, comments, leads,
  * calendar) plus a publishing pipeline. Posting and moderation happen in
@@ -64,13 +65,17 @@ function money(amount: number, currency: string | undefined): string {
   }
 }
 
-/** { data, loading, error } fetch-on-mount-or-dep-change. */
-function useLazyFetch<T>(path: string, deps: unknown[]): { data: T | null; loading: boolean; error: string | null } {
+/** { data, loading, error } fetch-on-mount-or-dep-change. A null path skips the fetch entirely (used to wait on a prerequisite value, e.g. a period range resolved by another fetch). */
+function useLazyFetch<T>(path: string | null, deps: unknown[]): { data: T | null; loading: boolean; error: string | null } {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (path === null) {
+      setLoading(true);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -146,6 +151,16 @@ export default function MetaPage() {
     `/api/meta/campaigns?days=${approxPeriodDays(period)}`,
     [period]
   );
+  // Waits on growth's resolved period so "this month so far" etc. line up
+  // exactly with the KPIs above, instead of re-deriving the same date math.
+  const postsPath = growth.data
+    ? `/api/meta/posts?limit=24&since=${growth.data.period.start}&until=${growth.data.period.end}`
+    : null;
+  const content = useLazyFetch<{ posts: MetaPost[]; audience: MetaAudienceSnapshot }>(postsPath, [postsPath]);
+  const instagramPosts = useMemo(
+    () => (content.data?.posts ?? []).filter((p) => p.platform === "instagram"),
+    [content.data]
+  );
 
   const ads = useMemo(() => {
     const list = campaigns.data?.campaigns ?? [];
@@ -180,7 +195,7 @@ export default function MetaPage() {
     <main className="page">
       <div className="page-header">
         <div>
-          <div className="page-title">Meta</div>
+          <div className="page-title">Social Network</div>
           <div className="page-subtitle">Facebook &amp; Instagram performance — read-only</div>
         </div>
       </div>
@@ -260,6 +275,30 @@ export default function MetaPage() {
             <div className="grid grid-cards">
               <BestPostCard platform="facebook" best={growth.data.bestPosts.facebook} />
               <BestPostCard platform="instagram" best={growth.data.bestPosts.instagram} />
+            </div>
+          </>
+        )}
+
+        <h2 className="section-title">Audience</h2>
+        <div className="grid grid-kpis grid-kpis-3" style={{ marginBottom: 16 }}>
+          <KpiCard
+            label="Instagram followers (total)"
+            value={content.data?.audience.instagramFollowers != null ? content.data.audience.instagramFollowers.toLocaleString() : "…"}
+          />
+          <KpiCard
+            label="Facebook fans (total)"
+            value={content.data?.audience.facebookFans != null ? content.data.audience.facebookFans.toLocaleString() : "…"}
+          />
+        </div>
+
+        {content.error && <FetchFailedState message={content.error} />}
+        {!content.error && instagramPosts.length > 0 && (
+          <>
+            <h2 className="section-title">Recent Instagram posts</h2>
+            <div className="grid grid-cards">
+              {instagramPosts.map((post) => (
+                <PostCard key={post.id} post={post} />
+              ))}
             </div>
           </>
         )}
@@ -346,8 +385,11 @@ function BestPostCard({ platform, best }: { platform: "facebook" | "instagram"; 
       </div>
     );
   }
+  return <PostCard post={best.post} score={best.score} />;
+}
 
-  const { post, score } = best;
+function PostCard({ post, score = null }: { post: MetaPost; score?: number | null }) {
+  const platform = post.platform;
   return (
     <div className="card card-pad">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>

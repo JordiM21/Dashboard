@@ -2,15 +2,16 @@
 
 A Next.js dashboard for running a small language-school business: a single
 company-wide **Overview** (today's tasks, KPIs, cash flow, channel
-performance, students — all in one place), a dedicated **Kommo pipeline
-view**, a student roster, an income/expense ledger with recurring/
-subscription payments, a **task board** with optional parent projects, and
-a Firebase-backed file manager.
+performance, students — all in one place), a **Social Network** view
+(Facebook/Instagram audience, content, and ad campaign performance), a
+student roster, an income/expense ledger with recurring/subscription
+payments, a **task board** with optional parent projects, and a
+Firebase-backed file manager.
 
-There used to be a separate "Manager" page for channel KPIs (Stripe/Kommo/
-Meta/Gmail) alongside Overview — it was folded into Overview's "Channel
-KPIs" section since the two were redundant; there is now exactly one
-dashboard, not two.
+There used to be a separate "Manager" page for channel KPIs (Stripe/Meta/
+Gmail) alongside Overview — it was folded into Overview's "Channel KPIs"
+section since the two were redundant; there is now exactly one dashboard,
+not two.
 
 **Backend migration complete**: every page is now backed by Firestore (and,
 for Resources, Firebase Storage for the raw file bytes) with real-time
@@ -37,14 +38,11 @@ My Dashboard/
 │   ├── teaching/page.tsx      # redirect to /students (Teaching merged into Classroom)
 │   ├── finance/page.tsx       # income/expense ledger + recurring payments, backed by Firestore
 │   ├── tasks/page.tsx         # task grid: capture box, buckets by due date, optional projects
-│   ├── kommo/page.tsx         # dedicated Kommo pipeline view — every lead, stage, tag, date filter
-│   ├── meta/page.tsx          # Meta ads, posts and audience growth
+│   ├── social/page.tsx        # Social Network: Meta ads, posts and audience growth
 │   ├── manifest.ts            # PWA manifest (installable, standalone)
 │   └── api/
-│       ├── kpis/route.ts              # aggregates Stripe/Kommo/Meta — consumed by Overview
-│       ├── kommo/route.ts             # full Kommo leads + pipelines pull — consumed by /kommo
+│       ├── kpis/route.ts              # aggregates Stripe/Meta — consumed by Overview
 │       ├── meta/...                   # campaigns, posts, audience growth
-│       ├── stripe/balance/route.ts    # live Stripe balance + last payout — consumed by Overview
 │       ├── cron/recurring-payments/   # auto-triggers due recurring payments (Vercel Cron + manual)
 │       ├── cron/meta-audience-snapshot/ # daily follower snapshot (see MetaAudienceSnapshotRecord)
 │       ├── students/...               # GET + POST + PATCH/DELETE, via lib/firebase/db.ts (admin SDK)
@@ -74,7 +72,7 @@ My Dashboard/
 │   │   └── verifyAuth.ts                # server-side ID token verification for Route Handlers
 │   ├── finance.ts              # pure summarizeFinance() — totals + category breakdown
 │   ├── types.ts                # shared type definitions
-│   └── api/                    # stripe.ts, kommo.ts, meta*.ts — channel integrations
+│   └── api/                    # stripe.ts, meta*.ts — channel integrations
 ├── functions/                  # Cloud Functions — separate Node subproject
 │   └── src/
 │       ├── index.ts             # exports both functions below
@@ -425,7 +423,6 @@ Environment Variables**:
 | `FIREBASE_SERVICE_ACCOUNT_KEY` | the service account JSON, as one line | **secret — see below** |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | your Stripe publishable key | not currently read by any code — safe to set now for later |
 | `STRIPE_SECRET_KEY` | your Stripe secret key | **yes, set this in Vercel too** — see note below |
-| `KOMMO_SUBDOMAIN`, `KOMMO_ACCESS_TOKEN` | your Kommo credentials | optional — powers /kommo and Overview's Kommo KPI |
 | `META_AD_ACCOUNT_ID`, `META_ACCESS_TOKEN` | your Meta Ads credentials | optional — dummy data if unset |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN` | your Gmail OAuth credentials | optional — dummy data if unset |
 | `GMAIL_ALERT_QUERY` | Gmail search query for alert-worthy mail | optional — defaults to `label:alerts newer_than:7d` |
@@ -444,13 +441,12 @@ choice per environment, no code change needed.
 this trips people up: `functions/.env`'s copy is for the *Cloud Functions*
 deployment (`paymentReceiver`'s webhook verification), and Vercel's copy is
 for the *Next.js app itself* (`lib/api/stripe.ts` — Overview's revenue
-chart, live Stripe balance, and payout tracking all call the real Stripe
-API directly from Next.js API routes, not through Functions). They're
-typically the same key value, but two separate env var scopes that don't
-share anything. Leaving Vercel's `STRIPE_SECRET_KEY` unset doesn't break
-anything — Overview just falls back to dummy revenue data and hides the
-live Stripe balance/payout card — but it's not the "Functions-only" secret
-some earlier guidance here implied.
+chart calls the real Stripe API directly from Next.js API routes, not
+through Functions). They're typically the same key value, but two separate
+env var scopes that don't share anything. Leaving Vercel's
+`STRIPE_SECRET_KEY` unset doesn't break anything — Overview just falls back
+to dummy revenue data — but it's not the "Functions-only" secret some
+earlier guidance here implied.
 
 The `functions/` folder itself is irrelevant to the Next.js deployment —
 Vercel's build only bundles what's actually imported from
@@ -532,38 +528,7 @@ older EUR-tainted ~113 records. Revisit the older data later if needed —
 it's still in Stripe, untouched, just not backfilled — once there's a
 deliberate answer for converting EUR settlements (e.g. a live FX rate).
 
-## Cash flow & balance (Overview)
-
-Overview shows two different numbers that will *not* match each other, on
-purpose, clearly labeled to avoid confusing them:
-
-- **Ledger Net (all-time)** — `summarizeFinance()` over every `transactions`
-  document ever recorded here (manual entries, Stripe rows, recurring
-  payments). A bookkeeping total, not what's actually sitting in your bank
-  or Stripe account.
-- **Stripe Balance (live)** — `stripe.balance.retrieve()`, fetched fresh on
-  every Overview load via `/api/stripe/balance` (server-only —
-  `STRIPE_SECRET_KEY` never reaches the browser). This is Stripe's own
-  figure for what it's actually holding right now, after fees and past
-  payouts — the number that should match your Stripe dashboard.
-
-They diverge because Ledger Net has no idea about Stripe fees, and includes
-every manual entry you've ever typed in (rent, non-Stripe income, etc.)
-that never touched Stripe's balance at all. Neither number is "wrong" —
-they're answering different questions ("what's the all-time bookkeeping
-total" vs "what can I withdraw from Stripe today").
-
-**Last payout / next payout**: also from `/api/stripe/balance`
-(`lib/api/stripe.ts`'s `fetchStripeBalanceOverview()`), via
-`stripe.payouts.list()` for the real last-paid payout's amount/date. "Next
-payout" is deliberately **not** a predicted date — Stripe's API only
-exposes a predictable next-payout date for accounts on a fixed
-daily/weekly/monthly schedule, not a threshold-based one (pay out
-automatically once available balance crosses some amount, which is what
-this account does at $250 — see `PAYOUT_THRESHOLD_USD` in
-`lib/api/stripe.ts` if that threshold ever changes). So instead of
-guessing a date, Overview shows a progress bar: current available balance
-out of $250.
+## Cash flow (Overview)
 
 **Cash Flow chart**: bucketed Income vs Expense bars
 (`cashFlowBuckets()` in `app/overview/page.tsx`), not a cumulative running
@@ -573,35 +538,6 @@ days with nothing meaningful to read. Bucketing shows the actual shape of
 each period: bucket size scales with the selected range (daily under 14
 days, weekly under 60, monthly beyond that) so you're never looking at 90+
 tiny daily bars either.
-
-## Kommo pipeline view (`/kommo`)
-
-A dedicated page for browsing every Kommo lead across every pipeline stage
-— separate from Overview's compact "Channel KPIs" summary (which just shows
-lead count and win rate, with a "View full Kommo pipeline →" link here).
-
-**Pull-based, not webhook-based**: despite the name "webhook" sometimes
-coming up for this kind of integration, there is no Kommo webhook receiver
-in this codebase — `/api/kommo` (server-only, `requireAuth()`-protected)
-calls Kommo's REST API directly (`lib/api/kommo.ts`'s
-`fetchAllKommoLeadsDetailed()`), paginating through every lead (250/page,
-Kommo's max) and resolving each lead's numeric `pipeline_id`/`status_id`
-into human-readable names via one `/leads/pipelines` call. The page
-refetches on load and via its "↻ Refresh" button — not real-time like the
-Firestore-backed pages, since this data lives in Kommo, not in Firestore.
-(A real-time version would mean deploying a new Cloud Function as a
-registered Kommo webhook target, mirroring `metaLeadReceiver` — worth doing
-later if push-based updates matter more than a manual refresh.)
-
-- **KPI tiles**: Today / Yesterday / This Week / Last Week lead counts,
-  computed client-side from each lead's `created_at`.
-- **Filters**: pipeline, stage (scoped to the selected pipeline), tag,
-  a date-range preset (Today/Yesterday/This Week/Last Week/This
-  Month/All time), and free-text search.
-- **Sort**: newest, value, or name.
-- **Two views** (`ViewToggle`): "By Stage" — read-only kanban-style columns,
-  one per pipeline stage, mirroring the task board's visual style; and
-  "List" — a sortable table.
 
 ## Recurring payments (subscriptions, ad spend, etc)
 
@@ -624,7 +560,7 @@ etc — "Repeats every ___" in the modal).
   "Auto-trigger" below).
 - **"Already paid once"** — check this box and enter "Paid on" instead. This
   is for exactly the situation of setting one up *after* you already paid
-  it: pick "Kommo CRM Plan", $X, every 6 months, already paid on 19 Aug →
+  it: pick "Canva Pro", $X, every 6 months, already paid on 19 Aug →
   the app immediately (a) logs a real `transactions` entry dated 19 Aug (so
   it shows in Finance like any normal payment, not just a future promise),
   and (b) sets `lastPayment: "2026-08-19"`, `nextPayment: "2027-02-19"`
@@ -661,8 +597,8 @@ mode".
 ## Date display format
 
 Every date shown as text anywhere in the app — transaction dates, due
-dates, recurring payment dates, Kommo lead dates, Resources timestamps —
-is consistently `DD-MM-YYYY` via `formatDateDMY()` in `lib/dateUtils.ts`.
+dates, recurring payment dates, Resources timestamps — is consistently
+`DD-MM-YYYY` via `formatDateDMY()` in `lib/dateUtils.ts`.
 This is a **display-only** convention: every `<input type="date">` (the
 native browser date picker used everywhere dates are entered) still uses
 HTML's required `YYYY-MM-DD` value format internally — that's not something
@@ -975,11 +911,10 @@ usable with zero keys configured.
 | Integration | Env vars | Setup steps |
 |---|---|---|
 | Stripe | `STRIPE_SECRET_KEY` | `lib/api/stripe.ts` — restricted key with read-only Balance/Charges access |
-| Kommo CRM | `KOMMO_SUBDOMAIN`, `KOMMO_ACCESS_TOKEN` | `lib/api/kommo.ts` — private integration token |
 | Meta Ads | `META_AD_ACCOUNT_ID`, `META_ACCESS_TOKEN` | `lib/api/meta.ts` — Marketing API, ads_read permission |
 | Gmail | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`, `GMAIL_ALERT_QUERY` (optional) | `lib/api/gmail.ts` — OAuth 2.0 desktop app credentials + a Gmail filter/label for alert mail |
 
-All four `lib/api/*.ts` files now call the real API once their env vars are
+All three `lib/api/*.ts` files now call the real API once their env vars are
 set — restart `npm run dev` (or redeploy) after adding credentials so
 Next.js picks up the new `.env.local` values. Overview's Channel KPIs
 section reads a `sources` field from `/api/kpis` to know which cards are
@@ -992,18 +927,20 @@ with `lib/api/meta.ts`'s live ad-spend numbers here — that's a real signal
 number on Overview pulled straight from the Marketing API. Reconciling those is out of scope for this migration
 but worth revisiting once Phase 4 ships.
 
-## Meta view (`/meta`)
+## Social Network view (`/social`)
 
-One read-only performance page — "is the money and the content working?"
-answered in a single scroll, no clicking through tabs. There used to be five
-tabs here (overview, posts, comments, leads, calendar) plus a publishing
-pipeline; posting and moderation happen in Meta's own tools now, so all of
-that is gone.
+One read-only performance page over Facebook + Instagram (still the Meta
+Graph API under the hood — `lib/api/meta*.ts`, `app/api/meta/*`) — "is the
+money and the content working?" answered in a single scroll, no clicking
+through tabs. There used to be five tabs here (overview, posts, comments,
+leads, calendar) plus a publishing pipeline; posting and moderation happen
+in Meta's own tools now, so all of that is gone.
 
 | Section | What it shows | Backed by |
 |---|---|---|
 | Audience & growth | Period-over-period growth (This Month / Last Month / Last 3 Months) — followers, posts published, interactions, best post of the period per platform | `app/api/meta/growth` → `lib/api/metaGrowth.ts` |
-| Content | Facebook + Instagram posts as cards, with per-platform metrics | `app/api/meta/posts` → `lib/api/metaContent.ts` |
+| Audience totals | Current Instagram follower count and Facebook fan count (not a delta) | `app/api/meta/posts` → `lib/api/metaContent.ts`'s `fetchMetaAudienceSnapshot()` |
+| Recent Instagram posts | Every Instagram post/reel in the selected period as a card — likes, comments, reach, impressions, engagement rate | `app/api/meta/posts` → `lib/api/metaContent.ts` |
 | Ads | Spend, leads and the campaigns behind them | `app/api/meta/campaigns`, `app/api/kpis` |
 
 Messenger/inbox management was deliberately left out of scope.

@@ -5,13 +5,27 @@
  * <img> the caller ends up rendering.
  */
 
-export type LinkKind = "youtube" | "image" | "video" | "audio" | "pdf" | "doc" | "link";
+export type LinkKind = "youtube" | "image" | "video" | "audio" | "pdf" | "html" | "doc" | "link";
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|avif|svg|bmp)(\?|#|$)/i;
 const VIDEO_EXT = /\.(mp4|webm|mov|m4v)(\?|#|$)/i;
 const AUDIO_EXT = /\.(mp3|wav|m4a|ogg)(\?|#|$)/i;
 const PDF_EXT = /\.pdf(\?|#|$)/i;
+const HTML_EXT = /\.html?(\?|#|$)/i;
 const DOC_EXT = /\.(docx?|pptx?|xlsx?|md|txt|csv|excalidraw)(\?|#|$)/i;
+
+/** Resource-picked links carry their file's own known category as `?category=` — the URL itself is an
+    extensionless `/api/resources/files/{id}/content` redirect, so there's nothing in the URL string to sniff
+    an extension from. A pasted URL never has this param, so it falls through to extension sniffing below. */
+function categoryHint(url: string): LinkKind | null {
+  try {
+    const category = new URL(url, "https://x.invalid").searchParams.get("category");
+    if (category === "image" || category === "video" || category === "pdf" || category === "html") return category;
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 /** The 11-character video id of a YouTube watch/share/embed/shorts URL, or null for anything else. */
 export function youtubeId(url: string): string | null {
@@ -22,10 +36,13 @@ export function youtubeId(url: string): string | null {
 
 export function linkKind(url: string): LinkKind {
   if (youtubeId(url)) return "youtube";
+  const hint = categoryHint(url);
+  if (hint) return hint;
   if (IMAGE_EXT.test(url)) return "image";
   if (VIDEO_EXT.test(url)) return "video";
   if (AUDIO_EXT.test(url)) return "audio";
   if (PDF_EXT.test(url)) return "pdf";
+  if (HTML_EXT.test(url)) return "html";
   if (DOC_EXT.test(url)) return "doc";
   return "link";
 }
@@ -36,6 +53,7 @@ export const LINK_ICON: Record<LinkKind, string> = {
   video: "🎬",
   audio: "🎧",
   pdf: "📕",
+  html: "🌐",
   doc: "📄",
   link: "🔗",
 };

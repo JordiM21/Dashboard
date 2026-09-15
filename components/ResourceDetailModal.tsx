@@ -209,7 +209,7 @@ export default function ResourceDetailModal({
   }
 
   return (
-    <Modal title={file.title} onClose={onClose} maxWidth={category === "markdown" || category === "text" ? 700 : 560}>
+    <Modal title={file.title} onClose={onClose} maxWidth={category === "markdown" || category === "text" || category === "html" ? 700 : 560}>
       <div style={{ marginBottom: 12 }}>
         {category === "image" && (
           <img src={contentUrl} alt={file.title} style={{ width: "100%", borderRadius: 12, maxHeight: 320, objectFit: "contain", background: "var(--cake)" }} />
@@ -219,6 +219,14 @@ export default function ResourceDetailModal({
         )}
         {category === "pdf" && (
           <iframe src={contentUrl} title={file.title} style={{ width: "100%", height: 420, border: "1px solid var(--line)", borderRadius: 12 }} />
+        )}
+        {category === "html" && (
+          <iframe
+            src={contentUrl}
+            title={file.title}
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+            style={{ width: "100%", height: 420, border: "1px solid var(--line)", borderRadius: 12, background: "var(--white)" }}
+          />
         )}
         {category === "markdown" && <MarkdownViewer fileId={file.id} />}
         {category === "text" && <TextViewer fileId={file.id} />}
@@ -249,7 +257,7 @@ export default function ResourceDetailModal({
         </div>
       )}
 
-      {(category === "video" || category === "pdf" || category === "document" || category === "other") && (
+      {(category === "video" || category === "pdf" || category === "html" || category === "document" || category === "other") && (
         <div className="modal-actions" style={{ justifyContent: "center", marginTop: 0, marginBottom: 12 }}>
           <a className="btn btn-secondary" href={contentUrl} target="_blank" rel="noopener noreferrer">
             Open

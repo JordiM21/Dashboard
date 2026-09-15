@@ -5,10 +5,12 @@ import Modal from "@/components/Modal";
 import TagPicker from "@/components/TagPicker";
 import LoadingLabel from "@/components/LoadingLabel";
 import ConfirmModal from "@/components/ConfirmModal";
+import ResourcePickerModal from "@/components/ResourcePickerModal";
 import { authFetch } from "@/lib/firebase/authFetch";
 import { formatDateDMY, localDateIso } from "@/lib/dateUtils";
 import { LINK_ICON, guessLinkTitle, isStorableUrl, linkKind, linkSource, linkThumb } from "@/lib/lessonLinks";
-import type { CurriculumLevelDoc, GroupDoc, LessonLink, WeeklyPlanDoc, WeeklyPlanTagDoc } from "@/lib/types";
+import { fileCategory } from "@/lib/resourceUtils";
+import type { CurriculumLevelDoc, GroupDoc, LessonLink, ResourceFile, WeeklyPlanDoc, WeeklyPlanTagDoc } from "@/lib/types";
 
 /** How long after the last keystroke the plan/takeaways text is PATCHed. Long enough that typing a paragraph is one request, short enough that closing the sheet almost never has anything left to flush. */
 const AUTOSAVE_MS = 700;
@@ -55,6 +57,7 @@ export default function LessonSheet({
   const [saving, setSaving] = useState(false);
   const [logging, setLogging] = useState<Verdict | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const taught = lesson.historyEntryId !== "";
 
@@ -97,6 +100,12 @@ export default function LessonSheet({
     };
   }, []);
 
+  function pushLink(link: LessonLink) {
+    const next = [...links, link];
+    setLinks(next);
+    queue({ links: next });
+  }
+
   function addLink() {
     const url = newUrl.trim();
     if (!url) return;
@@ -104,13 +113,19 @@ export default function LessonSheet({
       setUrlError("Paste a full https:// link (or a /path from this dashboard).");
       return;
     }
-    const link: LessonLink = { id: crypto.randomUUID(), url, title: newTitle.trim() || guessLinkTitle(url) };
-    const next = [...links, link];
-    setLinks(next);
+    pushLink({ id: crypto.randomUUID(), url, title: newTitle.trim() || guessLinkTitle(url) });
     setNewUrl("");
     setNewTitle("");
     setUrlError(null);
-    queue({ links: next });
+  }
+
+  /** A file picked straight from Resources — the category rides on the URL
+      (see lib/lessonLinks.ts's categoryHint) since /content is extensionless. */
+  function addResourceLink(file: ResourceFile) {
+    const category = fileCategory(file.mimeType, file.originalName);
+    const url = `/api/resources/files/${file.id}/content?category=${category}`;
+    pushLink({ id: crypto.randomUUID(), url, title: file.title });
+    setPickerOpen(false);
   }
 
   function removeLink(id: string) {
@@ -239,10 +254,14 @@ export default function LessonSheet({
           </div>
         )}
 
+        <button type="button" className="btn btn-secondary btn-sm link-add-resource" onClick={() => setPickerOpen(true)}>
+          📁 Link a Resources file
+        </button>
+
         <div className="link-add">
           <input
             type="url"
-            placeholder="Paste a link — YouTube, an image, your .excalidraw file, anything"
+            placeholder="…or paste a link — YouTube, an image, anything"
             value={newUrl}
             onChange={(e) => {
               setNewUrl(e.target.value);
@@ -318,6 +337,8 @@ export default function LessonSheet({
           onCancel={() => setConfirmDelete(false)}
         />
       )}
+
+      {pickerOpen && <ResourcePickerModal onClose={() => setPickerOpen(false)} onPick={addResourceLink} />}
     </Modal>
   );
 }

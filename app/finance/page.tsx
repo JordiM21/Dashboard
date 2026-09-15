@@ -74,7 +74,7 @@ export default function FinancePage() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState<"all" | "manual" | "stripe" | "recurring">("all");
   const [studentFilter, setStudentFilter] = useState("all");
-  const [dateRange, setDateRange] = useState<DateRangeKey>("all");
+  const [dateRange, setDateRange] = useState<DateRangeKey>("30");
   const [addOpen, setAddOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<FinanceEntry | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -201,9 +201,9 @@ export default function FinancePage() {
 
           {data && (
             <div className="grid grid-kpis" style={{ marginTop: 16, marginBottom: 20 }}>
-              <KpiCard label="Total Income" value={money(summary.totalIncome)} />
-              <KpiCard label="Total Expense" value={money(summary.totalExpense)} />
-              <KpiCard label="Net" value={money(summary.net)} />
+              <KpiCard label="Net (estimated)" value={money(summary.net)} highlight />
+              <KpiCard label="▲ Income" value={money(summary.totalIncome)} />
+              <KpiCard label="▼ Expense" value={money(summary.totalExpense)} />
               <KpiCard label="Entries" value={String(filtered.length)} />
             </div>
           )}
@@ -276,13 +276,13 @@ export default function FinancePage() {
             <div className="card card-pad">
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={summary.byCategory}>
-                  <CartesianGrid stroke="#e9ddce" vertical={false} />
-                  <XAxis dataKey="category" stroke="#7a6a5e" fontSize={12} />
-                  <YAxis stroke="#7a6a5e" fontSize={12} />
-                  <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #e9ddce" }} />
+                  <CartesianGrid stroke="var(--line)" vertical={false} />
+                  <XAxis dataKey="category" stroke="var(--ink-soft)" fontSize={12} />
+                  <YAxis stroke="var(--ink-soft)" fontSize={12} />
+                  <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid var(--line)", background: "var(--white)", color: "var(--ink)" }} />
                   <Bar dataKey="net" radius={[6, 6, 0, 0]}>
                     {summary.byCategory.map((c) => (
-                      <Cell key={c.category} fill={c.net >= 0 ? "#6fae7c" : "#d96060"} />
+                      <Cell key={c.category} fill={c.net >= 0 ? "#22aecb" : "#e0475a"} />
                     ))}
                   </Bar>
                 </BarChart>

@@ -92,7 +92,7 @@ export default function AddRecurringModal({ onClose, onCreated }: { onClose: () 
         <input
           value={form.description}
           onChange={(e) => setForm({ ...form, description: e.target.value })}
-          placeholder="e.g. Notion subscription, Kommo CRM Plan"
+          placeholder="e.g. Notion subscription, Canva Pro"
           autoFocus
         />
       </div>

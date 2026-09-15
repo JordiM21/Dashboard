@@ -11,8 +11,9 @@ export const ALL_NAV_TABS: NavTab[] = [
   // a nav layout already saved in localStorage keeps resolving to it.
   { id: "students", href: "/students", label: "Classroom", icon: "🎓" },
   { id: "finance", href: "/finance", label: "Finance", icon: "💰" },
-  { id: "kommo", href: "/kommo", label: "Kommo", icon: "📈" },
-  { id: "meta", href: "/meta", label: "Meta", icon: "📣" },
+  // Tab id stays "meta" (localStorage nav-visible-tabs compat) even though
+  // this is the Social Network view now, at /social.
+  { id: "meta", href: "/social", label: "Social Network", icon: "📣" },
   // Tab id stays "projects" even though this is the Tasks view now — the
   // id is what a saved nav layout in localStorage refers to, so renaming
   // it would quietly drop the tab for anyone who has customized theirs.

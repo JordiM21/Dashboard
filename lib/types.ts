@@ -175,34 +175,6 @@ export interface RecurringTransaction {
   updatedAt?: string;
 }
 
-/** One resolved Kommo pipeline stage, used to label a lead's status_id. */
-export interface KommoStatus {
-  id: number;
-  name: string;
-  color?: string;
-}
-
-/** One Kommo pipeline with its ordered stages. */
-export interface KommoPipeline {
-  id: number;
-  name: string;
-  statuses: KommoStatus[];
-}
-
-/** A Kommo lead enriched with resolved pipeline/status names and tags — see lib/api/kommo.ts. */
-export interface KommoLeadDetailed {
-  id: string;
-  name: string;
-  price: number;
-  pipelineId: number;
-  pipelineName: string;
-  statusId: number;
-  statusName: string;
-  tags: string[];
-  createdAt: string;
-  updatedAt: string;
-}
-
 /** One ad campaign with its rolled-up insights for the selected date range — powers the Meta view's Campaigns tab. */
 /**
  * Which ad account the campaign numbers actually came from.

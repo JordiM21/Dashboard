@@ -1,78 +1,234 @@
+/* ==========================================================================
+   LET Junior design system — tokens
+   Ported from the public marketing site's design system (see
+   LET-Junior-Web-Design-System.md at the project root). This app keeps its
+   original variable NAMES throughout (--accent, --cream, --radius-md, …) so
+   the ~3000 lines of component CSS below don't need touching rule by rule —
+   every one of those legacy names is aliased onto a real system token here.
+   New component work should reach for the system tokens (--mango, --r-m,
+   --s4, --e-spring, …) directly; the legacy names are the compatibility
+   layer, not the source of truth.
+   ========================================================================== */
 :root {
-  --cream: #faf6f0;
-  --cream-end: #f6efe6;
-  --cake: #f3e5d8;
-  --cake-dark: #e8d2ba;
-  --accent: #d98c5f;
-  --accent-dark: #c06b3d;
-  --ink: #3a2e28;
-  --ink-soft: #7a6a5e;
-  --line: #e9ddce;
-  --white: #ffffff;
-  --success: #6fae7c;
-  --warning: #e0a83e;
-  --danger: #d96060;
-  --orange: #c9702f;
-  --nav-bg: rgba(255, 255, 255, 0.75);
-  --radius-lg: 22px;
-  --radius-md: 16px;
-  --radius-sm: 10px;
-  --shadow: 0 8px 24px rgba(58, 46, 40, 0.08);
-  --shadow-hover: 0 14px 32px rgba(58, 46, 40, 0.14);
+  /* ---- brand ---- */
+  --mango: #ff7a3d;
+  --mango-deep: #e85f22;
+  --bubble: #ff4d8d;
+  --splash: #22aecb;
+  --sky: #4080d0;
+  --sun: #ffc93d;
 
-  /* Motion — one spring and one decelerating curve for the whole app, so
-     every card, chip and checkbox settles the same way. */
-  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  /* ---- this app's "primary action" pair ----
+     The source system reserves --cta for the marketing site's one buy
+     button and bans it everywhere else, because bright mango fails 4.5:1
+     under white text. This app has no buy button, but it has the same
+     shape of problem — a filled pill button with white text — all over
+     (nav active state, "+ Add", primary submits). Translating the CTA
+     pair into this app's general primary-action fill is the named
+     adaptation: same contrast-safe pair, wider job. */
+  --cta: #ca4b15;
+  --cta-deep: #ba4410;
+
+  /* ---- ink twins (bright colour -> readable text/icon colour) ---- */
+  --mango-ink: #c4490f;
+  --splash-ink: #0f6e8c;
+  --bubble-ink: #c7205e;
+  --sky-ink: #1b62b8;
+
+  /* ---- neutrals, warm-biased ---- */
+  --ink: #1c1620;
+  --ink-2: #4a3f51;
+  --muted: #786c80;
+  --line: #ebe2e6;
+  --ground: #fffcfa;
+  --ground-2: #fdf6f2;
+  --surface: #ffffff;
+  --on-color: #ffffff;
+
+  /* ---- glass ---- */
+  --glass: rgba(255, 255, 255, 0.62);
+  --glass-line: rgba(255, 255, 255, 0.75);
+  --glass-solid: #ffffffee;
+
+  /* ---- shadow — warm-tinted from --ink, never rgba(0,0,0,x) ---- */
+  --shadow-s: 0 1px 2px rgba(28, 22, 32, 0.06), 0 4px 12px rgba(28, 22, 32, 0.05);
+  --shadow-m: 0 2px 4px rgba(28, 22, 32, 0.05), 0 12px 32px rgba(28, 22, 32, 0.09);
+  --shadow-cta: 0 6px 20px rgba(186, 68, 16, 0.32);
+  --shadow-cta-hi: 0 10px 28px rgba(186, 68, 16, 0.42);
+
+  /* ---- type ---- */
+  --display: var(--font-display), "Trebuchet MS", system-ui, sans-serif;
+  --body: var(--font-body), "Helvetica Neue", Arial, sans-serif;
+  --fs-hero: clamp(30px, 4vw, 40px);
+  --fs-h2: clamp(22px, 2.4vw, 28px);
+  --fs-h3: clamp(17px, 1.4vw, 19px);
+  --fs-body: 15px;
+  --fs-small: 13px;
+  --fs-label: 12px;
+
+  /* ---- radius ---- */
+  --r-s: 14px;
+  --r-m: 20px;
+  --r-l: 28px;
+  --r-xl: 36px;
+  --r-pill: 999px;
+
+  /* ---- spacing — the 4px scale ---- */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+  --s8: 64px;
+
+  /* ---- motion ---- */
+  --e-standard: cubic-bezier(0.32, 0.72, 0, 1);
+  --e-entrance: cubic-bezier(0.16, 1, 0.3, 1);
+  --e-exit: cubic-bezier(0.4, 0, 1, 1);
+  --e-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --t-micro: 140ms;
+  --t-ui: 280ms;
+  --t-scene: 480ms;
+
+  /* ---- app canvas — wider than the marketing site's 1200px: this is a
+     desktop operate surface, and the whole point of this pass is spending
+     the horizontal space a laptop/monitor actually has instead of
+     scrolling a centred column. ---- */
+  --maxw-app: 1600px;
+
+  /* ==== legacy aliases — every rule below the token block still reads
+     these; changing values here re-themes the entire app. ==== */
+  --cream: var(--ground);
+  --cream-end: var(--ground-2);
+  --cake: color-mix(in srgb, var(--mango) 10%, var(--surface));
+  --cake-dark: color-mix(in srgb, var(--mango) 22%, var(--surface));
+  --accent: var(--mango);
+  --accent-dark: var(--mango-deep);
+  --ink-soft: var(--ink-2);
+  --white: var(--surface);
+  --success: #3f9d6b;
+  --warning: var(--sun);
+  --warning-ink: #9a6a0a;
+  --danger: #e0475a;
+  --orange: var(--mango-deep);
+  --nav-bg: var(--glass);
+  --radius-lg: var(--r-l);
+  --radius-md: var(--r-m);
+  --radius-sm: var(--r-s);
+  --shadow: var(--shadow-s);
+  --shadow-hover: var(--shadow-m);
+  --ease-out: var(--e-standard);
+  --ease-spring: var(--e-spring);
 
   /* The chevron drawn on every <select>. A data URI can't inherit
      currentColor, so the stroke is baked in and the dark theme redefines it. */
-  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1.5 1.75 6 6.25l4.5-4.5' fill='none' stroke='%237a6a5e' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1.5 1.75 6 6.25l4.5-4.5' fill='none' stroke='%234a3f51' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
 :root[data-theme="dark"] {
-  --cream: #0a1220;
-  --cream-end: #0d1a30;
-  --cake: #142238;
-  --cake-dark: #1c3050;
-  --accent: #e2975f;
-  --accent-dark: #edac7a;
-  --ink: #e9eef7;
-  --ink-soft: #94a6c4;
-  --line: #22314c;
-  --white: #101c33;
-  --success: #5fbf7e;
-  --warning: #e5b34c;
-  --danger: #e2685f;
-  --orange: #e79a52;
-  --nav-bg: rgba(16, 28, 51, 0.75);
-  --shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-  --shadow-hover: 0 14px 34px rgba(0, 0, 0, 0.55);
-  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1.5 1.75 6 6.25l4.5-4.5' fill='none' stroke='%2394a6c4' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --mango: #ff9a63;
+  --mango-deep: #ffb37e;
+  --bubble: #ff7aad;
+  --splash: #4fd2ea;
+  --sky: #6fa3e8;
+  --sun: #ffd766;
 
+  --cta: #ff8a52;
+  --cta-deep: #ffa06e;
+
+  /* On a dark ground, bright saturated brand colour reads fine as text —
+     the ink-twin problem is a light-ground problem — so the dark "ink
+     twins" are simply the brighter brand colours themselves. */
+  --mango-ink: #ffab7a;
+  --splash-ink: #7fe3f4;
+  --bubble-ink: #ff9dc4;
+  --sky-ink: #8fbdf0;
+
+  --ink: #f7f1ec;
+  --ink-2: #d9cbd6;
+  --muted: #a6939f;
+  --line: #362c3d;
+  --ground: #15111c;
+  --ground-2: #1c1624;
+  --surface: #221b2b;
+  --on-color: #1c1620;
+
+  --glass: rgba(34, 27, 43, 0.66);
+  --glass-line: rgba(255, 255, 255, 0.08);
+  --glass-solid: #221b2bf2;
+
+  --shadow-s: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 14px rgba(0, 0, 0, 0.28);
+  --shadow-m: 0 2px 4px rgba(0, 0, 0, 0.32), 0 14px 36px rgba(0, 0, 0, 0.4);
+  --shadow-cta: 0 6px 20px rgba(255, 138, 82, 0.28);
+  --shadow-cta-hi: 0 10px 28px rgba(255, 138, 82, 0.38);
+
+  --cream: var(--ground);
+  --cream-end: var(--ground-2);
+  --cake: color-mix(in srgb, var(--mango) 14%, var(--surface));
+  --cake-dark: color-mix(in srgb, var(--mango) 26%, var(--surface));
+  --accent: var(--mango);
+  --accent-dark: var(--mango-deep);
+  --ink-soft: var(--ink-2);
+  --white: var(--surface);
+  --success: #5fc98a;
+  --warning: var(--sun);
+  --warning-ink: #ffd766;
+  --danger: #ff6b7a;
+  --orange: var(--mango-deep);
+  --nav-bg: var(--glass);
+  --shadow: var(--shadow-s);
+  --shadow-hover: var(--shadow-m);
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1.5 1.75 6 6.25l4.5-4.5' fill='none' stroke='%23d9cbd6' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --cream: #0a1220;
-    --cream-end: #0d1a30;
-    --cake: #142238;
-    --cake-dark: #1c3050;
-    --accent: #e2975f;
-    --accent-dark: #edac7a;
-    --ink: #e9eef7;
-    --ink-soft: #94a6c4;
-    --line: #22314c;
-    --white: #101c33;
-    --success: #5fbf7e;
-    --warning: #e5b34c;
-    --danger: #e2685f;
-    --orange: #e79a52;
-    --nav-bg: rgba(16, 28, 51, 0.75);
-    --shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-    --shadow-hover: 0 14px 34px rgba(0, 0, 0, 0.55);
-    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1.5 1.75 6 6.25l4.5-4.5' fill='none' stroke='%2394a6c4' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-
+    --mango: #ff9a63;
+    --mango-deep: #ffb37e;
+    --bubble: #ff7aad;
+    --splash: #4fd2ea;
+    --sky: #6fa3e8;
+    --sun: #ffd766;
+    --cta: #ff8a52;
+    --cta-deep: #ffa06e;
+    --mango-ink: #ffab7a;
+    --splash-ink: #7fe3f4;
+    --bubble-ink: #ff9dc4;
+    --sky-ink: #8fbdf0;
+    --ink: #f7f1ec;
+    --ink-2: #d9cbd6;
+    --muted: #a6939f;
+    --line: #362c3d;
+    --ground: #15111c;
+    --ground-2: #1c1624;
+    --surface: #221b2b;
+    --on-color: #1c1620;
+    --glass: rgba(34, 27, 43, 0.66);
+    --glass-line: rgba(255, 255, 255, 0.08);
+    --glass-solid: #221b2bf2;
+    --shadow-s: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 14px rgba(0, 0, 0, 0.28);
+    --shadow-m: 0 2px 4px rgba(0, 0, 0, 0.32), 0 14px 36px rgba(0, 0, 0, 0.4);
+    --shadow-cta: 0 6px 20px rgba(255, 138, 82, 0.28);
+    --shadow-cta-hi: 0 10px 28px rgba(255, 138, 82, 0.38);
+    --cream: var(--ground);
+    --cream-end: var(--ground-2);
+    --cake: color-mix(in srgb, var(--mango) 14%, var(--surface));
+    --cake-dark: color-mix(in srgb, var(--mango) 26%, var(--surface));
+    --accent: var(--mango);
+    --accent-dark: var(--mango-deep);
+    --ink-soft: var(--ink-2);
+    --white: var(--surface);
+    --success: #5fc98a;
+    --warning: var(--sun);
+    --warning-ink: #ffd766;
+    --danger: #ff6b7a;
+    --orange: var(--mango-deep);
+    --nav-bg: var(--glass);
+    --shadow: var(--shadow-s);
+    --shadow-hover: var(--shadow-m);
+    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1.5 1.75 6 6.25l4.5-4.5' fill='none' stroke='%23d9cbd6' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   }
 }
 
@@ -93,12 +249,24 @@ body {
 }
 
 body {
-  background: linear-gradient(180deg, var(--cream) 0%, var(--cream-end) 100%);
+  background: var(--ground);
   color: var(--ink);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--body);
+  font-size: var(--fs-body);
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
   transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--display);
+  font-weight: 600;
+  line-height: 1.15;
+  margin: 0;
+  text-wrap: balance;
 }
 
 a {
@@ -108,6 +276,98 @@ a {
 
 button {
   font-family: inherit;
+}
+
+/* ---------- Browser surfaces the design system still owns ---------- */
+
+::selection {
+  background: color-mix(in srgb, var(--mango) 28%, transparent);
+  color: var(--ink);
+}
+
+input,
+textarea {
+  caret-color: var(--cta);
+}
+
+html {
+  scrollbar-color: color-mix(in srgb, var(--mango) 40%, var(--line)) transparent;
+  scrollbar-width: thin;
+}
+
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--mango) 36%, var(--line));
+  border: 3px solid var(--ground);
+  border-radius: var(--r-pill);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--mango) 62%, var(--line));
+}
+
+:focus-visible {
+  outline: 3px solid var(--sky);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    transition-delay: 0ms !important;
+  }
+}
+
+/* ---------- Ambient blobs — used sparingly (page header bands only), never
+   behind dense data so charts and tables stay perfectly legible. ---------- */
+
+.blobs {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(40px);
+  opacity: 0.22;
+  animation: blobfloat 9s ease-in-out infinite;
+}
+
+@keyframes blobfloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -10px, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blob {
+    animation: none;
+  }
 }
 
 #app-shell {
@@ -174,9 +434,9 @@ button {
 }
 
 .nav-tab.active {
-  background: var(--accent);
-  color: var(--white);
-  box-shadow: 0 4px 12px rgba(217, 140, 95, 0.35);
+  background: linear-gradient(180deg, var(--cta), var(--cta-deep));
+  color: var(--on-color);
+  box-shadow: var(--shadow-cta);
 }
 
 .theme-toggle {
@@ -314,7 +574,7 @@ button {
 .popover-menu-check {
   width: 14px;
   flex-shrink: 0;
-  color: var(--accent);
+  color: var(--mango-ink);
   font-weight: 700;
 }
 
@@ -373,8 +633,8 @@ button {
 }
 
 .nav-bottom-item.active {
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--mango-ink);
+  background: color-mix(in srgb, var(--mango) 14%, transparent);
 }
 
 .nav-bottom-item:active {
@@ -399,14 +659,14 @@ button {
   height: 46px;
   border-radius: 50%;
   border: none;
-  background: var(--accent);
-  color: #fff;
+  background: linear-gradient(180deg, var(--cta), var(--cta-deep));
+  color: var(--on-color);
   font-size: 26px;
   line-height: 1;
   font-weight: 300;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(217, 140, 95, 0.4);
-  transition: transform 0.15s ease;
+  box-shadow: var(--shadow-cta);
+  transition: transform var(--t-ui) var(--e-spring);
 }
 
 .nav-bottom-add:active {
@@ -735,11 +995,15 @@ button {
 /* ---------- Page layout ---------- */
 
 .page {
-  max-width: 1180px;
+  /* Desktop is the primary canvas: spend the width a monitor actually has
+     instead of centring a 1180px column and scrolling everything below
+     the fold. Narrow viewports still get the full-bleed mobile layout via
+     the padding alone — there is no separate mobile max-width. */
+  max-width: var(--maxw-app);
   margin: 0 auto;
-  padding: 32px 24px 80px;
+  padding: var(--s6) var(--s5) var(--s8);
   width: 100%;
-  animation: fadeIn 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: fadeIn 0.22s var(--e-entrance) both;
 }
 
 @keyframes fadeIn {
@@ -779,9 +1043,11 @@ button {
 }
 
 .page-title {
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-family: var(--display);
+  font-size: var(--fs-hero);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
 }
 
 .page-subtitle {
@@ -804,10 +1070,18 @@ button {
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
-  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.3s ease, border-color 0.3s ease;
+  transition: transform var(--t-ui) var(--e-standard), box-shadow var(--t-ui) var(--e-standard),
+    background-color 0.3s ease, border-color 0.3s ease;
   /* A table wider than its card (common on narrow screens) scrolls inside
      the card instead of overflowing the page. */
   overflow-x: auto;
+}
+
+@media (hover: none) {
+  .card:hover {
+    transform: none;
+    box-shadow: var(--shadow);
+  }
 }
 
 /* Clean, thin, theme-matched scrollbars wherever content scrolls — tables
@@ -866,14 +1140,17 @@ button {
 .btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--s2);
   border: none;
-  border-radius: 999px;
-  padding: 9px 18px;
+  border-radius: var(--r-pill);
+  padding: var(--s3) var(--s5);
+  min-height: 40px;
+  font-family: var(--display);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  transition: transform var(--t-ui) var(--e-spring), box-shadow var(--t-ui) var(--e-standard),
+    filter var(--t-micro) linear, background-color var(--t-ui) var(--e-standard);
   /* Anchors LoadingLabel's absolutely-positioned spinner overlay so a
      loading state never resizes the button or shifts its neighbors. */
   position: relative;
@@ -886,21 +1163,22 @@ button {
 }
 
 .btn:hover {
-  transform: scale(1.03);
+  transform: translateY(-1px) scale(1.02);
 }
 
 .btn:active {
-  transform: scale(0.97);
+  transform: translateY(0) scale(0.97);
+  filter: saturate(1.1);
 }
 
 .btn-primary {
-  background: var(--accent);
-  color: var(--white);
-  box-shadow: 0 4px 14px rgba(217, 140, 95, 0.35);
+  background: linear-gradient(180deg, var(--cta), var(--cta-deep));
+  color: var(--on-color);
+  box-shadow: var(--shadow-cta);
 }
 
 .btn-primary:hover {
-  background: var(--accent-dark);
+  box-shadow: var(--shadow-cta-hi);
 }
 
 .btn-secondary {
@@ -911,7 +1189,7 @@ button {
 .btn-ghost {
   background: transparent;
   color: var(--ink-soft);
-  border: 1px solid var(--line);
+  box-shadow: inset 0 0 0 1.5px var(--line);
 }
 
 .btn-danger {
@@ -920,15 +1198,26 @@ button {
 }
 
 .btn-sm {
-  padding: 6px 12px;
+  min-height: 32px;
+  padding: var(--s2) var(--s4);
   font-size: 13px;
+}
+
+.btn:disabled {
+  background: var(--ground-2);
+  color: var(--muted);
+  box-shadow: inset 0 0 0 1.5px var(--line);
+  opacity: 1;
+  filter: none;
+  transform: none;
+  pointer-events: none;
 }
 
 /* ---------- Grids ---------- */
 
 .grid {
   display: grid;
-  gap: 18px;
+  gap: var(--s4);
 }
 
 .grid-kpis {
@@ -989,21 +1278,98 @@ button {
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 }
 
+/* ---------- Overview dashboard grid — main content + a pinned "at a
+   glance" rail, so the day's numbers stay in view beside whatever else
+   you're scanning instead of living in their own scrolled-past section. ---------- */
+
+.ov-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s6);
+  align-items: start;
+}
+
+@media (min-width: 1100px) {
+  .ov-grid {
+    grid-template-columns: minmax(0, 1fr) 340px;
+  }
+}
+
+.ov-main {
+  min-width: 0;
+}
+
+.ov-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+@media (min-width: 1100px) {
+  .ov-side {
+    position: sticky;
+    top: calc(92px + env(safe-area-inset-top));
+  }
+}
+
+.ov-side-title {
+  font-family: var(--display);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: var(--s3) 0 0;
+}
+
+.ov-side-title:first-child {
+  margin-top: 0;
+}
+
+.grid-kpis-side {
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--s3);
+}
+
+.grid-kpis-side .kpi-card {
+  padding: var(--s3) var(--s4);
+}
+
+.grid-kpis-side .kpi-value {
+  font-size: 22px;
+}
+
+.ov-side-note {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0;
+  max-width: 40ch;
+}
+
 /* ---------- KPI card ---------- */
 
 .kpi-card {
   padding: 20px 22px;
 }
 
+.kpi-card-highlight {
+  background: var(--cake);
+  border-color: var(--accent);
+}
+
+.kpi-card-highlight .kpi-value {
+  color: var(--accent-dark);
+}
+
 .kpi-label {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: var(--fs-label);
   color: var(--ink-soft);
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
 }
 
 .kpi-label .badge {
@@ -1012,10 +1378,12 @@ button {
 }
 
 .kpi-value {
+  font-family: var(--display);
   font-size: 30px;
-  font-weight: 700;
+  font-weight: 600;
   margin-top: 6px;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
 }
 
 .kpi-delta {
@@ -1125,8 +1493,8 @@ button {
 
 .badge-warning,
 .badge-blocked {
-  background: color-mix(in srgb, var(--warning) 18%, transparent);
-  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 24%, transparent);
+  color: var(--warning-ink);
 }
 
 .badge-critical,
@@ -1142,13 +1510,13 @@ button {
 }
 
 .badge-medium {
-  background: color-mix(in srgb, var(--warning) 18%, transparent);
-  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 24%, transparent);
+  color: var(--warning-ink);
 }
 
 .badge-high {
-  background: color-mix(in srgb, var(--orange) 18%, transparent);
-  color: var(--orange);
+  background: color-mix(in srgb, var(--mango) 20%, transparent);
+  color: var(--mango-ink);
 }
 
 .badge-source-manual {
@@ -1162,8 +1530,8 @@ button {
 }
 
 .badge-source-recurring {
-  background: rgba(217, 140, 95, 0.16);
-  color: var(--accent-dark);
+  background: color-mix(in srgb, var(--mango) 18%, transparent);
+  color: var(--mango-ink);
 }
 
 .tag {
@@ -1199,7 +1567,7 @@ button {
 
 .filter-bar input[type="text"]:focus,
 .filter-bar select:focus {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--sky);
   outline-offset: 1px;
 }
 
@@ -1238,7 +1606,7 @@ button {
 }
 
 .capture:focus-within {
-  border-color: var(--accent);
+  border-color: var(--sky);
   box-shadow: var(--shadow-hover);
 }
 
@@ -1272,7 +1640,7 @@ button {
 .capture-plus {
   font-size: 20px;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--mango-ink);
   line-height: 1;
   flex-shrink: 0;
 }
@@ -1399,8 +1767,8 @@ button {
 
 .capture-select:focus-visible {
   outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  border-color: var(--sky);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sky) 22%, transparent);
 }
 
 /* Second row of the capture box: priority and project. Giving these their
@@ -1566,8 +1934,8 @@ button {
 }
 
 .chip-due {
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-  color: var(--accent-dark);
+  background: color-mix(in srgb, var(--mango) 16%, transparent);
+  color: var(--mango-ink);
 }
 
 .chip-overdue {
@@ -1686,6 +2054,28 @@ button {
   margin-bottom: 26px;
 }
 
+/* Buckets as board columns, not stacked full-width sections — the due-date
+   buckets (Overdue/Today/Tomorrow/This week/Later) read side by side on a
+   desktop-width screen instead of forcing a scroll through each one in
+   turn. auto-fit collapses to a single column back on mobile. */
+.task-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--s5);
+  align-items: start;
+}
+
+.task-column {
+  min-width: 0;
+}
+
+.task-column-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin-top: var(--s3);
+}
+
 .task-section-head {
   display: flex;
   align-items: baseline;
@@ -1736,9 +2126,8 @@ button {
   gap: 10px;
   background: var(--white);
   border: 1px solid var(--line);
-  border-left: 3px solid transparent;
   border-radius: var(--radius-md);
-  padding: 12px 12px 12px 13px;
+  padding: 12px 14px;
   cursor: pointer;
   transition: transform 0.25s var(--ease-spring), box-shadow 0.25s var(--ease-out), border-color 0.25s var(--ease-out),
     opacity 0.3s var(--ease-out), background-color 0.3s var(--ease-out);
@@ -1754,17 +2143,22 @@ button {
 }
 
 .task-card:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--sky);
   outline-offset: 2px;
 }
 
+/* State reads from the card's own status badge and due-date chip already —
+   a second colored signal (the old left-edge stripe) repeated the same
+   fact rather than adding one, and a coloured border-left/right is a
+   banned pattern in this design system regardless. A ring, not a stripe,
+   for the one state that still benefits from a glance-able highlight. */
 .task-card-doing {
-  border-left-color: var(--success);
   background: color-mix(in srgb, var(--success) 6%, var(--white));
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--success) 45%, transparent);
 }
 
 .task-card-overdue {
-  border-left-color: var(--danger);
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--danger) 45%, transparent);
 }
 
 .task-card-done {
@@ -2222,13 +2616,13 @@ button {
 
 .subtask-input:focus {
   outline: none;
-  border-bottom: 1px solid var(--accent);
+  border-bottom: 1px solid var(--sky);
 }
 
 .subtask-plus {
   width: 18px;
   text-align: center;
-  color: var(--accent);
+  color: var(--mango-ink);
   font-weight: 700;
 }
 
@@ -2271,9 +2665,9 @@ button {
   background: linear-gradient(180deg, var(--white), var(--cream));
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  padding: 18px;
+  padding: var(--s5);
   box-shadow: var(--shadow);
-  margin: 16px 0 24px;
+  margin: var(--s4) 0 var(--s5);
 }
 
 .today-head {
@@ -2294,12 +2688,15 @@ button {
   margin-top: 10px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--mango-ink);
   text-decoration: none;
+  box-shadow: inset 0 -1px 0 0 currentColor;
+  width: fit-content;
+  transition: box-shadow var(--t-micro) linear;
 }
 
 .today-more:hover {
-  text-decoration: underline;
+  box-shadow: inset 0 -2px 0 0 currentColor;
 }
 
 .today-tomorrow {
@@ -2371,7 +2768,7 @@ button {
 
 .resource-dropzone-active {
   outline-color: var(--accent);
-  background: rgba(217, 140, 95, 0.06);
+  background: color-mix(in srgb, var(--mango) 8%, transparent);
 }
 
 .resource-grid {
@@ -2405,6 +2802,7 @@ button {
 }
 
 .resource-tile-thumb {
+  position: relative;
   width: 100%;
   aspect-ratio: 1;
   border-radius: var(--radius-sm);
@@ -2420,6 +2818,24 @@ button {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* A real live render of the page, shrunk to fit the tile — rendered at a
+   fixed "actual size" and scaled down, since an iframe has no notion of
+   "render small". sandbox="" (no allow-* tokens) strips scripts, forms and
+   navigation for a thumbnail that's just a picture; pointer-events:none
+   hands clicks back to the tile underneath it instead of the page inside. */
+.resource-tile-html-preview {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1100px;
+  height: 1100px;
+  border: none;
+  pointer-events: none;
+  background: var(--white);
+  transform: scale(calc(var(--tile-size, 150px) / 1100));
+  transform-origin: top left;
 }
 
 .resource-tile-icon {
@@ -2467,6 +2883,75 @@ button {
 
 .resource-tile-folder:hover .resource-tile-delete {
   display: flex;
+}
+
+/* ---------- Resource picker (lesson material -> link a Resources file) ---------- */
+
+.resource-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 8px;
+  max-height: 380px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.resource-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--surface);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--t-micro) linear, background-color var(--t-micro) linear;
+}
+
+.resource-picker-item:hover {
+  border-color: var(--sky);
+  background: var(--cream);
+}
+
+.resource-picker-thumb {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: var(--r-s);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--cream);
+  font-size: 20px;
+}
+
+.resource-picker-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.resource-picker-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.resource-picker-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resource-picker-meta {
+  font-size: 11.5px;
+  color: var(--ink-soft);
 }
 
 /* ---------- Modal ---------- */
@@ -2542,7 +3027,7 @@ button {
 .form-row input:focus,
 .form-row select:focus,
 .form-row textarea:focus {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--sky);
   outline-offset: 1px;
   /* background-color, not the shorthand — the shorthand would wipe the
      select's chevron background-image on focus. */
@@ -2598,9 +3083,11 @@ button {
 /* ---------- Section title ---------- */
 
 .section-title {
-  font-size: 16px;
-  font-weight: 700;
-  margin: 30px 0 14px;
+  font-family: var(--display);
+  font-size: 17px;
+  font-weight: 600;
+  margin: var(--s6) 0 var(--s3);
+  text-wrap: balance;
 }
 
 .section-title:first-child {
@@ -2631,19 +3118,21 @@ button {
 .section-link {
   font-size: 13px;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--mango-ink);
   white-space: nowrap;
+  box-shadow: inset 0 -1px 0 0 transparent;
+  transition: box-shadow var(--t-micro) linear;
 }
 
 .section-link:hover {
-  color: var(--accent-dark);
+  box-shadow: inset 0 -2px 0 0 currentColor;
 }
 
-/* ---------- Report surfaces (Kommo / Meta monitors) ----------
-   These two pages are read-only: no filters to configure, nothing to
-   submit. The shared vocabulary is a period control at the top, a KPI
-   strip, then ranked bars and compact tables — so the eye lands on the
-   number first and the explanation second. */
+/* ---------- Report surfaces (Social Network monitor) ----------
+   This page is read-only: no filters to configure, nothing to submit. The
+   vocabulary is a period control at the top, a KPI strip, then ranked bars
+   and compact tables — so the eye lands on the number first and the
+   explanation second. */
 
 .control-bar {
   display: flex;
@@ -2958,28 +3447,191 @@ button {
   letter-spacing: 0.04em;
 }
 
-.hub-roster {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.hub-roster-item {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 4px 12px 4px 4px;
-  border-radius: 999px;
-  background: var(--cream);
-  font-size: 12.5px;
-  font-weight: 600;
-}
-
 .hub-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+
+/* ---------- Curriculum picker (inline, inside a group's own panel) ---------- */
+
+.curric-picker {
+  margin-top: 6px;
+}
+
+.curric-picker-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--cream);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: var(--ink);
+  transition: background-color var(--t-micro) linear, border-color var(--t-micro) linear;
+}
+
+.curric-picker-trigger:hover {
+  border-color: var(--sky);
+}
+
+.curric-picker-trigger-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.curric-picker-trigger-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.curric-picker-trigger-level {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.curric-picker-trigger-topic {
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.curric-picker-chevron {
+  flex-shrink: 0;
+  color: var(--ink-soft);
+  transition: transform var(--t-ui) var(--e-standard);
+}
+
+.curric-picker-chevron.open {
+  transform: rotate(180deg);
+}
+
+.curric-picker-panel {
+  margin-top: 8px;
+  max-height: 340px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  padding: 10px;
+  background: var(--surface);
+  animation: fadeIn var(--t-ui) var(--e-entrance) both;
+}
+
+.curric-picker-level + .curric-picker-level {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.curric-picker-level-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin-bottom: 6px;
+}
+
+.curric-picker-topics {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.curric-picker-topic {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.curric-picker-topic-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--r-s);
+  background: transparent;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background-color var(--t-micro) linear;
+}
+
+.curric-picker-topic-btn:hover {
+  background: var(--cream);
+}
+
+.curric-picker-topic.current .curric-picker-topic-btn {
+  background: color-mix(in srgb, var(--sky) 12%, transparent);
+  border-color: color-mix(in srgb, var(--sky) 40%, transparent);
+  font-weight: 700;
+}
+
+.curric-picker-here {
+  flex-shrink: 0;
+}
+
+.curric-picker-mastered {
+  flex-shrink: 0;
+  color: var(--success);
+  font-weight: 700;
+}
+
+.curric-picker-plan {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-s);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color var(--t-micro) linear, color var(--t-micro) linear;
+}
+
+.curric-picker-plan:hover {
+  border-color: var(--mango);
+  border-style: solid;
+  color: var(--mango-ink);
+}
+
+.curric-picker-full {
+  display: block;
+  width: 100%;
+  text-align: center;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 12.5px;
+}
+
+.hub-saving {
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin-top: 6px;
 }
 
 .hub-section {
@@ -3028,7 +3680,7 @@ button {
   padding: 0;
   font: inherit;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--mango-ink);
   cursor: pointer;
 }
 
@@ -3040,7 +3692,7 @@ button {
 
 .hub-inline-btn:hover,
 .hub-more:hover {
-  color: var(--accent-dark);
+  color: var(--mango-deep);
 }
 
 .lesson-grid {
@@ -3075,7 +3727,7 @@ button {
 }
 
 .lesson-card:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--sky);
   outline-offset: 2px;
 }
 
@@ -3220,7 +3872,7 @@ button {
 
 .lesson-sheet-text:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--sky);
   background: var(--white);
 }
 
@@ -3337,6 +3989,10 @@ button {
   color: var(--danger);
 }
 
+.link-add-resource {
+  margin-bottom: 8px;
+}
+
 .link-add {
   display: flex;
   gap: 6px;
@@ -3365,7 +4021,7 @@ button {
 
 .link-add input:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--sky);
 }
 
 /* ---------- Curriculum board: plan-a-lesson affordance ---------- */
@@ -3579,5 +4235,356 @@ button {
 
   .link-add input:nth-child(2) {
     flex: 1 1 0;
+  }
+}
+
+/* ---------- Parent report ---------- */
+
+.report-modal-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 420px;
+  gap: var(--s5);
+  align-items: start;
+}
+
+@media (max-width: 760px) {
+  .report-modal-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.report-field-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+  display: block;
+}
+
+.report-range-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.report-range-row input {
+  flex: 1;
+}
+
+.report-quick-ranges {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.report-student-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.report-student-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.report-preview-pages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.report-sibling-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.report-sibling-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  background: var(--surface);
+  cursor: pointer;
+  text-align: left;
+  font-size: 13.5px;
+  transition: border-color var(--t-micro) linear, background-color var(--t-micro) linear;
+}
+
+.report-sibling-row:hover {
+  border-color: var(--sky);
+  background: var(--cream);
+}
+
+.report-sibling-group {
+  font-size: 12px;
+  color: var(--ink-soft);
+  flex-shrink: 0;
+}
+
+/* ---------- The report document itself — same markup renders the on-screen
+   preview (scaled down via transform) and the printed page (full size,
+   `window.print()` is the "export to PDF" step: the browser's own print
+   dialog offers "Save as PDF"). Colour must survive to the printed output —
+   browsers drop backgrounds by default unless told otherwise. ---------- */
+
+.report-preview-frame {
+  width: 408px;
+  height: 528px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  box-shadow: var(--shadow-m);
+  background: var(--ground-2);
+}
+
+.report-preview-scale {
+  width: 816px;
+  transform: scale(0.5);
+  transform-origin: top left;
+}
+
+.report-page {
+  width: 816px;
+  min-height: 1056px;
+  padding: 40px 48px 32px;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--body);
+  box-sizing: border-box;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.report-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid var(--line);
+  margin-bottom: 18px;
+}
+
+.report-brand {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 22px;
+  color: var(--on-color);
+  background: linear-gradient(140deg, var(--mango-deep), var(--bubble));
+  padding: 10px 16px;
+  border-radius: var(--r-m);
+  flex-shrink: 0;
+}
+
+.report-header-text {
+  min-width: 0;
+}
+
+.report-title {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.report-range {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.report-student-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.report-student-name {
+  font-family: var(--display);
+  font-size: 26px;
+  font-weight: 600;
+}
+
+.report-student-meta {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin-top: 2px;
+}
+
+.report-level-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--sky) 14%, var(--surface));
+  color: var(--sky-ink);
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.report-level-emoji {
+  font-size: 16px;
+}
+
+.report-greeting {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin: 0 0 20px;
+  max-width: 62ch;
+}
+
+.report-section {
+  margin-bottom: 18px;
+}
+
+.report-section-title {
+  font-family: var(--display);
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.report-empty {
+  font-size: 13px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.report-topics {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.report-topic-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: var(--r-s);
+  background: var(--ground-2);
+}
+
+.report-topic-row:nth-child(odd) {
+  background: transparent;
+}
+
+.report-topic-status {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--on-color);
+}
+
+.report-topic-status.mastered {
+  background: var(--splash);
+}
+
+.report-topic-status.review {
+  background: var(--sun);
+  color: var(--warning-ink);
+}
+
+.report-topic-name {
+  flex: 1;
+  font-size: 13.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-topic-date {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.report-topic-more {
+  font-size: 12px;
+  color: var(--ink-soft);
+  padding: 4px 10px;
+  font-style: italic;
+}
+
+.report-note {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  white-space: pre-wrap;
+  margin: 0;
+  max-width: 68ch;
+}
+
+.report-footer {
+  margin-top: 28px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* Print: only the report page survives, at its real size, one page. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #report-print-root,
+  #report-print-root * {
+    visibility: visible;
+  }
+  #report-print-root {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+  .report-preview-pages {
+    display: block !important;
+  }
+  .report-preview-frame {
+    width: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+  .report-preview-frame + .report-preview-frame {
+    page-break-before: always;
+  }
+  .report-preview-scale {
+    transform: none;
+    width: auto;
+  }
+  .report-page {
+    width: auto;
+    min-height: 0;
+  }
+  @page {
+    margin: 10mm;
   }
 }

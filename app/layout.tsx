@@ -1,7 +1,22 @@
 import type { Metadata, Viewport } from "next";
+import { Fredoka, Figtree } from "next/font/google";
 import "@/app/globals.css";
 import { AuthProvider } from "@/lib/firebase/AuthContext";
 import AppShell from "@/components/AppShell";
+
+const fredoka = Fredoka({
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+  variable: "--font-display",
+  display: "swap",
+});
+
+const figtree = Figtree({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-body",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "My Dashboard",
@@ -22,8 +37,8 @@ export const viewport: Viewport = {
   // left a black bar sitting above a cream page all day in light mode.
   // These are --cream's two values from globals.css — keep them in sync.
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#faf6f0" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a1220" },
+    { media: "(prefers-color-scheme: light)", color: "#FFFCFA" },
+    { media: "(prefers-color-scheme: dark)", color: "#15111C" },
   ],
   // Paired with appleWebApp.statusBarStyle "black-translucent" above: that
   // style lets the page draw under the status bar, which only looks right
@@ -53,7 +68,7 @@ const THEME_INIT_SCRIPT = `
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={`${fredoka.variable} ${figtree.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: SW_REGISTER_SCRIPT }} />

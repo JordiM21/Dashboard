@@ -262,6 +262,7 @@ export default function ResourcesBrowser() {
             />
             <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as any)}>
               <option value="all">All types</option>
+              <option value="html">HTML pages</option>
               <option value="image">Images</option>
               <option value="video">Videos</option>
               <option value="pdf">PDFs</option>
@@ -376,6 +377,15 @@ export default function ResourcesBrowser() {
                     <div className="resource-tile-thumb">
                       {fileCategory(file.mimeType, file.originalName) === "image" ? (
                         <img src={`/api/resources/files/${file.id}/content`} alt={file.title} loading="lazy" />
+                      ) : fileCategory(file.mimeType, file.originalName) === "html" ? (
+                        <iframe
+                          src={`/api/resources/files/${file.id}/content`}
+                          title={file.title}
+                          loading="lazy"
+                          sandbox=""
+                          className="resource-tile-html-preview"
+                          tabIndex={-1}
+                        />
                       ) : (
                         <span className="resource-tile-icon">{fileIcon(fileCategory(file.mimeType, file.originalName))}</span>
                       )}
