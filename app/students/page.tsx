@@ -5,27 +5,27 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import ViewToggle from "@/components/ViewToggle";
 import ResourcesBrowser from "@/components/ResourcesBrowser";
 import GroupsHub from "@/components/classroom/GroupsHub";
+import CurriculumView from "@/components/classroom/CurriculumView";
 
 /**
  * The Classroom — what used to be the Students view, the Teaching view, and
- * a standalone Curriculum tab, now one place. Groups is the home: a class,
- * where it is in the syllabus, who's in it, and every lesson planned or
- * taught. Its rail's "All Students" entry folds in the full searchable
- * roster (used to be its own tab showing the same people from a shallower
- * angle), and each group's own panel carries a compact, expand-on-click
- * curriculum picker — where they are, where to send them next, and a
- * "+" to plan that lesson, without a trip to a separate Curriculum tab.
- * The full syllabus board (multi-group assignment, add/rename/reorder
- * levels) still exists — GroupsHub opens it in a modal on demand, since
- * that's a rarer, structural job, not the daily lesson-planning one.
- * Resources is the file library.
+ * a standalone Curriculum tab, now one place with three sections.
  *
- * The embedded Excalidraw whiteboard that used to live under Teaching is
- * gone — boards are local .excalidraw files now, linked onto a lesson like
- * any other material.
+ * Groups is the home: a class, where it is in the syllabus, who's in it,
+ * and every lesson planned or taught. Its rail's "All Students" entry folds
+ * in the full searchable roster.
+ *
+ * Curriculum is the whole path, Level 1 to the last, in one searchable grid
+ * — the view a teacher opens twenty minutes before a lesson to find a topic
+ * and an activity to run it with. It replaces both the level-by-level
+ * dropdown that used to sit inside a group's panel and the drag-and-drop
+ * Curriculum Board that hid behind a modal.
+ *
+ * Resources is the file library.
  */
 const SECTIONS = [
   { value: "groups", label: "Groups" },
+  { value: "curriculum", label: "Curriculum" },
   { value: "resources", label: "Resources" },
 ] as const;
 
@@ -33,6 +33,7 @@ type Section = (typeof SECTIONS)[number]["value"];
 
 const SUBTITLE: Record<Section, string> = {
   groups: "Every class and every student — where they are, and where to send them next",
+  curriculum: "The whole path, Level 1 to the end — find a topic, and how to teach it",
   resources: "Files, images, video and notes you teach from",
 };
 
@@ -66,7 +67,12 @@ export default function ClassroomPage() {
       <div key={section} className="section-swap">
         {section === "groups" && (
           <ErrorBoundary label="the groups view">
-            <GroupsHub />
+            <GroupsHub onOpenCurriculum={() => pick("curriculum")} />
+          </ErrorBoundary>
+        )}
+        {section === "curriculum" && (
+          <ErrorBoundary label="the curriculum">
+            <CurriculumView />
           </ErrorBoundary>
         )}
         {section === "resources" && (

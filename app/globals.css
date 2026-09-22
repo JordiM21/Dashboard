@@ -1127,14 +1127,6 @@ html {
   padding: 20px 22px;
 }
 
-/* Curriculum Board subtopic chips — hover only lights up while the chip is
-   actually clickable (paintbrush active or Edit Syllabus on), via the
-   .interactive modifier, so it doesn't imply an action is available when
-   clicking would be a no-op. */
-.subtopic-chip.interactive:hover {
-  background: var(--cake) !important;
-}
-
 /* ---------- Buttons ---------- */
 
 .btn {
@@ -3454,180 +3446,6 @@ html {
   gap: 8px;
 }
 
-/* ---------- Curriculum picker (inline, inside a group's own panel) ---------- */
-
-.curric-picker {
-  margin-top: 6px;
-}
-
-.curric-picker-trigger {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-m);
-  background: var(--cream);
-  cursor: pointer;
-  text-align: left;
-  font: inherit;
-  color: var(--ink);
-  transition: background-color var(--t-micro) linear, border-color var(--t-micro) linear;
-}
-
-.curric-picker-trigger:hover {
-  border-color: var(--sky);
-}
-
-.curric-picker-trigger-icon {
-  font-size: 18px;
-  flex-shrink: 0;
-}
-
-.curric-picker-trigger-body {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-  flex: 1;
-}
-
-.curric-picker-trigger-level {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--ink-soft);
-}
-
-.curric-picker-trigger-topic {
-  font-size: 14px;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.curric-picker-chevron {
-  flex-shrink: 0;
-  color: var(--ink-soft);
-  transition: transform var(--t-ui) var(--e-standard);
-}
-
-.curric-picker-chevron.open {
-  transform: rotate(180deg);
-}
-
-.curric-picker-panel {
-  margin-top: 8px;
-  max-height: 340px;
-  overflow-y: auto;
-  border: 1px solid var(--line);
-  border-radius: var(--r-m);
-  padding: 10px;
-  background: var(--surface);
-  animation: fadeIn var(--t-ui) var(--e-entrance) both;
-}
-
-.curric-picker-level + .curric-picker-level {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--line);
-}
-
-.curric-picker-level-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--ink-soft);
-  margin-bottom: 6px;
-}
-
-.curric-picker-topics {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.curric-picker-topic {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.curric-picker-topic-btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  padding: 6px 8px;
-  border: 1px solid transparent;
-  border-radius: var(--r-s);
-  background: transparent;
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-  color: var(--ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  transition: background-color var(--t-micro) linear;
-}
-
-.curric-picker-topic-btn:hover {
-  background: var(--cream);
-}
-
-.curric-picker-topic.current .curric-picker-topic-btn {
-  background: color-mix(in srgb, var(--sky) 12%, transparent);
-  border-color: color-mix(in srgb, var(--sky) 40%, transparent);
-  font-weight: 700;
-}
-
-.curric-picker-here {
-  flex-shrink: 0;
-}
-
-.curric-picker-mastered {
-  flex-shrink: 0;
-  color: var(--success);
-  font-weight: 700;
-}
-
-.curric-picker-plan {
-  flex-shrink: 0;
-  width: 26px;
-  height: 26px;
-  display: grid;
-  place-items: center;
-  border: 1px dashed var(--line);
-  border-radius: var(--r-s);
-  background: transparent;
-  color: var(--ink-soft);
-  font-size: 15px;
-  line-height: 1;
-  cursor: pointer;
-  transition: border-color var(--t-micro) linear, color var(--t-micro) linear;
-}
-
-.curric-picker-plan:hover {
-  border-color: var(--mango);
-  border-style: solid;
-  color: var(--mango-ink);
-}
-
-.curric-picker-full {
-  display: block;
-  width: 100%;
-  text-align: center;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--line);
-  font-size: 12.5px;
-}
-
 .hub-saving {
   font-size: 12px;
   color: var(--ink-soft);
@@ -4024,52 +3842,814 @@ html {
   border-color: var(--sky);
 }
 
-/* ---------- Curriculum board: plan-a-lesson affordance ---------- */
-
-.subtopic-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.subtopic-row .subtopic-chip {
-  flex: 1;
-  min-width: 0;
-}
-
-/* Only shown while a group's brush is up, and only surfaced on hover/focus —
-   the board's primary gesture is still "click the topic to assign it". */
-.subtopic-plan {
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
-  border: 1px dashed var(--line);
-  border-radius: 50%;
-  background: none;
-  color: var(--ink-soft);
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.18s ease, background 0.18s ease, color 0.18s ease, transform 0.18s var(--ease-spring);
-}
-
-.subtopic-row:hover .subtopic-plan,
-.subtopic-plan:focus-visible {
-  opacity: 1;
-}
-
-.subtopic-plan:hover {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-  transform: scale(1.12);
-}
-
 @media (hover: none) {
-  .subtopic-plan,
   .link-row-remove {
     opacity: 1;
+  }
+}
+
+
+/* ==========================================================================
+   Curriculum — the whole syllabus as one searchable grid, plus the topic
+   sheet it opens. Written mobile-first on purpose: the base rules ARE the
+   phone layout and the media queries only widen it, so none of this needs
+   to live in the mobile-overrides block at the end of the file.
+   ========================================================================== */
+
+.curric {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s5);
+}
+
+/* Everything you steer with, in one band that stays put while the grid
+   scrolls under it — searching and switching class are the two things you
+   do repeatedly, so they never scroll away. */
+.curric-bar {
+  position: sticky;
+  /* Clears #floating-nav's own sticky pill — the two stack, never overlap. */
+  top: calc(72px + env(safe-area-inset-top));
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding: var(--s3);
+  border-radius: var(--r-m);
+  border: 1px solid var(--line);
+  background: var(--glass-solid);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-s);
+}
+
+.curric-search {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 0 var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--cream);
+  transition: border-color var(--t-micro) linear, box-shadow var(--t-micro) linear;
+}
+
+.curric-search:focus-within {
+  border-color: var(--mango);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mango) 22%, transparent);
+}
+
+.curric-search-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.curric-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  padding: 10px 0;
+  font: inherit;
+  font-size: 15px;
+  color: var(--ink);
+  outline: none;
+  appearance: none;
+}
+
+.curric-search input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.curric-search-clear {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--line);
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.curric-bar-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+
+.curric-classes {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  /* A basis wide enough that the tools beside it wrap to their own line on
+     a phone rather than crushing the class pills to a sliver — the pills
+     don't shrink, so a squeezed track just clips them. */
+  flex: 1 1 200px;
+  min-width: 0;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.curric-classes::-webkit-scrollbar {
+  display: none;
+}
+
+.curric-class {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 7px 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background-color var(--t-micro) linear, color var(--t-micro) linear, border-color var(--t-micro) linear,
+    transform var(--t-micro) var(--e-spring);
+}
+
+.curric-class:hover {
+  transform: translateY(-1px);
+}
+
+.curric-class.on {
+  background: var(--chip);
+  border-color: var(--chip);
+  color: var(--on-color);
+}
+
+.curric-class-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--chip);
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--chip) 25%, transparent);
+}
+
+.curric-class.on .curric-class-dot {
+  background: var(--on-color);
+  box-shadow: none;
+}
+
+.curric-bar-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.curric-jump {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color var(--t-micro) linear, color var(--t-micro) linear;
+}
+
+.curric-jump:hover {
+  border-color: var(--sky);
+  color: var(--sky-ink);
+}
+
+.curric-lens {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* The filter chips across the curriculum and the topic sheet are buttons,
+   unlike the read-only .chip the rest of the app uses — so they get the
+   pressed state and hit area a control needs. */
+.curric-lens .chip,
+.curric-bar-tools .chip,
+.topic-sheet-filters .chip {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  padding: 6px 11px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background-color var(--t-micro) linear, color var(--t-micro) linear, border-color var(--t-micro) linear;
+}
+
+.curric-lens .chip:hover,
+.curric-bar-tools .chip:hover,
+.topic-sheet-filters .chip:hover {
+  border-color: var(--mango);
+  color: var(--ink);
+}
+
+.curric-lens .chip-on,
+.curric-bar-tools .chip-on,
+.topic-sheet-filters .chip-on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--surface);
+}
+
+.curric-count {
+  margin-left: auto;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* ---------- Stages and the level grid ---------- */
+
+.curric-stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.curric-stage-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.curric-stage-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.curric-stage-name {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.curric-stage-count {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.curric-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--s3);
+}
+
+@media (min-width: 560px) {
+  .curric-grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+}
+
+.curric-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s3);
+  padding-top: calc(var(--s3) + 3px);
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--surface);
+  box-shadow: var(--shadow-s);
+  overflow: hidden;
+  /* Staggered by grid position — a settle, not a parade: capped so a long
+     stage never makes you wait on the last card. */
+  animation: curricIn var(--t-ui) var(--e-entrance) both;
+  animation-delay: calc(min(var(--i), 8) * 30ms);
+  transition: box-shadow var(--t-ui) var(--e-standard), transform var(--t-ui) var(--e-standard),
+    border-color var(--t-micro) linear;
+}
+
+/* The level's colour as a top edge rather than a full border — it identifies
+   the card without competing with the topics inside it. */
+.curric-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: var(--lvl);
+}
+
+.curric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-m);
+}
+
+.curric-card.here {
+  border-color: var(--lvl);
+  box-shadow: 0 0 0 1px var(--lvl), var(--shadow-m);
+}
+
+.curric-card.drop {
+  border: 2px dashed var(--mango);
+}
+
+.curric-card.dragging {
+  opacity: 0.45;
+}
+
+@keyframes curricIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.curric-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.curric-card-emoji {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 17px;
+  background: color-mix(in srgb, var(--lvl) 16%, var(--surface));
+}
+
+.curric-card-titles {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.curric-card-level {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.curric-card-title {
+  font-size: 14.5px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.curric-card-progress {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  padding: 3px 8px;
+  border-radius: var(--r-pill);
+  background: var(--cream);
+}
+
+.curric-card-edit {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color var(--t-micro) linear, color var(--t-micro) linear;
+}
+
+.curric-card-edit:hover {
+  border-color: var(--mango);
+  color: var(--mango-ink);
+}
+
+.curric-card-here {
+  align-self: flex-start;
+  padding: 3px 9px;
+  border-radius: var(--r-pill);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--on-color);
+}
+
+.curric-topics {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.curric-topic {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 9px;
+  border: 1px solid transparent;
+  border-radius: var(--r-s);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background-color var(--t-micro) linear, border-color var(--t-micro) linear;
+}
+
+.curric-topic:hover {
+  background: var(--cream);
+  border-color: var(--line);
+}
+
+.curric-topic.current {
+  background: color-mix(in srgb, var(--lvl) 12%, transparent);
+  border-color: color-mix(in srgb, var(--lvl) 45%, transparent);
+  font-weight: 700;
+}
+
+.curric-topic.done:not(.current) .curric-topic-text {
+  color: var(--muted);
+}
+
+.curric-topic-mark {
+  flex-shrink: 0;
+  width: 14px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--success);
+  text-align: center;
+}
+
+.curric-topic-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.curric-topics-empty {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 6px 9px;
+}
+
+.curric-add-level,
+.curric-add-stage {
+  width: 100%;
+  padding: 10px;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-m);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: border-color var(--t-micro) linear, background-color var(--t-micro) linear;
+}
+
+.curric-add-level:hover,
+.curric-add-level.drop {
+  border-color: var(--mango);
+  background: var(--cake);
+}
+
+/* ---------- Topic sheet ---------- */
+
+.topic-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+.topic-sheet-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  flex-wrap: wrap;
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--line);
+}
+
+.topic-sheet-emoji {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 20px;
+  background: color-mix(in srgb, var(--topic-accent) 16%, var(--surface));
+}
+
+.topic-sheet-place {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  /* Same reason as .curric-classes: enough basis that the status badge
+     drops to its own line on a phone instead of squashing the title. */
+  flex: 1 1 180px;
+}
+
+.topic-sheet-level {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.topic-sheet-stage {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.topic-sheet-status {
+  margin-left: auto;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  background: var(--cream);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.topic-sheet-status.current {
+  background: color-mix(in srgb, var(--sky) 15%, transparent);
+  color: var(--sky-ink);
+}
+
+.topic-sheet-status.mastered {
+  background: color-mix(in srgb, var(--success) 15%, transparent);
+  color: var(--success);
+}
+
+.topic-sheet-actions {
+  display: flex;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+
+.topic-sheet-actions .btn {
+  flex: 1 1 200px;
+  justify-content: center;
+}
+
+.topic-sheet-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.topic-sheet-section-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.topic-sheet-section-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.topic-sheet-section-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: var(--cream);
+}
+
+.topic-sheet-hint {
+  margin: -6px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.topic-sheet-filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.activity {
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--surface);
+  overflow: hidden;
+  animation: curricIn var(--t-ui) var(--e-entrance) both;
+  animation-delay: calc(min(var(--i), 8) * 25ms);
+  transition: border-color var(--t-micro) linear, box-shadow var(--t-ui) var(--e-standard);
+}
+
+.activity:hover {
+  border-color: color-mix(in srgb, var(--topic-accent) 55%, var(--line));
+}
+
+.activity.open {
+  border-color: var(--topic-accent);
+  box-shadow: var(--shadow-s);
+}
+
+.activity-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  padding: var(--s3);
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.activity-emoji {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 17px;
+  background: color-mix(in srgb, var(--topic-accent) 14%, var(--surface));
+}
+
+.activity-head-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.activity-name {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.activity-blurb {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+
+.activity-meta {
+  display: none;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+@media (min-width: 620px) {
+  .activity-meta {
+    display: flex;
+  }
+}
+
+.activity-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 3px 7px;
+  border-radius: var(--r-pill);
+  background: var(--cream);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.activity-badge.badge-noprep {
+  background: color-mix(in srgb, var(--sun) 30%, var(--surface));
+  color: var(--warning-ink);
+}
+
+.activity-chevron {
+  flex-shrink: 0;
+  color: var(--muted);
+  transition: transform var(--t-ui) var(--e-standard);
+}
+
+.activity-chevron.open {
+  transform: rotate(180deg);
+}
+
+.activity-body {
+  padding: 0 var(--s3) var(--s3) calc(var(--s3) + 34px + var(--s2));
+  animation: curricIn var(--t-micro) var(--e-entrance) both;
+}
+
+.activity-steps {
+  margin: 0 0 var(--s3);
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.activity-steps li::marker {
+  font-weight: 800;
+  color: var(--topic-accent);
+}
+
+.activity-tip {
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-s);
+  background: var(--cream);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+/* ---------- "Where this class is" strip, inside a group's panel ---------- */
+
+.curric-now {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  flex-wrap: wrap;
+  margin-top: 6px;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--cream);
+}
+
+.curric-now-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.curric-now-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 160px;
+}
+
+.curric-now-level {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.curric-now-topic {
+  font-size: 14.5px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.curric-now-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .curric-card,
+  .activity,
+  .activity-body {
+    animation: none;
+  }
+  .curric-card:hover,
+  .curric-class:hover {
+    transform: none;
   }
 }
 

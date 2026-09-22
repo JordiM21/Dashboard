@@ -8,9 +8,7 @@ import TagFilterDropdown from "@/components/TagFilterDropdown";
 import LessonSheet from "@/components/classroom/LessonSheet";
 import StudentsRoster, { StudentCard } from "@/components/classroom/StudentsRoster";
 import CurriculumPicker from "@/components/classroom/CurriculumPicker";
-import CurriculumBoard from "@/components/CurriculumBoard";
 import ParentReportModal from "@/components/classroom/ParentReportModal";
-import Modal from "@/components/Modal";
 import { EmptyState, FetchFailedState } from "@/components/StateBox";
 import { useFirestoreCollection } from "@/lib/firebase/useFirestoreCollection";
 import { authFetch } from "@/lib/firebase/authFetch";
@@ -55,7 +53,7 @@ type TimelineItem =
  * This replaces the old split where lessons lived in a whiteboard sidebar
  * on one tab and group progress lived on another.
  */
-export default function GroupsHub() {
+export default function GroupsHub({ onOpenCurriculum }: { onOpenCurriculum: () => void }) {
   const { data: levels } = useFirestoreCollection<CurriculumLevelDoc>("curriculum", { orderByField: "levelNumber" });
   const { data: students } = useFirestoreCollection<Student>("students", { orderByField: "name" });
 
@@ -75,8 +73,6 @@ export default function GroupsHub() {
   const [newGroupOpen, setNewGroupOpen] = useState(false);
   const [historyModal, setHistoryModal] = useState<{ group: GroupDocWithRecall; entry?: GroupHistoryEntry } | null>(null);
   const [reportOpenFor, setReportOpenFor] = useState<GroupDocWithRecall | null>(null);
-  const [fullBoardOpen, setFullBoardOpen] = useState(false);
-  const [assigningTopic, setAssigningTopic] = useState(false);
 
   const loadGroups = useCallback(() => {
     setGroupsError(null);
@@ -190,24 +186,6 @@ export default function GroupsHub() {
     setOpenLesson((cur) => (cur?.id === lesson.id ? lesson : cur));
   }
 
-  /** Moves a group's curriculum position — same PATCH the full syllabus board's "paintbrush" makes, just triggered from the CurriculumPicker inline in this group's own panel instead of a separate tab. Optimistic, with a revert-by-refetch on failure. */
-  async function assignCurrentTopic(groupId: string, levelNumber: number, topic: string) {
-    setAssigningTopic(true);
-    setGroups((prev) => prev?.map((g) => (g.id === groupId ? { ...g, currentLevel: levelNumber, currentTopic: topic } : g)) ?? prev);
-    try {
-      const res = await authFetch(`/api/board/groups/${groupId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentLevel: levelNumber, currentTopic: topic }),
-      });
-      if (!res.ok) throw new Error(`Assign failed with ${res.status}`);
-    } catch {
-      loadGroups();
-    } finally {
-      setAssigningTopic(false);
-    }
-  }
-
   async function createGroup(name: string) {
     const res = await authFetch("/api/board/groups", {
       method: "POST",
@@ -225,10 +203,6 @@ export default function GroupsHub() {
   const currentLevel = (levels ?? []).find((l) => l.levelNumber === selected?.currentLevel);
   const roster = selected ? studentsIn(selected.name) : [];
   const lastTaught = timeline[0]; // timeline is sorted newest-first
-  const masteredTopics = useMemo(
-    () => new Set((historyByGroup[selectedId ?? ""] ?? []).filter((e) => e.status === "Mastered").map((e) => e.topic)),
-    [historyByGroup, selectedId]
-  );
 
   return (
     <div className="hub">
@@ -303,12 +277,9 @@ export default function GroupsHub() {
             <CurriculumPicker
               levels={levels ?? []}
               group={selected}
-              masteredTopics={masteredTopics}
-              onAssign={(levelNumber, topic) => assignCurrentTopic(selected.id, levelNumber, topic)}
-              onPlanLesson={(topic) => setNewLessonFor({ groupId: selected.id, topic })}
-              onOpenFullBoard={() => setFullBoardOpen(true)}
+              onPlanLesson={() => setNewLessonFor({ groupId: selected.id, topic: selected.currentTopic || undefined })}
+              onOpenCurriculum={onOpenCurriculum}
             />
-            {assigningTopic && <div className="hub-saving">Saving…</div>}
 
             <div className="hub-stats">
               <div className="hub-stat">
@@ -510,12 +481,6 @@ export default function GroupsHub() {
             loadHistory(historyModal.group.id);
           }}
         />
-      )}
-
-      {fullBoardOpen && (
-        <Modal title="Full syllabus board" onClose={() => setFullBoardOpen(false)} maxWidth={1040}>
-          <CurriculumBoard />
-        </Modal>
       )}
 
       {reportOpenFor && (

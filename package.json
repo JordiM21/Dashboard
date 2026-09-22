@@ -11,7 +11,8 @@
     "migrate:resources": "tsx scripts/migrateResourcesToFirebase.ts",
     "migrate:markdown": "tsx scripts/migrateMarkdownToFirebase.ts",
     "seed:test-students": "tsx scripts/seedTestStudents.ts",
-    "audit:firestore": "tsx scripts/auditFirestore.ts"
+    "audit:firestore": "tsx scripts/auditFirestore.ts",
+    "check:reminders": "tsx scripts/checkPaymentReminders.ts"
   },
   "dependencies": {
     "firebase": "^10.13.1",

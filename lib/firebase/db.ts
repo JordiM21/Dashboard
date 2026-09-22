@@ -1,6 +1,7 @@
 import { FieldValue, Timestamp, type DocumentData, type QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { getAdminDb } from "./admin";
 import { addOneMonth, localDateIso } from "@/lib/dateUtils";
+import { buildTuitionAlert, sendTuitionAlert } from "@/lib/paymentReminders";
 import type {
   Student,
   FinanceEntry,
@@ -123,16 +124,26 @@ export async function applyPaymentToStudent(opts: {
 
   if (targetIds.size === 0) return;
 
-  await Promise.all(
+  const paid = await Promise.all(
     Array.from(targetIds).map(async (id) => {
       const ref = db.collection(STUDENTS).doc(id);
       const doc = await ref.get();
-      if (!doc.exists) return;
+      if (!doc.exists) return null;
       const student = fromDoc<Student>(doc as QueryDocumentSnapshot<DocumentData>);
-      const nextPayment = addOneMonth(student.nextPayment ?? localDateIso());
-      await ref.update({ nextPayment, updatedAt: FieldValue.serverTimestamp() });
+      const settled = student.nextPayment ?? localDateIso(); // the due date this payment just cleared
+      await ref.update({ nextPayment: addOneMonth(settled), updatedAt: FieldValue.serverTimestamp() });
+      return { student, settled };
     })
   );
+
+  // Tell the Hub, which turns it into a Telegram message. Deliberately
+  // after the writes and deliberately unable to throw (see
+  // sendTuitionAlert): a notification that doesn't land must never undo a
+  // payment that really happened. Siblings on one combined tuition get one
+  // message each, which is right — each of their tuitions was paid.
+  for (const entry of paid) {
+    if (entry) await sendTuitionAlert(buildTuitionAlert(entry.student, entry.settled, "paid"));
+  }
 }
 
 export async function deleteStudent(id: string): Promise<boolean> {

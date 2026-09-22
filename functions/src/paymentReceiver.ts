@@ -78,16 +78,61 @@ async function applyPaymentToStudent(opts: { studentId: string | null; payerEmai
 
   if (targetIds.size === 0) return false;
 
-  await Promise.all(
+  const paid = await Promise.all(
     Array.from(targetIds).map(async (id) => {
       const ref = db.collection("students").doc(id);
       const doc = await ref.get();
-      if (!doc.exists) return;
-      const nextPayment = addOneMonth((doc.data()?.nextPayment as string | undefined) ?? new Date().toISOString().slice(0, 10));
-      await ref.update({ nextPayment, updatedAt: FieldValue.serverTimestamp() });
+      if (!doc.exists) return null;
+      const data = doc.data() ?? {};
+      const settled = (data.nextPayment as string | undefined) ?? new Date().toISOString().slice(0, 10);
+      await ref.update({ nextPayment: addOneMonth(settled), updatedAt: FieldValue.serverTimestamp() });
+      return { name: (data.name as string | undefined) ?? "A student", tuition: data.tuition as number | undefined, settled };
     })
   );
+
+  // The caller only reaches this once per payment (its `studentApplied`
+  // flag), so one Stripe payment is one Telegram message per student —
+  // which matters, because the Hub has no dedupe of its own.
+  for (const entry of paid) {
+    if (entry) await sendTuitionAlert(entry);
+  }
   return true;
+}
+
+/**
+ * Posts a "paid" tuition alert to the LET Junior Hub, which turns it into a
+ * Telegram message. Duplicated from lib/paymentReminders.ts (this is a
+ * separate deployable package, not sharing imports with the Next.js app) —
+ * keep in sync if the Hub's contract changes.
+ *
+ * Never throws and never retries, both deliberately: the Hub always answers
+ * 200 even when something downstream failed, so a non-200 isn't retryable
+ * and a second POST would just be a second Telegram message. And a
+ * notification that doesn't land must never fail a Stripe webhook — Stripe
+ * would retry the whole event and re-record the payment.
+ */
+async function sendTuitionAlert(entry: { name: string; tuition?: number; settled: string }): Promise<void> {
+  const url = process.env.LET_HUB_TUITION_WEBHOOK_URL;
+  if (!url) return;
+
+  const [y, m, d] = entry.settled.slice(0, 10).split("-");
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        studentName: entry.name,
+        // Always USD — every amount in this system settles in dollars. The
+        // Hub prints the string as-is, so the symbol has to come from here.
+        amount: typeof entry.tuition === "number" ? `$${entry.tuition}` : "tuition not set",
+        dueDate: y && m && d ? `${d}-${m}-${y}` : entry.settled, // DD-MM-YYYY, this project's one display format
+        status: "paid",
+      }),
+    });
+    if (!res.ok) logger.warn(`paymentReceiver: Hub tuition alert answered ${res.status} for ${entry.name}`);
+  } catch (err) {
+    logger.warn("paymentReceiver: Hub tuition alert failed:", err);
+  }
 }
 
 function stripeAmountToDecimal(amount: number, currency: string): number {
