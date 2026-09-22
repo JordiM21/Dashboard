@@ -128,6 +128,10 @@ async function sendTuitionAlert(entry: { name: string; tuition?: number; settled
         dueDate: y && m && d ? `${d}-${m}-${y}` : entry.settled, // DD-MM-YYYY, this project's one display format
         status: "paid",
       }),
+      // Stripe retries a webhook that doesn't answer in time, so a Hub that
+      // accepts the connection and never responds must not be able to hold
+      // this handler open. The alert is the least important thing here.
+      signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) logger.warn(`paymentReceiver: Hub tuition alert answered ${res.status} for ${entry.name}`);
   } catch (err) {

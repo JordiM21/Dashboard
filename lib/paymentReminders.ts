@@ -62,6 +62,11 @@ export async function sendTuitionAlert(payload: HubTuitionPayload): Promise<{ se
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+      // This runs inside payment recording. Without a bound, a Hub that
+      // accepts the connection and never answers would stall the request
+      // that's writing the payment — the notification is the least
+      // important thing in that call stack, so it gets a short leash.
+      signal: AbortSignal.timeout(5000),
     });
     return { sent: res.ok, status: res.status, ...(res.ok ? {} : { error: `Hub answered ${res.status}` }) };
   } catch (err) {
