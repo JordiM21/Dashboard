@@ -131,6 +131,15 @@ export default function FinancePage() {
     });
   }
 
+  async function linkStudent(e: FinanceEntry, studentId: string) {
+    if (!studentId) return;
+    await authFetch(`/api/finance/${e.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ studentId }),
+    });
+  }
+
   async function confirmDeleteRecurring() {
     if (!deleteRecurringTarget) return;
     await authFetch(`/api/finance/recurring/${deleteRecurringTarget.id}`, { method: "DELETE" });
@@ -332,7 +341,21 @@ export default function FinancePage() {
                           <span className="tag">{e.category}</span>
                         </td>
                         <td style={{ color: "var(--ink-soft)", fontSize: 13 }}>
-                          {e.studentId ? studentNameById.get(e.studentId) ?? "—" : "—"}
+                          {e.studentId ? (
+                            studentNameById.get(e.studentId) ?? "—"
+                          ) : e.type === "Income" && !e.studentApplied ? (
+                            // Linking counts as the payment landing — the API moves that student's due date one month.
+                            <select value="" onChange={(ev) => linkStudent(e, ev.target.value)} aria-label="Link to a student">
+                              <option value="">Link student…</option>
+                              {(students ?? []).map((s) => (
+                                <option key={s.id} value={s.id}>
+                                  {s.name}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            "—"
+                          )}
                         </td>
                         <td style={{ color: "var(--ink-soft)", fontSize: 13 }}>{original ?? "—"}</td>
                         <td>

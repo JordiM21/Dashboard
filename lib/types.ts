@@ -135,6 +135,9 @@ export interface FinanceEntry {
   // in manually) — matched against Student.parentEmail by
   // applyPaymentToStudent() to auto-advance that student's due date.
   payerEmail?: string;
+  // True once this payment has moved a student's due date, so no later
+  // event, edit or link moves it a second time.
+  studentApplied?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }

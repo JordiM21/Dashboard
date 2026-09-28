@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { listTransactions, createTransaction, applyPaymentToStudent } from "@/lib/firebase/db";
+import { listTransactions, createTransaction, updateTransaction, applyPaymentToStudent } from "@/lib/firebase/db";
 import { summarizeFinance } from "@/lib/finance";
 import { FirebaseNotConfiguredError } from "@/lib/firebase/admin";
 import { requireAuth, UnauthorizedError } from "@/lib/firebase/verifyAuth";
@@ -74,7 +74,9 @@ export async function POST(req: NextRequest) {
     // parent's email) advances that student's due date — see
     // lib/studentStatus.ts for how this becomes "Up to Date".
     if (type === "Income" && (body.studentId || payerEmail)) {
-      await applyPaymentToStudent({ studentId: body.studentId || null, payerEmail: payerEmail || null });
+      if (await applyPaymentToStudent({ studentId: body.studentId || null, payerEmail: payerEmail || null })) {
+        await updateTransaction(entry.id, { studentApplied: true });
+      }
     }
 
     return NextResponse.json(entry, { status: 201 });

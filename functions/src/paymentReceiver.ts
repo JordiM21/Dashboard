@@ -76,6 +76,14 @@ async function applyPaymentToStudent(opts: { studentId: string | null; payerEmai
     for (const d of snap.docs) targetIds.add(d.id);
   }
 
+  // A parent paying from an address that isn't their parentEmail is linked
+  // by hand once in Finance; every later payment from that address follows
+  // that link. Kept in sync with lib/firebase/db.ts's applyPaymentToStudent.
+  if (email && targetIds.size === 0) {
+    const prior = await db.collection("transactions").where("payerEmail", "==", email).get();
+    for (const d of prior.docs) if (d.data().studentId) targetIds.add(d.data().studentId as string);
+  }
+
   if (targetIds.size === 0) return false;
 
   const paid = await Promise.all(

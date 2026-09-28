@@ -104,7 +104,7 @@ export async function updateStudent(id: string, updates: Partial<Student>): Prom
 export async function applyPaymentToStudent(opts: {
   studentId?: string | null;
   payerEmail?: string | null;
-}): Promise<void> {
+}): Promise<boolean> {
   const db = getAdminDb();
   const targetIds = new Set<string>();
   let email = opts.payerEmail?.trim().toLowerCase() || null;
@@ -122,7 +122,15 @@ export async function applyPaymentToStudent(opts: {
     for (const d of snap.docs) targetIds.add(d.id);
   }
 
-  if (targetIds.size === 0) return;
+  // A parent paying from an address that isn't their parentEmail is linked
+  // by hand once in Finance; every later payment from that address follows
+  // that link. Kept in sync with functions/src/paymentReceiver.ts.
+  if (email && targetIds.size === 0) {
+    const prior = await db.collection(TRANSACTIONS).where("payerEmail", "==", email).get();
+    for (const d of prior.docs) if (d.data().studentId) targetIds.add(d.data().studentId);
+  }
+
+  if (targetIds.size === 0) return false;
 
   const paid = await Promise.all(
     Array.from(targetIds).map(async (id) => {
@@ -144,6 +152,7 @@ export async function applyPaymentToStudent(opts: {
   for (const entry of paid) {
     if (entry) await sendTuitionAlert(buildTuitionAlert(entry.student, entry.settled, "paid"));
   }
+  return true;
 }
 
 export async function deleteStudent(id: string): Promise<boolean> {
@@ -180,12 +189,28 @@ export async function updateTransaction(
   id: string,
   updates: Partial<FinanceEntry>
 ): Promise<FinanceEntry | null> {
-  const ref = getAdminDb().collection(TRANSACTIONS).doc(id);
-  const existing = await ref.get();
-  if (!existing.exists) return null;
-
+  const db = getAdminDb();
+  const ref = db.collection(TRANSACTIONS).doc(id);
   const { id: _ignoredId, createdAt: _ignoredCreatedAt, ...safeUpdates } = updates;
-  await ref.update({ ...safeUpdates, updatedAt: FieldValue.serverTimestamp() });
+
+  // Linking a student to Income nothing matched counts as that payment
+  // landing: their due date moves forward one month, the same as a matched
+  // Stripe payment. `studentApplied` is claimed inside the transaction so a
+  // double submit, or a row whose payment already moved a date, can't push
+  // the student a second month ahead.
+  const result = await db.runTransaction(async (tx) => {
+    const prev = (await tx.get(ref)).data();
+    if (!prev) return null;
+    const link =
+      !!safeUpdates.studentId && !prev.studentId && !prev.studentApplied && (safeUpdates.type ?? prev.type) === "Income";
+    tx.update(ref, { ...safeUpdates, ...(link ? { studentApplied: true } : {}), updatedAt: FieldValue.serverTimestamp() });
+    return { link };
+  });
+  if (!result) return null;
+  if (result.link && !(await applyPaymentToStudent({ studentId: safeUpdates.studentId }))) {
+    await ref.update({ studentApplied: false });
+  }
+
   const doc = await ref.get();
   return fromDoc<FinanceEntry>(doc as QueryDocumentSnapshot<DocumentData>);
 }
