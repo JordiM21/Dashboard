@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Modal from "@/components/Modal";
 import LoadingLabel from "@/components/LoadingLabel";
+import SelectMenu from "@/components/SelectMenu";
 import { useFirestoreCollection } from "@/lib/firebase/useFirestoreCollection";
 import { authFetch } from "@/lib/firebase/authFetch";
 import type { FinanceEntry, Student } from "@/lib/types";
@@ -87,7 +88,8 @@ export default function AddTransactionModal({
       category: form.category.trim() || "Uncategorized",
       description: form.description.trim(),
     };
-    if (form.studentId) payload.studentId = form.studentId;
+    // An edit always sends it, so picking "— None —" actually unlinks.
+    if (form.studentId || editing) payload.studentId = form.studentId;
     if (form.payerEmail.trim()) payload.payerEmail = form.payerEmail.trim();
     if (form.originalCurrency && form.originalAmount.trim()) {
       payload.originalAmount = Number(form.originalAmount);
@@ -159,14 +161,13 @@ export default function AddTransactionModal({
       </div>
       <div className="form-row">
         <label>Student (optional)</label>
-        <select value={form.studentId} onChange={(e) => setForm({ ...form, studentId: e.target.value })}>
-          <option value="">— None —</option>
-          {(students ?? []).map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
+        <SelectMenu
+          className="select-field"
+          ariaLabel="Student"
+          value={form.studentId}
+          onChange={(v) => setForm({ ...form, studentId: v })}
+          options={[{ value: "", label: "— None —" }, ...(students ?? []).map((s) => ({ value: s.id, label: s.name }))]}
+        />
         <p style={{ fontSize: 12, color: "var(--ink-soft)", margin: "4px 0 0" }}>
           Picking a student here (or filling in the parent's email below) advances that student's due date, if this
           is Income.

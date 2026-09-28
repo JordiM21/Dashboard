@@ -18,6 +18,7 @@ import ViewToggle from "@/components/ViewToggle";
 import AddTransactionModal from "@/components/AddTransactionModal";
 import AddRecurringModal from "@/components/AddRecurringModal";
 import ConfirmModal from "@/components/ConfirmModal";
+import SelectMenu from "@/components/SelectMenu";
 import LoadingLabel from "@/components/LoadingLabel";
 import { FetchFailedState, EmptyState } from "@/components/StateBox";
 import { useFirestoreCollection } from "@/lib/firebase/useFirestoreCollection";
@@ -345,14 +346,14 @@ export default function FinancePage() {
                             studentNameById.get(e.studentId) ?? "—"
                           ) : e.type === "Income" && !e.studentApplied ? (
                             // Linking counts as the payment landing — the API moves that student's due date one month.
-                            <select value="" onChange={(ev) => linkStudent(e, ev.target.value)} aria-label="Link to a student">
-                              <option value="">Link student…</option>
-                              {(students ?? []).map((s) => (
-                                <option key={s.id} value={s.id}>
-                                  {s.name}
-                                </option>
-                              ))}
-                            </select>
+                            <SelectMenu
+                              className="select-field"
+                              ariaLabel="Link to a student"
+                              placeholder="Link student…"
+                              value=""
+                              onChange={(v) => linkStudent(e, v)}
+                              options={(students ?? []).map((s) => ({ value: s.id, label: s.name }))}
+                            />
                           ) : (
                             "—"
                           )}
