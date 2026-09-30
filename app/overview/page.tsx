@@ -23,18 +23,22 @@ import KpiCard from "@/components/KpiCard";
 import { EmptyState, FetchFailedState } from "@/components/StateBox";
 import { useFirestoreCollection } from "@/lib/firebase/useFirestoreCollection";
 import { studentPaymentStatus, PAYMENT_STATUS_LABEL, PAYMENT_STATUS_BADGE_CLASS } from "@/lib/studentStatus";
-import { addDays, formatDateDMY, formatDayMonth } from "@/lib/dateUtils";
+import { formatDateDMY, formatDayMonth } from "@/lib/dateUtils";
 import TaskCapture from "@/components/tasks/TaskCapture";
 import TaskCard from "@/components/tasks/TaskCard";
 import TaskEditModal from "@/components/tasks/TaskEditModal";
+import ProgressRing from "@/components/tasks/ProgressRing";
 import { useTaskStore } from "@/lib/useTaskStore";
-import { allTags, compareTasks, completedToday, isOnDeck } from "@/lib/tasks";
+import { allTags, compareTasks, isOnDeck, isOnRadar, weekDates, weekdayShort, weekProgress } from "@/lib/tasks";
 import type { FinanceEntry, Student, Task } from "@/lib/types";
 import type { StripeDailyRevenue } from "@/lib/api/stripe";
 import type { MetaAdsSummary } from "@/lib/api/meta";
 
 const CHART_PALETTE = ["#ff7a3d", "#22aecb", "#ffc93d", "#ff4d8d", "#4080d0", "#e0475a"];
 const RANGE_OPTIONS = [7, 30, 90] as const;
+const CHART_H = 200;
+const TOOLTIP_STYLE = { borderRadius: 12, border: "1px solid var(--line)", background: "var(--white)", color: "var(--ink)" };
+const money = (n: number) => `${n < 0 ? "-" : ""}$${Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 type RangeOption = (typeof RANGE_OPTIONS)[number];
 
 interface KpiData {
@@ -173,9 +177,9 @@ export default function OverviewPage() {
   const [kpiError, setKpiError] = useState<string | null>(null);
   const [range, setRange] = useState<RangeOption>(30);
 
-  // The day's work sits above every chart on purpose: this page is the
+  // The week's work sits above every chart on purpose: this page is the
   // first thing opened in the morning, and a KPI you can only read is worth
-  // less at 8am than the three things you actually have to do.
+  // less at 8am than knowing what you're carrying this week.
   const taskStore = useTaskStore();
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const today = localDateIso(new Date());
@@ -183,11 +187,20 @@ export default function OverviewPage() {
     () => taskStore.tasks.filter((t) => isOnDeck(t, today)).sort((a, b) => compareTasks(a, b, today)),
     [taskStore.tasks, today]
   );
-  const tomorrow = useMemo(
-    () => taskStore.tasks.filter((t) => t.status !== "done" && t.due === addDays(today, 1)).sort((a, b) => compareTasks(a, b, today)),
+  // Everything else on the radar — a task due Friday shows here all week.
+  const comingUp = useMemo(
+    () =>
+      taskStore.tasks.filter((t) => isOnRadar(t, today) && !isOnDeck(t, today)).sort((a, b) => compareTasks(a, b, today)),
     [taskStore.tasks, today]
   );
-  const finishedToday = useMemo(() => completedToday(taskStore.tasks, today), [taskStore.tasks, today]);
+  const days = useMemo(() => weekDates(today), [today]);
+  const dayLoad = useMemo(() => {
+    const map = new Map<string, Task[]>(days.map((d) => [d, []]));
+    for (const t of taskStore.tasks) if (t.status !== "done" && t.due) map.get(t.due)?.push(t);
+    return map;
+  }, [taskStore.tasks, days]);
+  const overdueCount = taskStore.tasks.filter((t) => t.status !== "done" && t.due !== null && t.due < today).length;
+  const week = useMemo(() => weekProgress(taskStore.tasks, today), [taskStore.tasks, today]);
   const knownTags = useMemo(() => allTags(taskStore.tasks, taskStore.projects), [taskStore.tasks, taskStore.projects]);
 
   useEffect(() => {
@@ -224,11 +237,16 @@ export default function OverviewPage() {
     };
   }, [kpiData]);
 
-  const thisMonthRevenue = useMemo(() => {
+  const month = useMemo(() => {
     const monthPrefix = localDateIso(new Date()).slice(0, 7);
-    return (transactions ?? [])
-      .filter((e) => e.amount > 0 && e.date.startsWith(monthPrefix))
-      .reduce((sum, e) => sum + e.amount, 0);
+    let income = 0;
+    let expense = 0;
+    for (const e of transactions ?? []) {
+      if (!e.date.startsWith(monthPrefix)) continue;
+      if (e.amount > 0) income += e.amount;
+      else expense += Math.abs(e.amount);
+    }
+    return { income, expense };
   }, [transactions]);
 
   const activeStudents = (students ?? []).filter((s) => s.status === "active").length;
@@ -267,21 +285,49 @@ export default function OverviewPage() {
 
       <div className="ov-grid">
         <div className="ov-main">
-          <ErrorBoundary label="the Today panel">
+          <ErrorBoundary label="the This week panel">
             <section className="today-panel">
               <div className="today-head">
-                <div>
-                  <h2 className="section-title" style={{ marginTop: 0 }}>
-                    Today
-                  </h2>
-                  <div className="today-sub">
-                    {formatDateDMY(today)} · {onDeck.length} on deck
-                    {finishedToday.length > 0 ? ` · ${finishedToday.length} finished` : ""}
+                <div className="week-panel-hero">
+                  <ProgressRing pct={week.pct} size={56} label={`${week.pct}% of this week's work done`} />
+                  <div>
+                    <h2 className="section-title" style={{ margin: 0 }}>
+                      This week
+                    </h2>
+                    <div className="today-sub">
+                      {formatDateDMY(today)} · {week.done} done since Monday · {week.open} to go
+                    </div>
                   </div>
                 </div>
                 <Link href="/tasks" className="section-link">
-                  All tasks →
+                  Plan the week →
                 </Link>
+              </div>
+
+              {/* The week's load at a glance: one cell per day, a dot per
+                  open task, so a crowded Thursday is visible on Monday. */}
+              <div className="week-strip">
+                {overdueCount > 0 && (
+                  <div className="week-strip-cell week-strip-late">
+                    <span className="week-strip-day">Late</span>
+                    <span className="week-strip-count">{overdueCount}</span>
+                    <span className="week-strip-dots" />
+                  </div>
+                )}
+                {days.map((d, i) => {
+                  const list = dayLoad.get(d) ?? [];
+                  return (
+                    <div key={d} className={`week-strip-cell${i === 0 ? " week-strip-today" : ""}`}>
+                      <span className="week-strip-day">{i === 0 ? "Today" : weekdayShort(d)}</span>
+                      <span className="week-strip-count">{list.length}</span>
+                      <span className="week-strip-dots">
+                        {list.slice(0, 6).map((t) => (
+                          <i key={t.id} className={`dot-${t.status === "doing" ? "doing" : t.priority.toLowerCase()}`} />
+                        ))}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
 
               <TaskCapture
@@ -293,230 +339,165 @@ export default function OverviewPage() {
                   const created = await taskStore.create(fields);
                   if (created) setEditingTask(created);
                 }}
-                placeholder="Add to today — Enter to save, Shift+Enter for tomorrow"
+                placeholder="Add a task — type &quot;fri&quot; or &quot;tomorrow&quot; to schedule it"
               />
 
-              {onDeck.length === 0 ? (
-                <EmptyState
-                  title="Nothing on deck"
-                  hint="Nothing is overdue or due today. Add something above, or pull work forward from All tasks."
-                />
-              ) : (
-                <div className="task-grid task-grid-compact">
-                  {onDeck.slice(0, 6).map((task, i) => (
-                    <div key={task.id} className="task-grid-item" style={{ animationDelay: `${Math.min(i, 12) * 28}ms` }}>
-                      <TaskCard
-                        compact
-                        task={task}
-                        project={taskStore.projects.find((p) => p.id === task.projectId)}
-                        onToggleDone={taskStore.toggleDone}
-                        onToggleDoing={taskStore.toggleDoing}
-                        onPatch={taskStore.patch}
-                        onOpen={setEditingTask}
-                        onDelete={taskStore.remove}
-                      />
+              <div className="week-panel-cols">
+                {[
+                  { key: "now", label: "Now", hint: "In progress, overdue and due today", list: onDeck },
+                  { key: "next", label: "Coming up", hint: "The rest of the next seven days", list: comingUp },
+                ].map((col) => (
+                  <div key={col.key} className="week-panel-col">
+                    <div className="task-section-head">
+                      <h3 className="week-panel-label" title={col.hint}>
+                        {col.label}
+                      </h3>
+                      <span className="task-section-count">{col.list.length}</span>
                     </div>
-                  ))}
-                </div>
-              )}
-
-              {onDeck.length > 6 && (
-                <Link href="/tasks" className="today-more">
-                  + {onDeck.length - 6} more on deck →
-                </Link>
-              )}
-
-              {tomorrow.length > 0 && (
-                <div className="today-tomorrow">
-                  <span className="today-tomorrow-label">Tomorrow</span>
-                  {tomorrow.slice(0, 5).map((t) => (
-                    <button key={t.id} type="button" className="chip chip-button" onClick={() => setEditingTask(t)}>
-                      {t.title}
-                    </button>
-                  ))}
-                  {tomorrow.length > 5 && <span className="chip">+{tomorrow.length - 5}</span>}
-                </div>
-              )}
+                    {col.list.length === 0 ? (
+                      <p className="week-col-empty">
+                        {col.key === "now" ? "Nothing due today — pull something forward." : "Nothing else scheduled this week."}
+                      </p>
+                    ) : (
+                      <div className="task-column-list">
+                        {col.list.slice(0, 6).map((task, i) => (
+                          <div key={task.id} className="task-grid-item" style={{ animationDelay: `${Math.min(i, 12) * 28}ms` }}>
+                            <TaskCard
+                              compact
+                              task={task}
+                              project={taskStore.projects.find((p) => p.id === task.projectId)}
+                              onToggleDone={taskStore.toggleDone}
+                              onToggleDoing={taskStore.toggleDoing}
+                              onPatch={taskStore.patch}
+                              onOpen={setEditingTask}
+                              onDelete={taskStore.remove}
+                            />
+                          </div>
+                        ))}
+                        {col.list.length > 6 && (
+                          <Link href="/tasks" className="today-more">
+                            + {col.list.length - 6} more →
+                          </Link>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </section>
           </ErrorBoundary>
 
-          <div className="section-head">
-            <h2 className="section-title">Action Required</h2>
-            <Link href="/students" className="section-link">
-              All students →
-            </Link>
-          </div>
-          {actionRequiredStudents.length === 0 ? (
-            <EmptyState title="Nothing needs attention" hint="Every active student is up to date on payments." />
-          ) : (
-            <div className="card">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Student</th>
-                    <th>Plan</th>
-                    <th>Tuition</th>
-                    <th>Due Date</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {actionRequiredStudents.map((s) => {
-                    const status = studentPaymentStatus(s.nextPayment);
-                    return (
-                      <tr key={s.id}>
-                        <td>{s.name}</td>
-                        <td>{s.plan ?? "—"}</td>
-                        <td>{s.tuition !== undefined ? `$${s.tuition.toLocaleString()}` : "—"}</td>
-                        <td>{formatDateDMY(s.nextPayment)}</td>
-                        <td>
-                          <span className={`badge ${PAYMENT_STATUS_BADGE_CLASS[status]}`}>
-                            {PAYMENT_STATUS_LABEL[status]}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+          {/* Four charts as a 2x2 grid rather than a stack, so the whole
+              picture fits in about one screen below the week panel. */}
+          <div className="ov-charts">
+            <section className="card ov-chart">
+              <div className="ov-chart-head">
+                <h2 className="section-title">Cash flow</h2>
+                <select value={range} onChange={(e) => setRange(Number(e.target.value) as RangeOption)} aria-label="Range">
+                  {RANGE_OPTIONS.map((r) => (
+                    <option key={r} value={r}>
+                      Last {r} days
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <ResponsiveContainer width="100%" height={CHART_H}>
+                <BarChart data={cashFlowData}>
+                  <CartesianGrid stroke="var(--line)" vertical={false} />
+                  <XAxis dataKey="label" stroke="var(--ink-soft)" fontSize={11} />
+                  <YAxis stroke="var(--ink-soft)" fontSize={11} width={44} />
+                  <Tooltip
+                    contentStyle={TOOLTIP_STYLE}
+                    formatter={(value: number, name: string) => [
+                      `$${Math.abs(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
+                      name === "expenseNeg" ? "Expense" : "Income",
+                    ]}
+                  />
+                  <Bar dataKey="income" fill="var(--splash)" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="expenseNeg" fill="var(--bubble)" radius={[0, 0, 6, 6]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </section>
 
-          <div className="section-head" style={{ marginTop: 30 }}>
-            <h2 className="section-title" style={{ margin: 0 }}>
-              Cash Flow
-            </h2>
-            <div className="filter-bar" style={{ margin: 0 }}>
-              <span style={{ fontSize: 13, color: "var(--ink-soft)", fontWeight: 600 }}>Range</span>
-              <select value={range} onChange={(e) => setRange(Number(e.target.value) as RangeOption)}>
-                {RANGE_OPTIONS.map((r) => (
-                  <option key={r} value={r}>
-                    Last {r} days
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="card card-pad" style={{ marginTop: 10 }}>
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={cashFlowData}>
-                <CartesianGrid stroke="var(--line)" vertical={false} />
-                <XAxis dataKey="label" stroke="var(--ink-soft)" fontSize={12} />
-                <YAxis stroke="var(--ink-soft)" fontSize={12} />
-                <Tooltip
-                  contentStyle={{ borderRadius: 12, border: "1px solid var(--line)", background: "var(--white)", color: "var(--ink)" }}
-                  formatter={(value: number, name: string) => [
-                    `$${Math.abs(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
-                    name === "expenseNeg" ? "Expense" : "Income",
-                  ]}
-                />
-                <Bar dataKey="income" fill="var(--splash)" radius={[6, 6, 0, 0]} />
-                <Bar dataKey="expenseNeg" fill="var(--bubble)" radius={[0, 0, 6, 6]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="grid grid-cards" style={{ marginTop: 30 }}>
-            <div>
-              <h2 className="section-title">Expenses by Category</h2>
-              <div className="card card-pad">
-                {donutData.length === 0 ? (
-                  <EmptyState title="No expenses in this range" />
-                ) : (
-                  <ResponsiveContainer width="100%" height={240}>
-                    <PieChart>
-                      <Pie data={donutData} dataKey="value" nameKey="category" innerRadius={54} outerRadius={84} paddingAngle={2}>
-                        {donutData.map((d, i) => (
-                          <Cell key={d.category} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
-                        ))}
-                      </Pie>
-                      <Legend wrapperStyle={{ fontSize: 12 }} />
-                      <Tooltip
-                        contentStyle={{ borderRadius: 12, border: "1px solid var(--line)", background: "var(--white)", color: "var(--ink)" }}
-                        formatter={(value: number) => `$${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
-                      />
-                    </PieChart>
+            <section className="card ov-chart">
+              <div className="ov-chart-head">
+                <h2 className="section-title">Channel trend</h2>
+                <span className="section-meta">Revenue vs ad spend</span>
+              </div>
+              {kpiError && <FetchFailedState message={kpiError} />}
+              {!kpiError && !channelWindowed && <div className="state-box">Loading channel KPIs…</div>}
+              {!kpiError && channelWindowed && (
+                <ErrorBoundary label="the channel trend chart">
+                  <ResponsiveContainer width="100%" height={CHART_H}>
+                    <LineChart data={channelWindowed.merged}>
+                      <CartesianGrid stroke="var(--line)" vertical={false} />
+                      <XAxis dataKey="date" stroke="var(--ink-soft)" fontSize={11} />
+                      <YAxis stroke="var(--ink-soft)" fontSize={11} width={44} />
+                      <Tooltip contentStyle={TOOLTIP_STYLE} />
+                      <Line type="monotone" dataKey="revenue" name="Revenue" stroke="var(--mango-ink)" strokeWidth={2} dot={false} />
+                      <Line type="monotone" dataKey="spend" name="Ad spend" stroke="var(--sky-ink)" strokeWidth={2} dot={false} />
+                    </LineChart>
                   </ResponsiveContainer>
-                )}
-              </div>
-            </div>
+                </ErrorBoundary>
+              )}
+            </section>
 
-            <div>
-              <h2 className="section-title">New Students / Month</h2>
-              <div className="card card-pad">
-                <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={enrollmentData}>
-                    <CartesianGrid stroke="var(--line)" vertical={false} />
-                    <XAxis dataKey="month" stroke="var(--ink-soft)" fontSize={12} />
-                    <YAxis stroke="var(--ink-soft)" fontSize={12} allowDecimals={false} />
-                    <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid var(--line)", background: "var(--white)", color: "var(--ink)" }} />
-                    <Bar dataKey="count" fill="var(--splash)" radius={[6, 6, 0, 0]} />
-                  </BarChart>
+            <section className="card ov-chart">
+              <div className="ov-chart-head">
+                <h2 className="section-title">Expenses by category</h2>
+                <span className="section-meta">Last {range} days</span>
+              </div>
+              {donutData.length === 0 ? (
+                <EmptyState title="No expenses in this range" />
+              ) : (
+                <ResponsiveContainer width="100%" height={CHART_H}>
+                  <PieChart>
+                    <Pie data={donutData} dataKey="value" nameKey="category" innerRadius={48} outerRadius={74} paddingAngle={2}>
+                      {donutData.map((d, i) => (
+                        <Cell key={d.category} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
+                      ))}
+                    </Pie>
+                    <Legend layout="vertical" align="right" verticalAlign="middle" wrapperStyle={{ fontSize: 12 }} />
+                    <Tooltip
+                      contentStyle={TOOLTIP_STYLE}
+                      formatter={(value: number) => `$${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
+                    />
+                  </PieChart>
                 </ResponsiveContainer>
-              </div>
-            </div>
+              )}
+            </section>
 
-            <div>
-              <h2 className="section-title">Students by Plan</h2>
-              <div className="card card-pad">
-                {planGroupData.length === 0 ? (
-                  <EmptyState title="No students yet" />
-                ) : (
-                  <ResponsiveContainer width="100%" height={240}>
-                    <PieChart>
-                      <Pie
-                        data={planGroupData}
-                        dataKey="value"
-                        nameKey="name"
-                        innerRadius={54}
-                        outerRadius={84}
-                        paddingAngle={2}
-                      >
-                        {planGroupData.map((d, i) => (
-                          <Cell key={d.name} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
-                        ))}
-                      </Pie>
-                      <Legend wrapperStyle={{ fontSize: 12 }} />
-                      <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid var(--line)", background: "var(--white)", color: "var(--ink)" }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                )}
+            <section className="card ov-chart">
+              <div className="ov-chart-head">
+                <h2 className="section-title">New students / month</h2>
+                <span className="section-meta">Last 6 months</span>
               </div>
-            </div>
+              <ResponsiveContainer width="100%" height={CHART_H}>
+                <BarChart data={enrollmentData}>
+                  <CartesianGrid stroke="var(--line)" vertical={false} />
+                  <XAxis dataKey="month" stroke="var(--ink-soft)" fontSize={11} />
+                  <YAxis stroke="var(--ink-soft)" fontSize={11} allowDecimals={false} width={32} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
+                  <Bar dataKey="count" fill="var(--splash)" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </section>
           </div>
-
-          <h2 className="section-title">Channel Trend</h2>
-          {kpiError && <FetchFailedState message={kpiError} />}
-          {!kpiError && !kpiData && <div className="state-box">Loading channel KPIs…</div>}
-          {!kpiError && kpiData && channelWindowed && (
-            <ErrorBoundary label="the channel trend chart">
-              <div className="card card-pad">
-                <ResponsiveContainer width="100%" height={220}>
-                  <LineChart data={channelWindowed.merged}>
-                    <CartesianGrid stroke="var(--line)" vertical={false} />
-                    <XAxis dataKey="date" stroke="var(--ink-soft)" fontSize={12} />
-                    <YAxis stroke="var(--ink-soft)" fontSize={12} />
-                    <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid var(--line)", background: "var(--white)", color: "var(--ink)" }} />
-                    <Line type="monotone" dataKey="revenue" name="Revenue" stroke="var(--mango-ink)" strokeWidth={2} dot={false} />
-                    <Line type="monotone" dataKey="spend" name="Ad spend" stroke="var(--sky-ink)" strokeWidth={2} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </ErrorBoundary>
-          )}
         </div>
 
         <aside className="ov-side">
-          <ErrorBoundary label="the Overview KPI rail">
-            <div className="ov-side-title">At a glance</div>
+          <ErrorBoundary label="the Overview side rail">
+            <div className="ov-side-title">This month</div>
             <div className="grid grid-kpis-side">
-              <KpiCard label="Active Students" value={String(activeStudents)} />
-              <KpiCard label="Revenue This Month" value={`$${thisMonthRevenue.toLocaleString(undefined, { maximumFractionDigits: 2 })}`} />
+              <KpiCard label="Revenue" value={money(month.income)} />
+              <KpiCard label="Expenses" value={money(month.expense)} />
+              <KpiCard label="Net" value={money(month.income - month.expense)} highlight />
+              <KpiCard label="Active students" value={String(activeStudents)} />
             </div>
 
             {!kpiError && kpiData && channelWindowed && (
               <>
-                <div className="ov-side-title">Channels ({range}d)</div>
+                <div className="ov-side-title">Channels</div>
                 <div className="grid grid-kpis-side">
                   <KpiCard
                     label="Revenue (Stripe)"
@@ -525,11 +506,69 @@ export default function OverviewPage() {
                     demo={kpiData.sources.revenue === "demo"}
                   />
                   <KpiCard
-                    label="Ad Spend (Social)"
+                    label="Ad spend"
                     value={`$${channelWindowed.totalSpend.toFixed(2)}`}
                     delta={{ pct: channelWindowed.spendDelta, label: "vs prior" }}
                     demo={kpiData.sources.ads === "demo"}
                   />
+                </div>
+              </>
+            )}
+
+            {/* Who needs chasing: a compact list instead of a full-width
+                table, so the exception sits beside the numbers it affects. */}
+            <div className="ov-side-head">
+              <div className="ov-side-title">
+                Action required{actionRequiredStudents.length > 0 ? ` · ${actionRequiredStudents.length}` : ""}
+              </div>
+              <Link href="/students" className="section-link">
+                Students →
+              </Link>
+            </div>
+            <div className="card ov-list">
+              {actionRequiredStudents.length === 0 ? (
+                <p className="ov-list-empty">Every active student is up to date.</p>
+              ) : (
+                <>
+                  {actionRequiredStudents.slice(0, 6).map((s) => {
+                    const status = studentPaymentStatus(s.nextPayment);
+                    return (
+                      <div key={s.id} className="ov-list-row">
+                        <div className="ov-list-main">
+                          <span className="ov-list-name">{s.name}</span>
+                          <span className="ov-list-sub">
+                            {s.tuition !== undefined ? `$${s.tuition.toLocaleString()} · ` : ""}due {formatDateDMY(s.nextPayment)}
+                          </span>
+                        </div>
+                        <span className={`badge ${PAYMENT_STATUS_BADGE_CLASS[status]}`}>{PAYMENT_STATUS_LABEL[status]}</span>
+                      </div>
+                    );
+                  })}
+                  {actionRequiredStudents.length > 6 && (
+                    <Link href="/students" className="today-more">
+                      + {actionRequiredStudents.length - 6} more →
+                    </Link>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Plan mix as ranked bars: reads faster than a donut and costs a third of the height. */}
+            {planGroupData.length > 0 && (
+              <>
+                <div className="ov-side-title">Students by plan</div>
+                <div className="card ov-list">
+                  {planGroupData.map((p) => (
+                    <div key={p.name} className="ov-bar-row">
+                      <div className="ov-bar-label">
+                        <span>{p.name}</span>
+                        <strong>{p.value}</strong>
+                      </div>
+                      <div className="ov-bar-track">
+                        <span style={{ transform: `scaleX(${p.value / planGroupData[0].value})` }} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </>
             )}

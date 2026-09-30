@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import CardMenu from "@/components/tasks/CardMenu";
-import { subtaskProgress } from "@/lib/tasks";
+import { daysUntil, HORIZON_DAYS, subtaskProgress, weekdayShort } from "@/lib/tasks";
 import { addDays, formatDateDMY, localDateIso } from "@/lib/dateUtils";
 import type { Project, Task } from "@/lib/types";
 
@@ -40,14 +40,21 @@ export default function TaskCard({
   const today = localDateIso();
   const progress = subtaskProgress(task);
   const overdue = task.status !== "done" && task.due !== null && task.due < today;
+  // A countdown reads faster than a date: "Fri · 3d" says both when and how
+  // long is left, and "2d late" says how far behind without doing sums.
+  const days = daysUntil(task.due, today);
   const dueLabel =
-    task.due === null
+    task.due === null || days === null
       ? null
-      : task.due === today
-        ? "Today"
-        : task.due === addDays(today, 1)
-          ? "Tomorrow"
-          : formatDateDMY(task.due);
+      : days < 0
+        ? `${-days}d late`
+        : days === 0
+          ? "Today"
+          : days === 1
+            ? "Tomorrow"
+            : days < HORIZON_DAYS
+              ? `${weekdayShort(task.due)} · ${days}d`
+              : formatDateDMY(task.due);
 
   function tick(e: React.MouseEvent) {
     e.stopPropagation();

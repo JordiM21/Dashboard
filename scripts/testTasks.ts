@@ -12,7 +12,12 @@ import {
   bucketOf,
   compareTasks,
   hasTag,
+  daysUntil,
   isOnDeck,
+  isOnRadar,
+  weekDates,
+  weekProgress,
+  weekStart,
   parseQuickTask,
   projectProgress,
   subtaskProgress,
@@ -76,6 +81,33 @@ assert.ok(isOnDeck({ ...base, status: "doing" }, today), "in-flight with no date
 assert.ok(isOnDeck({ ...base, due: "2026-08-01" }, today), "overdue is on deck");
 assert.ok(!isOnDeck({ ...base, due: "2026-09-05" }, today), "a future task is not on deck");
 assert.ok(!isOnDeck({ ...base, due: today, status: "done" }, today), "a finished task is never on deck");
+
+// --- Radar / week -----------------------------------------------------------
+assert.ok(isOnRadar({ ...base, due: "2026-09-04" }, today), "a task due tomorrow is on the radar");
+assert.ok(isOnRadar({ ...base, due: "2026-09-09" }, today), "six days out is still this week");
+assert.ok(!isOnRadar({ ...base, due: "2026-09-10" }, today), "seven days out is next week");
+assert.ok(isOnRadar({ ...base, due: "2026-08-01" }, today), "overdue stays on the radar");
+assert.ok(!isOnRadar({ ...base, due: null }, today), "undated todo is backlog, not radar");
+assert.equal(weekDates(today).length, 7);
+assert.equal(weekDates(today)[0], today);
+assert.equal(daysUntil("2026-09-05", today), 2);
+assert.equal(daysUntil("2026-09-01", today), -2);
+assert.equal(daysUntil(null, today), null);
+assert.equal(weekStart(today), "2026-08-31", "Thursday's week starts on Monday");
+assert.equal(weekStart("2026-09-06"), "2026-08-31", "Sunday belongs to the week that started Monday");
+assert.equal(weekStart("2026-08-31"), "2026-08-31", "Monday is its own week start");
+assert.deepEqual(
+  weekProgress(
+    [
+      { ...base, id: "1", status: "done", completedAt: "2026-09-01T10:00:00Z" },
+      { ...base, id: "2", status: "done", completedAt: "2026-08-20T10:00:00Z" },
+      { ...base, id: "3", due: "2026-09-05" },
+    ],
+    today
+  ),
+  { done: 1, open: 1, pct: 50 },
+  "only this week's completions count"
+);
 
 // --- Progress ---------------------------------------------------------------
 assert.equal(subtaskProgress(base), 0, "no subtasks is 0%, not 100%");

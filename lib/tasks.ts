@@ -102,6 +102,60 @@ export function isOnDeck(task: Task, today = localDateIso()): boolean {
   return task.due !== null && task.due <= today;
 }
 
+/** How far ahead "this week" looks. Rolling, not Mon–Sun, so Sunday night still shows the week ahead instead of nothing. */
+export const HORIZON_DAYS = 7;
+
+/** Today plus the next six days — the Week board's columns and the Overview's day strip. */
+export function weekDates(today = localDateIso()): string[] {
+  return Array.from({ length: HORIZON_DAYS }, (_, i) => addDays(today, i));
+}
+
+/**
+ * The Overview's question: what am I carrying right now? A task due Friday
+ * is on the radar all week, not just on Friday — that's the difference from
+ * isOnDeck, which only answers "what has to happen today".
+ */
+export function isOnRadar(task: Task, today = localDateIso()): boolean {
+  if (task.status === "done") return false;
+  if (task.status === "doing") return true;
+  return task.due !== null && task.due <= addDays(today, HORIZON_DAYS - 1);
+}
+
+/** Whole days from today to the due date: negative when overdue, null when undated. */
+export function daysUntil(due: string | null, today = localDateIso()): number | null {
+  if (!due) return null;
+  const toUtc = (iso: string) => {
+    const [y, m, d] = iso.split("-").map(Number);
+    return Date.UTC(y, m - 1, d);
+  };
+  return Math.round((toUtc(due) - toUtc(today)) / 86400000);
+}
+
+/** "Fri" for "YYYY-MM-DD" — local calendar day, never UTC-shifted. */
+export function weekdayShort(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("en-US", { weekday: "short" });
+}
+
+/** Monday of the current calendar week — what "done this week" counts from. */
+export function weekStart(today = localDateIso()): string {
+  const [y, m, d] = today.split("-").map(Number);
+  const dow = new Date(y, m - 1, d).getDay(); // 0 = Sunday
+  return addDays(today, -((dow + 6) % 7));
+}
+
+/**
+ * The week's scoreboard: what's been finished since Monday against what's
+ * still on the radar. `pct` is of the two together, so finishing a task
+ * moves the bar and adding one moves it back — honest in both directions.
+ */
+export function weekProgress(tasks: Task[], today = localDateIso()): { done: number; open: number; pct: number } {
+  const since = weekStart(today);
+  const done = tasks.filter((t) => t.status === "done" && (t.completedAt ?? "").slice(0, 10) >= since).length;
+  const open = tasks.filter((t) => isOnRadar(t, today)).length;
+  return { done, open, pct: done + open === 0 ? 0 : Math.round((done / (done + open)) * 100) };
+}
+
 /** Completed today — the night review's "here's what you actually got done" list. */
 export function completedToday(tasks: Task[], today = localDateIso()): Task[] {
   return tasks.filter((t) => t.status === "done" && (t.completedAt ?? "").slice(0, 10) === today);
