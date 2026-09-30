@@ -313,14 +313,14 @@ export default function FinancePage() {
                         aria-label="Select all"
                       />
                     </th>
-                    <th>Date</th>
-                    <th>Description</th>
+                    <th className="ledger-date">Date</th>
+                    <th className="ledger-pin-left">Description</th>
                     <th>Category</th>
                     <th>Student</th>
                     <th>Original</th>
                     <th>Source</th>
-                    <th>Amount (USD)</th>
                     <th></th>
+                    <th className="ledger-pin-right">Amount (USD)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -336,8 +336,11 @@ export default function FinancePage() {
                             aria-label={`Select ${e.description || e.date}`}
                           />
                         </td>
-                        <td>{formatDateDMY(e.date)}</td>
-                        <td>{e.description}</td>
+                        <td className="ledger-date">{formatDateDMY(e.date)}</td>
+                        <td className="ledger-pin-left">
+                          {e.description}
+                          <span className="ledger-date-sub">{formatDateDMY(e.date)}</span>
+                        </td>
                         <td>
                           <span className="tag">{e.category}</span>
                         </td>
@@ -364,9 +367,6 @@ export default function FinancePage() {
                             {SOURCE_LABEL[e.source ?? "manual"]}
                           </span>
                         </td>
-                        <td style={{ fontWeight: 700, color: e.amount >= 0 ? "var(--success)" : "var(--danger)" }}>
-                          {money(e.amount)}
-                        </td>
                         <td>
                           <div style={{ display: "flex", gap: 8 }}>
                             <button className="btn btn-secondary btn-sm" onClick={() => setEditingEntry(e)}>
@@ -376,6 +376,15 @@ export default function FinancePage() {
                               Delete
                             </button>
                           </div>
+                        </td>
+                        {/* Last column and pinned right, with the description
+                            pinned left: on a phone the middle scrolls and
+                            "who / how much" never leaves the screen. */}
+                        <td
+                          className="ledger-pin-right"
+                          style={{ fontWeight: 700, color: e.amount >= 0 ? "var(--success)" : "var(--danger)" }}
+                        >
+                          {money(e.amount)}
                         </td>
                       </tr>
                     );

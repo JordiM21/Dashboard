@@ -1569,6 +1569,38 @@ html {
   background: var(--cream);
 }
 
+/* Finance ledger: the date never breaks at its dashes, and the description
+   (left) and amount (right) stay pinned while the middle columns scroll
+   sideways inside the card on a narrow screen. Pinned cells need their own
+   background or the scrolling cells show through them. */
+.ledger-date {
+  white-space: nowrap;
+}
+
+.ledger-pin-left,
+.ledger-pin-right {
+  position: sticky;
+  z-index: 1;
+  background: var(--white);
+}
+
+.ledger-pin-left {
+  left: 0;
+  min-width: 140px;
+  max-width: 220px;
+}
+
+.ledger-pin-right {
+  right: 0;
+  text-align: right;
+  white-space: nowrap;
+  box-shadow: -8px 0 12px -10px rgba(28, 22, 32, 0.25);
+}
+
+td.ledger-pin-left {
+  box-shadow: 8px 0 12px -10px rgba(28, 22, 32, 0.25);
+}
+
 /* ---------- Tags / badges ---------- */
 
 .badge {
@@ -5617,5 +5649,38 @@ html {
 @media (max-width: 800px) {
   .ov-charts {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .ledger-pin-left {
+    min-width: 110px;
+    max-width: 38vw;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* Phones: the date rides under the description instead of taking its own
+   column, so description + amount both fit on screen without scrolling. */
+.ledger-date-sub {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .data-table .ledger-date {
+    display: none;
+  }
+
+  .ledger-date-sub {
+    display: block;
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin-top: 2px;
+    white-space: nowrap;
+  }
+
+  .ledger-pin-left {
+    min-width: 150px;
+    max-width: 48vw;
   }
 }
