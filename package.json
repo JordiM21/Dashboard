@@ -15,9 +15,14 @@
     "check:reminders": "tsx scripts/checkPaymentReminders.ts"
   },
   "dependencies": {
+    "@phosphor-icons/react": "^2.1.7",
+    "@types/canvas-confetti": "^1.6.4",
+    "canvas-confetti": "^1.9.3",
     "firebase": "^10.13.1",
     "firebase-admin": "^12.4.0",
+    "geist": "^1.3.1",
     "gray-matter": "^4.0.3",
+    "motion": "^11.18.2",
     "next": "14.2.35",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

@@ -1,0 +1,60 @@
+/**
+ * Smallest runnable check for the rules that would silently break:
+ * quick-add parsing, XP/level math and the streak walk.
+ *   npx tsx lib/hub/check.ts
+ */
+import assert from "node:assert/strict";
+import { parseQuickAdd } from "./parse";
+import { levelFromXp, streak, taskXp, xpForLevel } from "./game";
+import { addDays, today } from "./util";
+import type { HubState, Task } from "./types";
+
+const ctx = {
+  areas: [{ id: "let", name: "LET Junior" }, { id: "home", name: "Home" }],
+  projects: [{ id: "meta", name: "Meta campaign" }],
+  students: [{ id: "s1", name: "Valentina Ruiz" }],
+  collections: [{ id: "games", name: "Games backlog" }],
+};
+const base = "2026-10-18"; // a Sunday
+
+let p = parseQuickAdd("Call parent tomorrow #let !1 @valentina +meta", ctx, base);
+assert.equal(p.title, "Call parent");
+assert.equal(p.due, "2026-10-19");
+assert.deepEqual([p.areaId, p.priority, p.studentId, p.projectId], ["let", 1, "s1", "meta"]);
+
+p = parseQuickAdd("Pay rent fri", ctx, base);
+assert.equal(p.due, "2026-10-23");
+p = parseQuickAdd("Review next week #nope", ctx, base);
+assert.equal(p.due, "2026-10-19");
+assert.equal(p.title, "Review #nope");
+p = parseQuickAdd("/games Elden Ring", ctx, base);
+assert.deepEqual([p.collectionId, p.title, p.due], ["games", "Elden Ring", null]);
+p = parseQuickAdd("Book flights 02-01", ctx, base);
+assert.equal(p.due, "2027-01-02");
+
+assert.equal(xpForLevel(1), 100);
+assert.equal(xpForLevel(10), 3162);
+assert.deepEqual(levelFromXp(0).level, 1);
+assert.deepEqual(levelFromXp(100).level, 2);
+assert.equal(levelFromXp(99).level, 1);
+
+const old = { priority: 1 as const, estimate: 60, createdAt: "2026-01-01T00:00:00Z", recurrence: null };
+assert.equal(taskXp(old, new Date(), 0), 52);
+assert.equal(taskXp(old, new Date(), 400), 13);
+assert.equal(taskXp({ ...old, createdAt: new Date().toISOString() }, new Date(), 0), 2);
+
+// Streak: 3 counted days ending yesterday, today not yet counted.
+const t = today();
+const mk = (day: string, n: number): Task[] =>
+  Array.from({ length: n }, (_, i) => ({ id: day + i, scheduled: day, due: null, completedAt: day + "T10:00:00", status: "done" } as Task));
+const days = [3, 2, 1].map((n) => addDays(t, -n));
+const s: Pick<HubState, "tasks" | "game" | "settings"> = {
+  tasks: days.flatMap((d) => mk(d, 3)),
+  game: { dayPlans: Object.fromEntries(days.map((d) => [d, { at: d, taskIds: [] }])) } as unknown as HubState["game"],
+  settings: { restDay: 9 } as HubState["settings"],
+};
+assert.equal(streak(s).current, 3);
+s.tasks = s.tasks.filter((x) => !x.id.startsWith(days[1])); // miss the middle day, no freeze banked
+assert.equal(streak(s).current, 1);
+
+console.log("hub checks passed");

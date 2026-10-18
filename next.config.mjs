@@ -11,7 +11,7 @@ const nextConfig = {
     unoptimized: true
   },
   experimental: {
-    optimizePackageImports: ["recharts", "react-markdown"]
+    optimizePackageImports: ["@phosphor-icons/react", "react-markdown"]
   }
 };
 

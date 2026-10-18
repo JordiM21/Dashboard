@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp, type FirebaseOptions } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, type Firestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
 /**
@@ -22,5 +22,15 @@ const firebaseConfig: FirebaseOptions = {
 
 // getApps() guard avoids "Firebase App named '[DEFAULT]' already exists" on Next.js hot reload.
 export const firebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
-export const db = getFirestore(firebaseApp);
+// Local-first: in the browser Firestore keeps its last known state in
+// IndexedDB, so repeat opens paint from cache and refresh behind it.
+function makeDb(): Firestore {
+  if (typeof window === "undefined") return getFirestore(firebaseApp);
+  try {
+    return initializeFirestore(firebaseApp, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+  } catch {
+    return getFirestore(firebaseApp); // already initialised (hot reload)
+  }
+}
+export const db = makeDb();
 export const auth = getAuth(firebaseApp);

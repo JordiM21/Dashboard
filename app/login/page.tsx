@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
-import LoadingLabel from "@/components/LoadingLabel";
+
 
 function friendlyAuthError(code: string | undefined): string {
   switch (code) {
@@ -36,7 +36,7 @@ export default function LoginPage() {
 
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      router.replace("/overview");
+      router.replace("/today");
     } catch (err: any) {
       setError(friendlyAuthError(err?.code));
     } finally {
@@ -45,16 +45,16 @@ export default function LoginPage() {
   }
 
   return (
-    <main style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <form onSubmit={handleSubmit} className="card card-pad" style={{ width: "100%", maxWidth: 380 }}>
-        <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>My Dashboard</div>
-        <div style={{ fontSize: 14, color: "var(--ink-soft)", marginTop: 4, marginBottom: 24 }}>
+    <main className="login">
+      <form onSubmit={handleSubmit} className="card col" style={{ width: "100%", maxWidth: 380 }}>
+        <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>Hub</div>
+        <div style={{ fontSize: 14, color: "var(--text-2)", marginTop: 4, marginBottom: 24 }}>
           Sign in to continue
         </div>
 
-        <div className="form-row">
+        <div className="field">
           <label>Email</label>
-          <input
+          <input className="input"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -63,9 +63,9 @@ export default function LoginPage() {
             required
           />
         </div>
-        <div className="form-row">
+        <div className="field">
           <label>Password</label>
-          <input
+          <input className="input"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -82,7 +82,7 @@ export default function LoginPage() {
           disabled={submitting}
           style={{ width: "100%", justifyContent: "center", marginTop: 4 }}
         >
-          <LoadingLabel loading={submitting}>Sign In</LoadingLabel>
+          {submitting ? "Signing in…" : "Sign in"}
         </button>
       </form>
     </main>
