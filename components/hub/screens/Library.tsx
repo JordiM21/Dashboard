@@ -120,7 +120,7 @@ export default function Library() {
           </>
         ) : folder ? (
           <>
-            <div className="row" style={{ marginBottom: 20 }}>
+            <div className="row head-row" style={{ marginBottom: 20 }}>
               <button className="icon-btn" aria-label="Back" onClick={() => setFolder(null)}>
                 <ArrowLeft size={18} />
               </button>

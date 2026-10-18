@@ -12,7 +12,8 @@
     "migrate:markdown": "tsx scripts/migrateMarkdownToFirebase.ts",
     "seed:test-students": "tsx scripts/seedTestStudents.ts",
     "audit:firestore": "tsx scripts/auditFirestore.ts",
-    "check:reminders": "tsx scripts/checkPaymentReminders.ts"
+    "check:reminders": "tsx scripts/checkPaymentReminders.ts",
+    "dev:phone": "next dev --turbo -H 0.0.0.0 -p 3001"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.7",

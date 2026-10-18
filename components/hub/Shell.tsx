@@ -21,6 +21,7 @@ import { isFocus, streak } from "@/lib/hub/game";
 import { monthKey, prevMonth, today } from "@/lib/hub/util";
 import type { Area } from "@/lib/hub/types";
 import Sidebar from "./Sidebar";
+import { Fab, MoreSheet, PlayerChip, PlayerSheet, TabBar } from "./MobileNav";
 import Dock from "./Dock";
 import Inspector from "./Inspector";
 import { Palette, QuickAdd, Toasts } from "./Overlays";
@@ -39,6 +40,8 @@ interface HubCtx {
   lessonLog: (groupId?: string) => void;
   planDay: () => void;
   settings: () => void;
+  mobile: boolean;
+  player: () => void;
 }
 
 const Ctx = createContext<HubCtx>(null as unknown as HubCtx);
@@ -58,7 +61,8 @@ const isTyping = (e: KeyboardEvent) => {
 };
 
 function useWidth() {
-  const [w, setW] = useState(1600);
+  // The shell only renders client-side, so the real width is known on first paint — no desktop flash on phones.
+  const [w, setW] = useState(() => (typeof window === "undefined" ? 1600 : innerWidth));
   useEffect(() => {
     const f = () => setW(innerWidth);
     f();
@@ -92,7 +96,7 @@ export default function Shell({ children }: { children: ReactNode }) {
 
 function BootSkeleton() {
   return (
-    <div className="hub">
+    <div className="hub boot">
       <aside className="sidebar">
         {Array.from({ length: 9 }, (_, i) => (
           <div key={i} className="skeleton" style={{ height: 24, margin: "6px 4px" }} />
@@ -125,6 +129,9 @@ function Ready({ children }: { children: ReactNode }) {
   const [plan, setPlan] = useState(false);
   const [settings, setSettings] = useState(false);
   const [cheats, setCheats] = useState(false);
+  const [more, setMore] = useState(false);
+  const [player, setPlayer] = useState(false);
+  const mobile = width < 768;
 
   const sb = s.settings.sidebar === "auto" ? (width < 1280 ? "rail" : "open") : s.settings.sidebar;
   const dock = s.settings.dock === "auto" ? (width < 1440 ? "rail" : "open") : s.settings.dock;
@@ -144,8 +151,11 @@ function Ready({ children }: { children: ReactNode }) {
     return () => mq.removeEventListener("change", apply);
   }, [s.settings.theme]);
 
-  // close the inspector on navigation
-  useEffect(() => setRec(null), [pathname]);
+  // close the inspector (and phone sheets) on navigation
+  useEffect(() => {
+    setRec(null);
+    setMore(false);
+  }, [pathname]);
 
   const ctx = useMemo<HubCtx>(
     () => ({
@@ -156,8 +166,10 @@ function Ready({ children }: { children: ReactNode }) {
       lessonLog: (g) => setLog(g ?? null),
       planDay: () => setPlan(true),
       settings: () => setSettings(true),
+      mobile,
+      player: () => setPlayer(true),
     }),
-    [rec]
+    [rec, mobile]
   );
 
   useEffect(() => {
@@ -242,16 +254,29 @@ function Ready({ children }: { children: ReactNode }) {
     <MotionConfig reducedMotion={s.settings.game === "off" ? "always" : "user"}>
       <Ctx.Provider value={ctx}>
         <MenuProvider>
-          <div className="hub" data-sb={sb} data-dock={dock} data-inspector={rec ? "open" : "closed"}>
-            <Sidebar rail={sb === "rail"} />
-            <main className="main" id="main">
-              {children}
-            </main>
-            <aside className="right">
-              {s.settings.game !== "off" ? <Dock rail={dock === "rail" && !rec} /> : <div className="dock" />}
-              <AnimatePresence>{rec && <Inspector key={rec.kind + rec.id} rec={rec} onClose={() => setRec(null)} />}</AnimatePresence>
-            </aside>
-          </div>
+          {mobile ? (
+            <div className="hub hub-mobile" data-inspector={rec ? "open" : "closed"}>
+              <main className="main" id="main">
+                {children}
+              </main>
+              <Fab onClick={() => setQa("")} hidden={!!rec || more || player} />
+              <TabBar onMore={() => setMore(!more)} moreOpen={more} />
+              <AnimatePresence>{rec && <Inspector key={rec.kind + rec.id} rec={rec} onClose={() => setRec(null)} mobile />}</AnimatePresence>
+              <MoreSheet open={more} onClose={() => setMore(false)} onSearch={() => setPal(true)} onSettings={() => setSettings(true)} />
+              {s.settings.game !== "off" && <PlayerSheet open={player} onClose={() => setPlayer(false)} />}
+            </div>
+          ) : (
+            <div className="hub" data-sb={sb} data-dock={dock} data-inspector={rec ? "open" : "closed"}>
+              <Sidebar rail={sb === "rail"} />
+              <main className="main" id="main">
+                {children}
+              </main>
+              <aside className="right">
+                {s.settings.game !== "off" ? <Dock rail={dock === "rail" && !rec} /> : <div className="dock" />}
+                <AnimatePresence>{rec && <Inspector key={rec.kind + rec.id} rec={rec} onClose={() => setRec(null)} />}</AnimatePresence>
+              </aside>
+            </div>
+          )}
           <Palette open={pal} onClose={() => setPal(false)} />
           <QuickAdd value={qa} onClose={() => setQa(null)} />
           <LessonLogSheet groupId={log} onClose={() => setLog(undefined)} />
@@ -275,7 +300,20 @@ function Ready({ children }: { children: ReactNode }) {
  */
 export function Toolbar({ title, children, areas: aware = true }: { title: string; children?: ReactNode; areas?: boolean }) {
   const { area, areas } = useArea();
-  const { quickAdd } = useShell();
+  const { quickAdd, mobile, player } = useShell();
+  const game = useHub().settings.game !== "off";
+  if (mobile)
+    return (
+      <header className="toolbar toolbar-mobile">
+        <div className="row" style={{ width: "100%" }}>
+          <span className="toolbar-title">{title}</span>
+          {aware && <AreaFilter area={area} areas={areas} />}
+          <span className="spacer" />
+          {game && <PlayerChip onClick={player} />}
+        </div>
+        {children && <div className="toolbar-tools">{children}</div>}
+      </header>
+    );
   return (
     <header className="toolbar">
       <span className="toolbar-title">{title}</span>
@@ -370,6 +408,8 @@ function useAutomations() {
     // Overdue payment → follow-up task.
     for (const r of receivables(live, st)) {
       if (r.status !== "late") continue;
+      // One open follow-up per student is enough, whatever the due date says.
+      if (getState().tasks.some((t) => t.studentId === r.student.id && t.title.startsWith("Follow up with") && !t.archivedAt && t.status !== "done")) continue;
       if (A.markAutomation(`follow:${r.student.id}:${r.student.nextPayment}`)) {
         A.addTask({ title: `Follow up with ${r.student.name}'s parent`, areaId: "let", priority: 1, due: today(), studentId: r.student.id, notes: `Payment ${r.days} days overdue.` });
       }

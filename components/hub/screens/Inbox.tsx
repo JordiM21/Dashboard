@@ -87,7 +87,7 @@ export default function Inbox() {
         </header>
 
         {items.length > 0 && (
-          <div className="row" style={{ flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
+          <div className="row inbox-keys" style={{ flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
             {keys.map(([k, l]) => (
               <span key={k} className="caption muted row" style={{ gap: 6 }}>
                 <span className="kbd">{k}</span>

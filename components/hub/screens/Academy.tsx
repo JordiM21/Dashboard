@@ -57,7 +57,7 @@ function Academy() {
       </Toolbar>
       <Fade className="canvas">
         <section aria-label="Capacity" style={{ marginBottom: 28 }}>
-          <div className="row" style={{ marginBottom: 12, alignItems: "baseline" }}>
+          <div className="row head-row" style={{ marginBottom: 12, alignItems: "baseline" }}>
             <h1 className="display-xl">Academy</h1>
             <span className="spacer" />
             <span className="display-l">{free}</span>
@@ -150,12 +150,13 @@ function Students() {
     [live.students, s.studentMeta, lc, q]
   );
   const [sel, setSel] = useState<string | null>(null);
+  const { mobile, inspect } = useShell();
   const selected = list.find((r) => r.x.id === sel)?.x.id ?? list[0]?.x.id;
   const count = (v: Lifecycle) => live.students.filter((x) => lifecycle(x, s.studentMeta[x.id]) === v).length;
 
   return (
     <>
-      <div className="row" style={{ marginBottom: 12 }}>
+      <div className="row head-row" style={{ marginBottom: 12 }}>
         <Segmented label="Lifecycle" size="sm" value={lc} onChange={setLc} options={[{ value: "all" as const, label: "All", count: live.students.length }, ...LC_ORDER.filter((v) => count(v) > 0 || v === "active").map((v) => ({ value: v, label: v[0].toUpperCase() + v.slice(1), count: count(v) }))]} />
         <span className="spacer" />
         <div className="row sb-search" style={{ width: 240, margin: 0 }}>
@@ -167,7 +168,7 @@ function Students() {
         <div className="card ld-list" role="listbox" aria-label="Students">
           {list.length === 0 && <Empty text="No students here." />}
           {list.map(({ x, lc: l, pay }) => (
-            <button key={x.id} className="ld-row" role="option" aria-selected={x.id === selected} onClick={() => setSel(x.id)}>
+            <button key={x.id} className="ld-row" role="option" aria-selected={x.id === selected} onClick={() => (mobile ? inspect({ kind: "student", id: x.id }) : setSel(x.id))}>
               <Avatar name={x.name} src={x.photoUrl} />
               <span className="grow col" style={{ gap: 0, minWidth: 0 }}>
                 <span className="truncate" style={{ fontWeight: 500 }}>

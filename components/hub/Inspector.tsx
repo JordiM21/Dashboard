@@ -14,19 +14,36 @@ import { lifecycle, members, price, tenureMonths, goalProgress } from "@/lib/hub
 import { studentPaymentStatus, PAYMENT_STATUS_LABEL } from "@/lib/studentStatus";
 import { formatDateDMY, money, nowIso, relDay, uid, today, hhmm } from "@/lib/hub/util";
 import type { Collection, FieldDef, Goal, Item, Note, Task, TaskStatus } from "@/lib/hub/types";
-import { Avatar, Check, Progress, Segmented, spring } from "./ui";
+import { Avatar, Check, Progress, Segmented, spring, useSheetDrag } from "./ui";
 import { CoverPicker, IconPicker } from "./Customize";
 import type { Rec } from "./Shell";
 
-export default function Inspector({ rec, onClose }: { rec: Rec; onClose: () => void }) {
-  return (
-    <motion.div className="inspector" role="dialog" aria-label="Inspector" initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%", transition: { duration: 0.22, ease: [0.4, 0, 1, 1] } }} transition={spring.panel}>
+/** Desktop: slides in over the Dock. Phone: a full-height bottom sheet you can pull down to close. */
+export default function Inspector({ rec, onClose, mobile }: { rec: Rec; onClose: () => void; mobile?: boolean }) {
+  const drag = useSheetDrag(onClose);
+  const panels = (
+    <>
       {rec.kind === "task" && <TaskPanel id={rec.id} onClose={onClose} />}
       {rec.kind === "student" && <StudentPanel id={rec.id} onClose={onClose} />}
       {rec.kind === "note" && <NotePanel id={rec.id} onClose={onClose} />}
       {rec.kind === "item" && <ItemPanel id={rec.id} onClose={onClose} />}
       {rec.kind === "goal" && <GoalPanel id={rec.id} onClose={onClose} />}
       {rec.kind === "tx" && <TxPanel id={rec.id} onClose={onClose} />}
+    </>
+  );
+  if (mobile)
+    return (
+      <>
+        <motion.div className="scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
+        <motion.div className="inspector inspector-sheet" role="dialog" aria-label="Inspector" initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%", transition: { duration: 0.24, ease: [0.4, 0, 1, 1] } }} transition={spring.panel} {...drag}>
+          <div className="sheet-grab" aria-hidden />
+          {panels}
+        </motion.div>
+      </>
+    );
+  return (
+    <motion.div className="inspector" role="dialog" aria-label="Inspector" initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%", transition: { duration: 0.22, ease: [0.4, 0, 1, 1] } }} transition={spring.panel}>
+      {panels}
     </motion.div>
   );
 }

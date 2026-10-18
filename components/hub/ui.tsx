@@ -2,7 +2,7 @@
 
 /** Work-layer primitives (Design Guide §7). */
 import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useDragControls } from "motion/react";
 import {
   BookOpen, Books, CalendarHeart, Check as CheckIcon, Folder, GameController, Gift, GraduationCap, Heart, House, MapPin, Target, User, Star, Briefcase, Airplane, Barbell, MusicNotes, Camera, Code, Plant, PawPrint,
   Lightning, Rocket, Trophy, Coffee, Brain, Palette, Leaf, Sun, Moon, Car, Bicycle, ShoppingCart, Wallet, PiggyBank, ChartLine, Megaphone, ChatCircle, Envelope, Calendar, Clock, FilmSlate, Television, Headphones, Book, Pencil, Lightbulb, Flag, Sparkle, Globe, Mountains, Tree, Dog, Cat, Cake, Basketball, SoccerBall, Sword, Shield, Crown, Diamond, Key, Wrench, Hammer, PaintBrush, Flask, Atom, Laptop, DeviceMobile, Users, Baby, Bed, ForkKnife, Kanban, Note,
@@ -294,7 +294,47 @@ export function useDropdown() {
 
 /* ---------------------------------------------------------------- sheet */
 
+/** True on phone widths. Structure (tab bar, sheets) switches on this; styling uses the same 767px media query. */
+export function useMobile(): boolean {
+  const [m, setM] = useState(() => typeof window !== "undefined" && matchMedia("(max-width: 767px)").matches);
+  useEffect(() => {
+    const mq = matchMedia("(max-width: 767px)");
+    const f = () => setM(mq.matches);
+    f();
+    mq.addEventListener("change", f);
+    return () => mq.removeEventListener("change", f);
+  }, []);
+  return m;
+}
+
+/**
+ * Drag-to-dismiss for bottom sheets: drag starts from the grab handle or a
+ * heading (never from inputs or buttons), and a short fling or a 110px pull
+ * closes it — the iOS sheet gesture.
+ */
+export function useSheetDrag(onClose: () => void) {
+  const controls = useDragControls();
+  return {
+    drag: "y" as const,
+    dragListener: false,
+    dragControls: controls,
+    dragConstraints: { top: 0, bottom: 0 },
+    dragElastic: { top: 0.04, bottom: 0.9 },
+    onDragEnd: (_: unknown, i: { offset: { y: number }; velocity: { y: number } }) => (i.offset.y > 110 || i.velocity.y > 600) && onClose(),
+    onPointerDown: (e: React.PointerEvent) => {
+      const t = e.target as Element;
+      if (t.closest("button, a, input, textarea, select, [role=checkbox], .seg")) return;
+      const sheet = e.currentTarget as HTMLElement;
+      const body = sheet.querySelector(".insp-body") as HTMLElement | null;
+      const atTop = (body ?? sheet).scrollTop <= 0;
+      if (t.closest(".sheet-grab, .insp-head, h2") || (atTop && e.clientY - sheet.getBoundingClientRect().top < 72)) controls.start(e);
+    },
+  };
+}
+
 export function Sheet({ open, onClose, children, wide, label }: { open: boolean; onClose: () => void; children: ReactNode; wide?: boolean; label: string }) {
+  const mobile = useMobile();
+  const drag = useSheetDrag(onClose);
   useEffect(() => {
     if (!open) return;
     const k = (e: KeyboardEvent) => e.key === "Escape" && (e.stopPropagation(), onClose());
@@ -306,18 +346,25 @@ export function Sheet({ open, onClose, children, wide, label }: { open: boolean;
       {open && (
         <>
           <motion.div className="scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
-          <motion.div
-            role="dialog"
-            aria-modal
-            aria-label={label}
-            className={`sheet ${wide ? "sheet-wide" : ""}`}
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.14 } }}
-            transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
-          >
-            {children}
-          </motion.div>
+          {mobile ? (
+            <motion.div role="dialog" aria-modal aria-label={label} className="sheet" initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%", transition: { duration: 0.24, ease: [0.4, 0, 1, 1] } }} transition={spring.panel} {...drag}>
+              <div className="sheet-grab" aria-hidden />
+              {children}
+            </motion.div>
+          ) : (
+            <motion.div
+              role="dialog"
+              aria-modal
+              aria-label={label}
+              className={`sheet ${wide ? "sheet-wide" : ""}`}
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.14 } }}
+              transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
+            >
+              {children}
+            </motion.div>
+          )}
         </>
       )}
     </AnimatePresence>
@@ -325,3 +372,45 @@ export function Sheet({ open, onClose, children, wide, label }: { open: boolean;
 }
 
 export { CheckIcon };
+
+/** True on touch-first devices (phones, iPad without a trackpad). */
+export function useCoarse(): boolean {
+  const [c, setC] = useState(false);
+  useEffect(() => setC(matchMedia("(pointer: coarse)").matches), []);
+  return c;
+}
+
+/**
+ * Long-press → callback at the touch point (iOS has no right-click). The
+ * click that ends a long-press is swallowed so it doesn't also open the row.
+ */
+export function useLongPress(onLong: (p: { clientX: number; clientY: number }) => void, ms = 430) {
+  const timer = useRef<ReturnType<typeof setTimeout>>();
+  const start = useRef({ x: 0, y: 0 });
+  const fired = useRef(false);
+  const clear = () => clearTimeout(timer.current);
+  return {
+    onPointerDown: (e: React.PointerEvent) => {
+      if (e.pointerType === "mouse") return;
+      fired.current = false;
+      start.current = { x: e.clientX, y: e.clientY };
+      clear();
+      timer.current = setTimeout(() => {
+        fired.current = true;
+        onLong({ clientX: start.current.x, clientY: start.current.y });
+      }, ms);
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      if (Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y) > 10) clear();
+    },
+    onPointerUp: clear,
+    onPointerCancel: clear,
+    onClickCapture: (e: React.MouseEvent) => {
+      if (fired.current) {
+        e.preventDefault();
+        e.stopPropagation();
+        fired.current = false;
+      }
+    },
+  };
+}

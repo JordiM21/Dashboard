@@ -69,7 +69,7 @@ export default function Time() {
       <Toolbar areas={false} title="Time" />
       <Fade className="canvas">
         <section className="card" style={{ padding: 28, marginBottom: 16 }} aria-label="Timer">
-          <div className="row" style={{ gap: 24, alignItems: "center" }}>
+          <div className="row head-row" style={{ gap: 24, alignItems: "center" }}>
             <span className="display-xl" style={{ fontVariantNumeric: "tabular-nums", minWidth: 190, color: running ? "var(--text-1)" : "var(--text-3)" }}>
               {String(Math.floor(elapsed / 3600)).padStart(2, "0")}:{String(Math.floor((elapsed % 3600) / 60)).padStart(2, "0")}:{String(elapsed % 60).padStart(2, "0")}
             </span>
@@ -88,7 +88,7 @@ export default function Time() {
               </>
             ) : (
               <form
-                className="grow row"
+                className="grow row head-row"
                 onSubmit={(e) => {
                   e.preventDefault();
                   A.startTimer({ label: label.trim() || "Focus", areaId, track: areaId === "let" ? track : undefined });

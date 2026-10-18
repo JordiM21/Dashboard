@@ -15,7 +15,7 @@ import { Empty, Fade, Kpi, Money, Segmented, Sheet, useDropdown, Check } from ".
 export default function Finance() {
   const s = useHub();
   const live = useLive();
-  const { inspect } = useShell();
+  const { inspect, mobile } = useShell();
   const drop = useDropdown();
   const scope = s.ui.finScope;
   const all = useMemo(() => ledger(live, s), [live, s]);
@@ -122,7 +122,7 @@ export default function Finance() {
           <div className="card ld-list" role="listbox" aria-label="Ledger">
             {rows.length === 0 && <Empty text="No entries match." />}
             {rows.slice(0, 200).map((r) => (
-              <button key={r.id} className="ld-row" role="option" aria-selected={r.id === selected?.id} onClick={() => setSel(r.id)}>
+              <button key={r.id} className="ld-row" role="option" aria-selected={r.id === selected?.id} onClick={() => (mobile ? inspect({ kind: "tx", id: r.id }) : setSel(r.id))}>
                 <span className="avatar" style={{ width: 28, height: 28, color: r.amount > 0 ? "var(--success-ink)" : "var(--text-2)" }}>
                   {r.amount > 0 ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
                 </span>

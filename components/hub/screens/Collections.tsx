@@ -96,7 +96,7 @@ function CollectionView({ c, onBack }: { c: Collection; onBack: () => void }) {
         </div>
       )}
       <NewCollection open={editing} onClose={() => setEditing(false)} edit={c} />
-      <div className="row" style={{ marginBottom: 20 }}>
+      <div className="row head-row" style={{ marginBottom: 20 }}>
         <button className="icon-btn" aria-label="Back to collections" onClick={onBack}>
           <ArrowLeft size={18} />
         </button>

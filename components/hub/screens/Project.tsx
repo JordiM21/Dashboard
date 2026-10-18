@@ -54,7 +54,7 @@ export default function Project() {
             <CoverPicker value={p.cover} onChange={(cover) => up({ cover })} height={180} />
           </div>
         )}
-        <div className="row" style={{ marginBottom: 8, gap: 10 }}>
+        <div className="row head-row" style={{ marginBottom: 8, gap: 10 }}>
           {!p.cover && <CoverPicker value={undefined} onChange={(cover) => up({ cover })} />}
           <span className="chip chip-area" style={{ "--c": area?.color } as CSSProperties}>
             <span className="dot" style={{ "--c": area?.color } as CSSProperties} />

@@ -1,13 +1,16 @@
-// Minimal service worker: just enough for "Add to Home Screen" installability,
-// plus a network-first cache so previously visited pages still load offline.
-//
-// Bump CACHE whenever a route or asset is removed. The old version's entries
-// are deleted on activate, which is what stops a page that no longer exists
-// (the Games view, say) from still being served to an offline installed app
-// long after it was deleted from the app itself.
-const CACHE = "dashboard-v2";
+// Hub service worker: installable PWA + offline shell.
+// - Hashed build assets (/_next/static) are immutable: cache-first.
+// - Pages: network-first with a 2.5s timeout, then the cached copy — so a
+//   weak 4G connection never leaves the app on a blank screen.
+// - /api and anything cross-origin (Firebase, Stripe) is never cached.
+// Bump CACHE when routes are removed so old pages stop being served.
+const CACHE = "hub-v2-1";
+const SHELL = ["/today", "/inbox", "/tasks", "/academy"];
 
-self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("install", (event) => {
+  self.skipWaiting();
+  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL).catch(() => {})));
+});
 
 self.addEventListener("activate", (event) =>
   event.waitUntil(
@@ -18,28 +21,40 @@ self.addEventListener("activate", (event) =>
   )
 );
 
-self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
+const put = (req, res) => {
+  if (res.ok && res.type === "basic") caches.open(CACHE).then((c) => c.put(req, res.clone()));
+  return res;
+};
 
-  // Same-origin only. Firebase's own endpoints (Firestore streams, token
-  // refresh) must never be answered from a cache — a replayed auth or
-  // snapshot response is worse than being offline — and caching them stores
-  // opaque cross-origin bodies we can't inspect or usefully reuse anyway.
-  const url = new URL(event.request.url);
-  if (url.origin !== self.location.origin) return;
+self.addEventListener("fetch", (event) => {
+  const req = event.request;
+  if (req.method !== "GET") return;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin || url.pathname.startsWith("/api/")) return;
+
+  if (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/icons/")) {
+    event.respondWith(caches.match(req).then((hit) => hit || fetch(req).then((res) => put(req, res))));
+    return;
+  }
 
   event.respondWith(
-    fetch(event.request)
-      .then((res) => {
-        // Only cache a real, complete response. A 404 or a 500 cached here
-        // would be served back as the "offline copy" of a page that works
-        // perfectly well the next time the network is up.
-        if (res.ok && res.type === "basic") {
-          const copy = res.clone();
-          caches.open(CACHE).then((cache) => cache.put(event.request, copy));
-        }
-        return res;
-      })
-      .catch(() => caches.match(event.request))
+    new Promise((resolve) => {
+      let done = false;
+      const fallback = () =>
+        caches.match(req).then((hit) => {
+          if (!done && hit) (done = true), resolve(hit);
+        });
+      const timer = setTimeout(fallback, 2500);
+      fetch(req)
+        .then((res) => {
+          clearTimeout(timer);
+          put(req, res);
+          if (!done) (done = true), resolve(res);
+        })
+        .catch(() => {
+          clearTimeout(timer);
+          caches.match(req).then((hit) => !done && ((done = true), resolve(hit || caches.match("/today"))));
+        });
+    })
   );
 });

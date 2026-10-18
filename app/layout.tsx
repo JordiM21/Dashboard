@@ -3,6 +3,7 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { Bricolage_Grotesque } from "next/font/google";
 import "@/app/globals.css";
+import "@/app/mobile.css";
 import { AuthProvider } from "@/lib/firebase/AuthContext";
 import { LiveProvider } from "@/lib/hub/live";
 import Gate from "@/components/hub/Gate";
@@ -13,11 +14,17 @@ const bricolage = Bricolage_Grotesque({ subsets: ["latin", "latin-ext"], weight:
 export const metadata: Metadata = {
   title: "Hub",
   description: "Personal operating system",
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Hub" },
+  // "default" keeps the iOS status bar text dark on the light canvas (black-translucent would draw white text over it).
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "Hub" },
+  formatDetection: { telephone: false },
   icons: { apple: "/icons/icon-192.png" },
 };
 
 export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  // Draw under the iOS status bar / home indicator; the shell pads itself back with env(safe-area-inset-*).
+  viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#F2F2F7" },
     { media: "(prefers-color-scheme: dark)", color: "#0B0B0F" },
@@ -34,11 +41,15 @@ const THEME_INIT_SCRIPT = `
 })();
 `;
 
+// Production only: a service worker in dev would serve stale bundles over hot reload.
+const SW_SCRIPT = `if ("serviceWorker" in navigator) addEventListener("load", function () { navigator.serviceWorker.register("/sw.js").catch(function () {}); });`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning className={`${GeistSans.variable} ${GeistMono.variable} ${bricolage.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        {process.env.NODE_ENV === "production" && <script dangerouslySetInnerHTML={{ __html: SW_SCRIPT }} />}
       </head>
       <body>
         <AuthProvider>

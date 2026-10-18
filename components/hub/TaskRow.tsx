@@ -2,14 +2,16 @@
 
 /** Task row (§7) with the signature completion moment (§9.1). */
 import { useRef, useState, type CSSProperties } from "react";
-import { motion } from "motion/react";
-import { DotsSixVertical, Play, CalendarBlank, ArrowRight, Archive, Hourglass, ListChecks, Repeat } from "@phosphor-icons/react";
+import { motion, useMotionValue, useTransform } from "motion/react";
+import { DotsSixVertical, Play, CalendarBlank, ArrowRight, Archive, Hourglass, ListChecks, Repeat, CheckCircle } from "@phosphor-icons/react";
 import { useHub } from "@/lib/hub/store";
 import * as A from "@/lib/hub/actions";
 import { taskXp } from "@/lib/hub/game";
 import { addDays, relDay, today, weekStart } from "@/lib/hub/util";
 import type { Task } from "@/lib/hub/types";
-import { AreaDot, Check, useMenu } from "./ui";
+import { AreaDot, Check, useCoarse, useLongPress, useMenu } from "./ui";
+import { sfx } from "@/lib/hub/sound";
+import { toast } from "@/lib/hub/fx";
 import { useShell } from "./Shell";
 
 export const rowMotion = {
@@ -23,13 +25,16 @@ export const rowMotion = {
 export function useTaskMenu() {
   const s = useHub();
   const menu = useMenu();
-  return (e: React.MouseEvent, t: Task) =>
-    menu(e, [
+  return (e: { clientX: number; clientY: number; preventDefault?: () => void }, t: Task) =>
+    menu({ clientX: e.clientX, clientY: e.clientY, preventDefault: () => e.preventDefault?.() }, [
       { label: t.status === "done" ? "Reopen" : "Complete", onClick: () => (t.status === "done" ? A.reopenTask(t.id) : A.completeTask(t.id, { x: e.clientX, y: e.clientY })) },
       { sep: true, label: "" },
       { label: "Do today", hint: relDay(today()), onClick: () => A.updateTask(t.id, { scheduled: today(), status: t.status === "inbox" ? "next" : t.status }) },
       { label: "Tomorrow", onClick: () => A.updateTask(t.id, { scheduled: addDays(today(), 1), status: t.status === "inbox" ? "next" : t.status }) },
       { label: "Next week", onClick: () => A.updateTask(t.id, { scheduled: addDays(weekStart(), 7), status: t.status === "inbox" ? "next" : t.status }) },
+      { sep: true, label: "" },
+      // Board columns as menu items — touch screens can't drag between columns.
+      ...(["next", "doing", "waiting"] as const).filter((st) => st !== t.status).map((st) => ({ label: `Move to ${st[0].toUpperCase() + st.slice(1)}`, onClick: () => A.updateTask(t.id, { status: st, completedAt: null }) })),
       { sep: true, label: "" },
       ...([1, 2, 3] as const).map((p) => ({ label: `Priority P${p}`, hint: t.priority === p ? "✓" : `!${p}`, onClick: () => A.updateTask(t.id, { priority: p }) })),
       { sep: true, label: "" },
@@ -52,6 +57,11 @@ export default function TaskRow({ t, selected, showProject = true, draggable, co
   const overdue = !done && t.due != null && t.due < today();
   const date = t.due ?? t.scheduled;
   const xp = s.settings.game !== "off" && !done ? taskXp(t, new Date(), 0) : 0;
+  const coarse = useCoarse();
+  const longPress = useLongPress((pt) => {
+    sfx.open();
+    openMenu(pt, t);
+  });
 
   const toggle = (e: React.MouseEvent) => {
     if (t.status === "done") return A.reopenTask(t.id);
@@ -67,12 +77,13 @@ export default function TaskRow({ t, selected, showProject = true, draggable, co
     }, 220);
   };
 
-  return (
+  const row = (
     <div
       className="task-row"
       data-done={done}
       data-selected={selected || rec?.id === t.id}
       onContextMenu={(e) => openMenu(e, t)}
+      {...longPress}
       draggable={draggable}
       onDragStart={(e) => e.dataTransfer.setData("text/plain", t.id)}
       style={compact ? { minHeight: 36 } : undefined}
@@ -126,6 +137,62 @@ export default function TaskRow({ t, selected, showProject = true, draggable, co
       <span style={{ "--c": area?.color } as CSSProperties}>
         <AreaDot area={area} />
       </span>
+    </div>
+  );
+
+  if (!coarse || t.status === "done") return row;
+  return <SwipeRow t={t}>{row}</SwipeRow>;
+}
+
+/**
+ * Swipe right to complete, left to do it today (or tomorrow, if it's
+ * already today) — the Mail/Reminders gesture. A soft tick marks the
+ * moment the swipe will commit.
+ */
+function SwipeRow({ t, children }: { t: Task; children: React.ReactNode }) {
+  const x = useMotionValue(0);
+  const bg = useTransform(x, [-120, -1, 0, 1, 120], ["#5E5CE6", "#5E5CE6", "rgba(0,0,0,0)", "#30C48D", "#30C48D"]);
+  const left = useTransform(x, [0, 60, 100], [0, 0.6, 1]);
+  const right = useTransform(x, [-100, -60, 0], [1, 0.6, 0]);
+  const armed = useRef(0);
+  const later = t.scheduled === today() ? addDays(today(), 1) : today();
+  return (
+    <div className="swipe">
+      <motion.div className="swipe-bg" style={{ background: bg }} aria-hidden>
+        <motion.span style={{ opacity: left }}>
+          <CheckCircle size={18} weight="fill" /> Done
+        </motion.span>
+        <motion.span style={{ opacity: right }}>
+          {later === today() ? "Today" : "Tomorrow"} <CalendarBlank size={18} weight="fill" />
+        </motion.span>
+      </motion.div>
+      <motion.div
+        className="swipe-fg"
+        style={{ x }}
+        drag="x"
+        dragDirectionLock
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={0.55}
+        onDrag={(_, i) => {
+          const zone = i.offset.x > 90 ? 1 : i.offset.x < -90 ? -1 : 0;
+          if (zone !== armed.current) {
+            armed.current = zone;
+            if (zone) sfx.toggle();
+          }
+        }}
+        onDragEnd={(e, i) => {
+          armed.current = 0;
+          const p = "clientX" in e ? { x: (e as PointerEvent).clientX, y: (e as PointerEvent).clientY } : undefined;
+          if (i.offset.x > 90) A.completeTask(t.id, p);
+          else if (i.offset.x < -90) {
+            const prev = { scheduled: t.scheduled, status: t.status };
+            A.updateTask(t.id, { scheduled: later, status: t.status === "inbox" ? "next" : t.status });
+            toast(`“${t.title}” · ${relDay(later)}`, { undo: () => A.updateTask(t.id, prev) });
+          }
+        }}
+      >
+        {children}
+      </motion.div>
     </div>
   );
 }

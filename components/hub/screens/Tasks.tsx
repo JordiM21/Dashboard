@@ -1,7 +1,8 @@
 "use client";
 
 /** Tasks (§5.3 rebuild): List · Board · Week · Calendar · Projects. The list itself is the focal point. */
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { sfx } from "@/lib/hub/sound";
 import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
 import { CaretLeft, CaretRight, CaretDown, Plus, Warning, X, Kanban } from "@phosphor-icons/react";
@@ -13,7 +14,7 @@ import { addDays, dayName, dayOfWeek, formatDateDMY, monthName, relDay, today, w
 import type { Task, TaskStatus } from "@/lib/hub/types";
 import { Toolbar, useArea, useShell } from "../Shell";
 import TaskRow, { rowMotion, useTaskMenu } from "../TaskRow";
-import { AreaDot, Empty, Fade, IconByName, Progress, Segmented, useDropdown } from "../ui";
+import { AreaDot, Empty, Fade, IconByName, Progress, Segmented, useDropdown, useLongPress, useCoarse } from "../ui";
 import { coverCss } from "../Customize";
 
 type View = "list" | "board" | "week" | "calendar" | "projects";
@@ -234,6 +235,13 @@ function TaskCard({ t, style }: { t: Task; style?: CSSProperties }) {
   const s = useHub();
   const { inspect } = useShell();
   const menu = useTaskMenu();
+  const pressed = useRef<Task | null>(null);
+  const lp = useLongPress((pt) => {
+    if (!pressed.current) return;
+    sfx.open();
+    menu(pt, pressed.current);
+  });
+  const press = (t: Task) => ({ ...lp, onPointerDown: (e: React.PointerEvent) => ((pressed.current = t), lp.onPointerDown(e)) });
   const a = s.areas.find((x) => x.id === t.areaId);
   const p = s.projects.find((x) => x.id === t.projectId);
   return (
@@ -246,6 +254,7 @@ function TaskCard({ t, style }: { t: Task; style?: CSSProperties }) {
       onDragStart={(e) => (e as unknown as React.DragEvent).dataTransfer.setData("text/plain", t.id)}
       onClick={() => inspect({ kind: "task", id: t.id })}
       onContextMenu={(e) => menu(e, t)}
+      {...press(t)}
       style={{ "--c": a?.color, ...style } as CSSProperties}
     >
       <span style={{ fontWeight: 500, ...(t.status === "done" ? { color: "var(--text-3)", textDecoration: "line-through" } : {}) }}>{t.title}</span>
@@ -304,12 +313,26 @@ function DayCol({ date, tasks }: { date: string; tasks: Task[] }) {
   const s = useHub();
   const { inspect } = useShell();
   const menu = useTaskMenu();
+  const pressed = useRef<Task | null>(null);
+  const lp = useLongPress((pt) => {
+    if (!pressed.current) return;
+    sfx.open();
+    menu(pt, pressed.current);
+  });
+  const press = (t: Task) => ({ ...lp, onPointerDown: (e: React.PointerEvent) => ((pressed.current = t), lp.onPointerDown(e)) });
   const { over, props } = useDrop((id) => A.updateTask(id, { scheduled: date }));
   const isToday = date === today();
+  const col = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    // Centre today in the sideways-scrolling week (phones) without moving the page vertically.
+    const c = col.current;
+    const w = c?.parentElement;
+    if (isToday && c && w && w.scrollWidth > w.clientWidth) w.scrollLeft = c.offsetLeft - (w.clientWidth - c.offsetWidth) / 2;
+  }, [isToday]);
   const mins = tasks.filter((t) => t.status !== "done").reduce((a, t) => a + (t.estimate ?? 0), 0);
   const game = s.settings.game !== "off";
   return (
-    <div className="week-col" data-over={over} {...props} style={isToday ? { background: "var(--bg-surface)", boxShadow: "var(--e1)" } : undefined}>
+    <div ref={col} className="week-col" data-over={over} {...props} style={isToday ? { background: "var(--bg-surface)", boxShadow: "var(--e1)" } : undefined}>
       <div className="week-head" data-today={isToday}>
         <div className="label">{dayName(date)}</div>
         <div className="big">{Number(date.slice(8))}</div>
@@ -330,6 +353,7 @@ function DayCol({ date, tasks }: { date: string; tasks: Task[] }) {
               onDragStart={(e) => (e as unknown as React.DragEvent).dataTransfer.setData("text/plain", t.id)}
               onClick={() => inspect({ kind: "task", id: t.id })}
               onContextMenu={(e) => menu(e, t)}
+      {...press(t)}
               style={{ "--c": a?.color } as CSSProperties}
             >
               <div style={{ fontWeight: 500 }}>{t.title}</div>
@@ -347,6 +371,7 @@ function DayCol({ date, tasks }: { date: string; tasks: Task[] }) {
 }
 
 function WeekView({ tasks }: { tasks: Task[] }) {
+  const coarse = useCoarse();
   const [start, setStart] = useState(() => weekStart());
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   const t0 = today();
@@ -360,11 +385,11 @@ function WeekView({ tasks }: { tasks: Task[] }) {
   const { over, props } = useDrop((id) => A.updateTask(id, { scheduled: null }));
   return (
     <>
-      <div className="row" style={{ marginBottom: 12 }}>
+      <div className="row head-row" style={{ marginBottom: 12 }}>
         <h2 className="title">
           {monthName(start.slice(0, 7))} {start.slice(0, 4)}
         </h2>
-        <span className="caption muted">Drag a card to reschedule. Overdue rolls into today.</span>
+        <span className="caption muted">{coarse ? "Long-press a card to reschedule." : "Drag a card to reschedule."} Overdue rolls into today.</span>
         <span className="spacer" />
         <button className="icon-btn" aria-label="Previous week" onClick={() => setStart(addDays(start, -7))}>
           <CaretLeft size={16} />
@@ -481,7 +506,7 @@ function ProjectsView() {
   };
   return (
     <>
-      <div className="row" style={{ marginBottom: 16 }}>
+      <div className="row head-row" style={{ marginBottom: 16 }}>
         <Segmented label="Project status" size="sm" value={status} onChange={setStatus} options={(["active", "planned", "paused", "done"] as const).map((v) => ({ value: v, label: v[0].toUpperCase() + v.slice(1), count: count(v) }))} />
         <span className="spacer" />
         <button className="btn" onClick={create}>
