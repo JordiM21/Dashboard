@@ -28,3 +28,13 @@ export async function requireAuth(req: NextRequest): Promise<DecodedIdToken> {
     throw new UnauthorizedError("Invalid or expired session — please sign in again.");
   }
 }
+
+/** Route-handler shorthand: a 401 Response when the caller isn't signed in, else null. */
+export async function denyUnlessAuthed(req: NextRequest): Promise<Response | null> {
+  try {
+    await requireAuth(req);
+    return null;
+  } catch (err) {
+    return Response.json({ error: err instanceof Error ? err.message : "unauthorized" }, { status: 401 });
+  }
+}

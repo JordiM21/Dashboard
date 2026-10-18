@@ -532,3 +532,9 @@ img { display: block; max-width: 100%; }
 .inline-edit { border-radius: 8px; transition: background var(--fast); }
 .inline-edit:hover { background: var(--bg-raised); }
 .prop-grid > .seg, .prop-grid > .select { justify-self: start; }
+
+/* on/off switch (Connections) */
+.switch { width: 40px; height: 24px; flex: none; border-radius: var(--r-pill); border: 0; padding: 2px; background: var(--line-strong); cursor: pointer; transition: background 0.18s; }
+.switch > span { display: block; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: var(--e1); transition: transform 0.18s cubic-bezier(0.32, 0.72, 0, 1); }
+.switch[aria-checked="true"] { background: var(--success); }
+.switch[aria-checked="true"] > span { transform: translateX(16px); }

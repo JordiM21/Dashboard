@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import type { CSSProperties } from "react";
 import {
-  Sun, Tray, CheckSquare, Target, GraduationCap, Wallet, Books, SquaresFour, Timer, MagnifyingGlass, GearSix, SidebarSimple, SignIn, PushPin, Kanban,
+  Sun, Tray, CheckSquare, Target, GraduationCap, Wallet, Books, SquaresFour, Timer, MagnifyingGlass, GearSix, SidebarSimple, SignIn, PushPin, Kanban, PlugsConnected,
   type Icon,
 } from "@phosphor-icons/react";
 import { useHub } from "@/lib/hub/store";
@@ -29,6 +29,7 @@ export const NAV: { href: string; label: string; icon: Icon }[] = [
   { href: "/library", label: "Library", icon: Books },
   { href: "/collections", label: "Collections", icon: SquaresFour },
   { href: "/time", label: "Time", icon: Timer },
+  { href: "/connections", label: "Connections", icon: PlugsConnected },
 ];
 
 export default function Sidebar({ rail }: { rail: boolean }) {
@@ -70,12 +71,12 @@ export default function Sidebar({ rail }: { rail: boolean }) {
         const active = path === n.href || path.startsWith(n.href + "/") || (n.href === "/goals" && path.startsWith("/character"));
         const I = n.icon;
         return (
-          <Link key={n.href} href={n.href} className="sb-row" aria-current={active ? "page" : undefined} title={`${n.label} (${i + 1})`} onMouseEnter={() => router.prefetch(n.href)}>
+          <Link key={n.href} href={n.href} className="sb-row" aria-current={active ? "page" : undefined} title={i < 9 ? `${n.label} (${i + 1})` : n.label} onMouseEnter={() => router.prefetch(n.href)}>
             {active && <motion.span layoutId="sb-pill" className="sb-pill" transition={spring.ui} />}
             <I size={20} weight={active ? "fill" : "regular"} />
             <span className="sb-hide">{n.label}</span>
             {counts[n.href] ? <span className="sb-count sb-hide">{counts[n.href]}</span> : null}
-            <span className={`sb-key sb-hide ${counts[n.href] ? "" : "solo"}`}>{i + 1}</span>
+            {i < 9 && <span className={`sb-key sb-hide ${counts[n.href] ? "" : "solo"}`}>{i + 1}</span>}
           </Link>
         );
       })}

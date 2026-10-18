@@ -52,7 +52,7 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
       { id: "settings", group: "Actions", label: "Settings · areas, keys, sound", icon: <GearSix size={18} />, hint: ",", run: settings },
       { id: "theme", group: "Actions", label: "Toggle dark mode", icon: <Moon size={18} />, run: () => A.setSettings({ theme: document.documentElement.dataset.theme === "dark" ? "light" : "dark" }) },
       ...s.templates.map((t) => ({ id: "tpl" + t.id, group: "Actions", label: `Use template: ${t.name}`, icon: <Kanban size={18} />, run: () => toast(`${A.applyTemplate(t.id)} tasks created from “${t.name}”`) })),
-      ...NAV.map((n, i) => ({ id: "nav" + n.href, group: "Go to", label: n.label, hint: String(i + 1), icon: <ArrowRight size={18} />, run: go(n.href) })),
+      ...NAV.map((n, i) => ({ id: "nav" + n.href, group: "Go to", label: n.label, hint: i < 9 ? String(i + 1) : undefined, icon: <ArrowRight size={18} />, run: go(n.href) })),
       { id: "nav-char", group: "Go to", label: "Character sheet", icon: <ArrowRight size={18} />, run: go("/character") },
     ];
     if (!q) return actions;

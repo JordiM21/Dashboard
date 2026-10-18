@@ -10,7 +10,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import type { CSSProperties } from "react";
-import { Sun, Tray, CheckSquare, GraduationCap, DotsThreeCircle, Plus, Target, Wallet, Books, SquaresFour, Timer, GearSix, MagnifyingGlass, UserCircle, SignIn } from "@phosphor-icons/react";
+import { Sun, Tray, CheckSquare, GraduationCap, DotsThreeCircle, Plus, Target, Wallet, Books, SquaresFour, Timer, GearSix, MagnifyingGlass, UserCircle, SignIn, PlugsConnected } from "@phosphor-icons/react";
 import { useHub } from "@/lib/hub/store";
 import { useLive } from "@/lib/hub/live";
 import * as A from "@/lib/hub/actions";
@@ -32,6 +32,7 @@ const MORE = [
   { href: "/library", label: "Library", icon: Books },
   { href: "/collections", label: "Collections", icon: SquaresFour },
   { href: "/time", label: "Time", icon: Timer },
+  { href: "/connections", label: "Connections", icon: PlugsConnected },
   { href: "/character", label: "Character", icon: UserCircle },
 ];
 
