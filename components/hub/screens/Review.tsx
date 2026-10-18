@@ -43,7 +43,7 @@ export default function Review() {
 
   return (
     <>
-      <Toolbar title="Weekly review" />
+      <Toolbar areas={false} title="Weekly review" />
       <div className="canvas" style={{ maxWidth: 820 }}>
         <div className="row" style={{ marginBottom: 12 }}>
           <span className="label">

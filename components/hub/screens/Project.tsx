@@ -14,6 +14,7 @@ import type { Milestone, Project as P } from "@/lib/hub/types";
 import { Toolbar, useShell } from "../Shell";
 import TaskRow, { rowMotion } from "../TaskRow";
 import { Check, Fade, Segmented, useDropdown, Empty } from "../ui";
+import { CoverPicker, IconPicker } from "../Customize";
 
 export default function Project() {
   const { id } = useParams<{ id: string }>();
@@ -26,7 +27,7 @@ export default function Project() {
   if (!p)
     return (
       <>
-        <Toolbar title="Project" />
+        <Toolbar title="Project" areas={false} />
         <div className="canvas">
           <Empty text="This project doesn’t exist." />
         </div>
@@ -42,13 +43,19 @@ export default function Project() {
 
   return (
     <>
-      <Toolbar title="Tasks">
+      <Toolbar title="Tasks" areas={false}>
         <Link href="/tasks" className="btn btn-sm btn-ghost" onClick={() => A.setUi({ taskView: "projects" })}>
           <ArrowLeft size={14} /> Projects
         </Link>
       </Toolbar>
       <Fade className="canvas" style={{ maxWidth: 1040 }}>
+        {p.cover && (
+          <div style={{ marginBottom: 20 }}>
+            <CoverPicker value={p.cover} onChange={(cover) => up({ cover })} height={180} />
+          </div>
+        )}
         <div className="row" style={{ marginBottom: 8, gap: 10 }}>
+          {!p.cover && <CoverPicker value={undefined} onChange={(cover) => up({ cover })} />}
           <span className="chip chip-area" style={{ "--c": area?.color } as CSSProperties}>
             <span className="dot" style={{ "--c": area?.color } as CSSProperties} />
             <select className="input-bare caption" value={p.areaId} onChange={(e) => up({ areaId: e.target.value })} aria-label="Area">
@@ -68,7 +75,10 @@ export default function Project() {
             <Plus size={14} /> From template
           </button>
         </div>
-        <input className="input-bare display-xl" value={p.title} onChange={(e) => up({ title: e.target.value })} aria-label="Project title" />
+        <div className="row" style={{ gap: 14 }}>
+          <IconPicker icon={p.icon ?? "Kanban"} color={area?.color} size={48} onIcon={(icon) => up({ icon })} />
+          <input className="input-bare display-xl inline-edit" value={p.title} onChange={(e) => up({ title: e.target.value })} aria-label="Project title" />
+        </div>
         <textarea
           className="input-bare"
           rows={1}
@@ -77,6 +87,15 @@ export default function Project() {
           placeholder="One sentence: what does done look like?"
           onChange={(e) => up({ outcome: e.target.value })}
           aria-label="Outcome"
+        />
+        <textarea
+          className="input-bare callout inline-edit"
+          rows={Math.max(1, (p.description ?? "").split("\n").length)}
+          style={{ resize: "none", marginTop: 6, padding: "4px 0", color: "var(--text-2)" }}
+          value={p.description ?? ""}
+          placeholder="Add a description, context, links…"
+          onChange={(e) => up({ description: e.target.value })}
+          aria-label="Description"
         />
 
         <section className="card" style={{ marginTop: 24 }}>

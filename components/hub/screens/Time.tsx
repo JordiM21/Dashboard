@@ -66,7 +66,7 @@ export default function Time() {
 
   return (
     <>
-      <Toolbar title="Time" />
+      <Toolbar areas={false} title="Time" />
       <Fade className="canvas">
         <section className="card" style={{ padding: 28, marginBottom: 16 }} aria-label="Timer">
           <div className="row" style={{ gap: 24, alignItems: "center" }}>

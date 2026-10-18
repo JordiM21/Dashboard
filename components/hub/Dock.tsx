@@ -12,6 +12,7 @@ import * as A from "@/lib/hub/actions";
 import { hhmm, today } from "@/lib/hub/util";
 import { Badge, Flame, LevelRing, StreakDots } from "./game";
 import { Pip, spring } from "./ui";
+import { coverCss } from "./Customize";
 
 export function usePlayer() {
   const s = useHub();
@@ -87,6 +88,7 @@ export default function Dock({ rail }: { rail: boolean }) {
         </Link>
         <div className="grow col" style={{ gap: 6 }}>
           <div className="row">
+            {s.settings.avatar && <span className="avatar" style={{ width: 22, height: 22, background: coverCss(s.settings.avatar) }} />}
             <span className="headline">{s.settings.ownerName}</span>
             <span className="spacer" />
             <button className="icon-btn" title="Collapse dock (Ctrl .)" aria-label="Collapse dock" onClick={() => A.setSettings({ dock: "rail" })} style={{ width: 26, height: 26 }}>

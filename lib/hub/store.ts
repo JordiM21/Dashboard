@@ -10,7 +10,7 @@
  */
 import { useSyncExternalStore } from "react";
 import type { HubState } from "./types";
-import { STATE_VERSION } from "./seed";
+import { DEFAULT_SETTINGS, STATE_VERSION } from "./seed";
 
 let state: HubState | null = null;
 let key = "";
@@ -28,7 +28,8 @@ export function initStore(mode: "demo" | "live", seed: () => HubState): void {
     const raw = localStorage.getItem(k);
     if (raw) loaded = JSON.parse(raw);
   } catch {}
-  state = loaded && loaded.version === STATE_VERSION ? loaded : seed();
+  // Settings added after a device first saved get their defaults.
+  state = loaded && loaded.version === STATE_VERSION ? { ...loaded, settings: { ...DEFAULT_SETTINGS, ...loaded.settings } } : seed();
   if (!loaded) persist();
   emit();
 }

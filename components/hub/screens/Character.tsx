@@ -8,6 +8,7 @@ import { addDays, formatDateDMY, weekStart } from "@/lib/hub/util";
 import { Toolbar } from "../Shell";
 import { Badge, Flame, LevelRing } from "../game";
 import { Fade, Pip } from "../ui";
+import { coverCss } from "../Customize";
 import { PillBars } from "./Goals";
 
 export default function Character() {
@@ -28,13 +29,13 @@ export default function Character() {
 
   return (
     <>
-      <Toolbar title="Character" />
+      <Toolbar areas={false} title="Character" />
       <Fade className="canvas">
         <div className="bento">
           <section className="card span-5 col" style={{ alignItems: "center", gap: 16, padding: 32 }}>
             <LevelRing pct={lv.pct} level={lv.level} size={200} stroke={12}>
               <div className="col" style={{ alignItems: "center", gap: 0 }}>
-                <Pip state={st.atRisk ? "sleepy" : "idle"} size={84} />
+                {s.settings.avatar ? <span className="avatar" style={{ width: 84, height: 84, background: coverCss(s.settings.avatar) }} /> : <Pip state={st.atRisk ? "sleepy" : "idle"} size={84} />}
                 <span className="label">Level</span>
                 <span className="display-xl">{lv.level}</span>
               </div>

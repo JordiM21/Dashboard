@@ -76,6 +76,10 @@ export interface Milestone {
 
 export interface Project extends Base {
   title: string;
+  icon?: string; // Phosphor icon name (components/hub/ui.tsx ICONS)
+  cover?: string; // image URL or a resized data: URL
+  description?: string;
+
   areaId: ID;
   status: ProjectStatus;
   start: string | null;
@@ -90,6 +94,10 @@ export type GoalMetric = "mrr" | "students" | "revenue" | "tasks" | "collection"
 
 export interface Goal extends Base {
   title: string;
+  icon?: string; // Phosphor icon name (components/hub/ui.tsx ICONS)
+  cover?: string; // image URL or a resized data: URL
+  description?: string;
+
   areaId: ID;
   horizon: Horizon;
   metric: GoalMetric;
@@ -111,6 +119,8 @@ export type NoteType = "doc" | "plan" | "meeting" | "reference";
 
 export interface Note extends Base {
   title: string;
+  icon?: string;
+  cover?: string;
   body: string;
   type: NoteType;
   areaId: ID;
@@ -132,6 +142,8 @@ export interface FieldDef {
 
 export interface Collection extends Base {
   name: string;
+  cover?: string;
+  description?: string;
   areaId: ID;
   icon: string;
   fields: FieldDef[];
@@ -147,6 +159,7 @@ export interface Item extends Base {
   values: Record<string, unknown>;
   image?: string;
   link?: string;
+  description?: string;
   doneAt: string | null;
 }
 
@@ -237,6 +250,11 @@ export interface Settings {
   sidebar: "auto" | "open" | "rail";
   dock: "auto" | "open" | "rail";
   ownerName: string;
+  avatar?: string;
+  sound: boolean;
+  volume: number; // 0–1
+  navKeys: "arrows" | "wasd"; // WASD also moves the selector when chosen; arrows always do
+  keys: Record<string, string>; // action id -> combo, overrides lib/hub/keys.ts defaults
 }
 
 export interface HubState {

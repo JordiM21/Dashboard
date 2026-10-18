@@ -17,6 +17,8 @@ import { today } from "@/lib/hub/util";
 import { useShell, type Rec } from "./Shell";
 import { spring } from "./ui";
 
+const AREA_PAGES = ["/today", "/tasks", "/goals", "/library", "/collections"];
+
 export const NAV: { href: string; label: string; icon: Icon }[] = [
   { href: "/today", label: "Today", icon: Sun },
   { href: "/inbox", label: "Inbox", icon: Tray },
@@ -56,23 +58,24 @@ export default function Sidebar({ rail }: { rail: boolean }) {
           <SidebarSimple size={18} />
         </button>
       </div>
-      <button className="sb-search" onClick={palette} aria-label="Search (Ctrl K)">
+      <button className="sb-search" onClick={palette} aria-label="Search (Space)">
         <MagnifyingGlass size={16} />
         <span className="sb-hide callout grow" style={{ textAlign: "left" }}>
           Search
         </span>
-        <span className="kbd sb-hide">Ctrl K</span>
+        <span className="kbd sb-hide">Space</span>
       </button>
 
       {NAV.map((n, i) => {
         const active = path === n.href || path.startsWith(n.href + "/") || (n.href === "/goals" && path.startsWith("/character"));
         const I = n.icon;
         return (
-          <Link key={n.href} href={n.href} className="sb-row" aria-current={active ? "page" : undefined} title={rail ? `${n.label} (Ctrl ${i + 1})` : undefined} onMouseEnter={() => router.prefetch(n.href)}>
+          <Link key={n.href} href={n.href} className="sb-row" aria-current={active ? "page" : undefined} title={`${n.label} (${i + 1})`} onMouseEnter={() => router.prefetch(n.href)}>
             {active && <motion.span layoutId="sb-pill" className="sb-pill" transition={spring.ui} />}
             <I size={20} weight={active ? "fill" : "regular"} />
             <span className="sb-hide">{n.label}</span>
             {counts[n.href] ? <span className="sb-count sb-hide">{counts[n.href]}</span> : null}
+            <span className={`sb-key sb-hide ${counts[n.href] ? "" : "solo"}`}>{i + 1}</span>
           </Link>
         );
       })}
@@ -84,7 +87,18 @@ export default function Sidebar({ rail }: { rail: boolean }) {
         .map((a) => {
           const on = s.ui.area === a.id;
           return (
-            <button key={a.id} className="sb-row" aria-pressed={on} title={a.name} onClick={() => A.setUi({ area: on ? "all" : a.id })} style={on ? { background: "var(--line)" } : undefined}>
+            <button
+              key={a.id}
+              className="sb-row sb-row-sm"
+              aria-pressed={on}
+              title={`${a.name} · filter`}
+              onClick={() => {
+                A.setUi({ area: on ? "all" : a.id });
+                // The filter only shapes Today, Tasks, Goals, Library and Collections — elsewhere, take you to the tasks.
+                if (!on && !AREA_PAGES.some((p) => path.startsWith(p))) router.push("/tasks");
+              }}
+              style={on ? { background: `color-mix(in srgb, ${a.color} 14%, transparent)` } : undefined}
+            >
               <span className="sb-dot" style={{ background: a.color } as CSSProperties} />
               <span className="sb-hide truncate">{a.name}</span>
               <span className="lvl-chip sb-hide">Lv {levelFromXp(areaXp[a.id] ?? 0).level}</span>

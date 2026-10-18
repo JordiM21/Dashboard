@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { MagnifyingGlass, Plus, ArrowRight, CheckCircle, Note, User, Kanban, Target, SquaresFour, UsersThree, Moon, NotePencil, CalendarCheck, ClipboardText, Lightning } from "@phosphor-icons/react";
+import { MagnifyingGlass, Plus, ArrowRight, CheckCircle, Note, User, Kanban, Target, SquaresFour, UsersThree, Moon, NotePencil, CalendarCheck, ClipboardText, Lightning, GearSix } from "@phosphor-icons/react";
 import { getState, useHub } from "@/lib/hub/store";
 import { useLive } from "@/lib/hub/live";
 import { parseQuickAdd } from "@/lib/hub/parse";
@@ -31,7 +31,7 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
   const s = useHub();
   const live = useLive();
   const router = useRouter();
-  const { inspect, quickAdd, lessonLog, planDay } = useShell();
+  const { inspect, quickAdd, lessonLog, planDay, settings } = useShell();
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -49,9 +49,10 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
       { id: "log", group: "Create", label: "Log a lesson", icon: <ClipboardText size={18} />, run: () => lessonLog() },
       { id: "plan", group: "Actions", label: "Plan my day", icon: <CalendarCheck size={18} />, run: planDay },
       { id: "review", group: "Actions", label: "Start weekly review", icon: <Lightning size={18} />, run: go("/goals/review") },
+      { id: "settings", group: "Actions", label: "Settings · areas, keys, sound", icon: <GearSix size={18} />, hint: ",", run: settings },
       { id: "theme", group: "Actions", label: "Toggle dark mode", icon: <Moon size={18} />, run: () => A.setSettings({ theme: document.documentElement.dataset.theme === "dark" ? "light" : "dark" }) },
       ...s.templates.map((t) => ({ id: "tpl" + t.id, group: "Actions", label: `Use template: ${t.name}`, icon: <Kanban size={18} />, run: () => toast(`${A.applyTemplate(t.id)} tasks created from “${t.name}”`) })),
-      ...NAV.map((n, i) => ({ id: "nav" + n.href, group: "Go to", label: n.label, hint: `Ctrl ${i + 1}`, icon: <ArrowRight size={18} />, run: go(n.href) })),
+      ...NAV.map((n, i) => ({ id: "nav" + n.href, group: "Go to", label: n.label, hint: String(i + 1), icon: <ArrowRight size={18} />, run: go(n.href) })),
       { id: "nav-char", group: "Go to", label: "Character sheet", icon: <ArrowRight size={18} />, run: go("/character") },
     ];
     if (!q) return actions;
@@ -132,6 +133,7 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
               })}
             </div>
             <div className="pal-foot">
+              <span>Space to open</span>
               <span>↑↓ to move</span>
               <span>↵ to open</span>
               <span>#area +project !1 @student tomorrow</span>

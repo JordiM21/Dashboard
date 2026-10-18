@@ -14,7 +14,8 @@ import { lifecycle, members, price, tenureMonths, goalProgress } from "@/lib/hub
 import { studentPaymentStatus, PAYMENT_STATUS_LABEL } from "@/lib/studentStatus";
 import { formatDateDMY, money, nowIso, relDay, uid, today, hhmm } from "@/lib/hub/util";
 import type { Collection, FieldDef, Goal, Item, Note, Task, TaskStatus } from "@/lib/hub/types";
-import { Avatar, Check, Progress, Segmented, spring, AreaDot } from "./ui";
+import { Avatar, Check, Progress, Segmented, spring } from "./ui";
+import { CoverPicker, IconPicker } from "./Customize";
 import type { Rec } from "./Shell";
 
 export default function Inspector({ rec, onClose }: { rec: Rec; onClose: () => void }) {
@@ -400,7 +401,12 @@ function NotePanel({ id, onClose }: { id: string; onClose: () => void }) {
         </button>
       </Head>
       <div className="insp-body">
-        <input className="input-bare title" value={n.title} onChange={(e) => up({ title: e.target.value })} aria-label="Title" />
+        {n.cover && <CoverPicker value={n.cover} onChange={(cover) => up({ cover })} height={120} />}
+        <div className="row" style={{ gap: 10 }}>
+          <IconPicker icon={n.icon ?? "Note"} color={s.areas.find((a) => a.id === n.areaId)?.color} size={36} onIcon={(icon) => up({ icon })} />
+          <input className="input-bare title grow" value={n.title} onChange={(e) => up({ title: e.target.value })} aria-label="Title" />
+          {!n.cover && <CoverPicker value={undefined} compact onChange={(cover) => up({ cover })} />}
+        </div>
         <div className="prop-grid">
           <span>Type</span>
           <Segmented label="Type" size="sm" value={n.type} onChange={(v) => up({ type: v })} options={[{ value: "doc", label: "Doc" }, { value: "plan", label: "Plan" }, { value: "meeting", label: "Meeting" }, { value: "reference", label: "Ref" }]} />
@@ -493,8 +499,9 @@ function ItemPanel({ id, onClose }: { id: string; onClose: () => void }) {
         </button>
       </Head>
       <div className="insp-body">
-        {it.image && <img src={it.image} alt="" width={400} height={200} style={{ width: "100%", height: 200, objectFit: "cover", borderRadius: 14 }} />}
+        {it.image ? <CoverPicker value={it.image} onChange={(image) => up({ image })} height={200} /> : <CoverPicker value={undefined} onChange={(image) => up({ image })} />}
         <input className="input-bare title" value={it.title} onChange={(e) => up({ title: e.target.value })} aria-label="Title" />
+        <textarea className="textarea" style={{ minHeight: 70 }} value={it.description ?? ""} onChange={(e) => up({ description: e.target.value })} placeholder="Notes, thoughts, where you left off…" aria-label="Description" />
         {it.doneAt && <span className="chip success">Done · {formatDateDMY(it.doneAt)}</span>}
         <div className="prop-grid">
           {c.fields.map((f) => (
@@ -502,8 +509,6 @@ function ItemPanel({ id, onClose }: { id: string; onClose: () => void }) {
               <FieldInput f={f} value={it.values[f.key]} onChange={(v) => up({ values: { [f.key]: v } })} />
             </FieldRow>
           ))}
-          <span>Image URL</span>
-          <input className="input" value={it.image ?? ""} onChange={(e) => up({ image: e.target.value })} placeholder="https://…" />
           <span>Link</span>
           <input className="input" value={it.link ?? ""} onChange={(e) => up({ link: e.target.value })} placeholder="https://…" />
         </div>
@@ -555,7 +560,13 @@ function GoalPanel({ id, onClose }: { id: string; onClose: () => void }) {
         </button>
       </Head>
       <div className="insp-body">
-        <input className="input-bare title" value={g.title} onChange={(e) => up({ title: e.target.value })} aria-label="Title" />
+        {g.cover && <CoverPicker value={g.cover} onChange={(cover) => up({ cover })} height={120} />}
+        <div className="row" style={{ gap: 10 }}>
+          <IconPicker icon={g.icon ?? (someday ? "Folder" : "Target")} color={s.areas.find((a) => a.id === g.areaId)?.color} size={36} onIcon={(icon) => up({ icon })} />
+          <input className="input-bare title grow" value={g.title} onChange={(e) => up({ title: e.target.value })} aria-label="Title" />
+          {!g.cover && <CoverPicker value={undefined} compact onChange={(cover) => up({ cover })} />}
+        </div>
+        <textarea className="input-bare callout inline-edit" rows={2} style={{ resize: "none", color: "var(--text-2)" }} value={g.description ?? ""} onChange={(e) => up({ description: e.target.value })} placeholder="Why this matters…" aria-label="Description" />
         {!someday && (
           <div className="col">
             <Progress value={prog.pct} label="Goal progress" />

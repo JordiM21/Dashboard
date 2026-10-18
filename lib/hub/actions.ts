@@ -108,7 +108,7 @@ export function reopenTask(id: string): void {
   revokeXp(id);
 }
 
-export function archive(kind: "tasks" | "notes" | "projects" | "goals" | "items" | "collections" | "expenses" | "time", id: string, label = "Archived"): void {
+export function archive(kind: "areas" | "tasks" | "notes" | "projects" | "goals" | "items" | "collections" | "expenses" | "time", id: string, label = "Archived"): void {
   const at = nowIso();
   const set = (v: string | null) =>
     setState((s) => ({ ...s, [kind]: (s[kind] as { id: string; archivedAt?: string | null }[]).map((x) => (x.id === id ? { ...x, archivedAt: v } : x)) }));
@@ -140,6 +140,27 @@ function checkInboxZero(): void {
     setState((st) => ({ ...st, game: { ...st.game, inboxZeroDays: [...st.game.inboxZeroDays, t0] } }));
     award(XP.inbox, "Inbox zero", "inbox", null, "inbox:" + t0);
   }
+}
+
+// ---------------------------------------------------------------- Areas
+
+export function addArea(name: string, color: string, icon = "Folder"): void {
+  setState((s) => ({ ...s, areas: [...s.areas, { id: uid(), createdAt: nowIso(), updatedAt: nowIso(), archivedAt: null, name, color, icon, active: true, sort: s.areas.length }] }));
+}
+
+export function updateArea(id: string, patch: Partial<HubState["areas"][number]>): void {
+  setState((s) => ({ ...s, areas: s.areas.map((a) => (a.id === id ? touch(a, patch) : a)) }));
+}
+
+export function moveArea(id: string, by: -1 | 1): void {
+  setState((s) => {
+    const list = [...s.areas].sort((a, b) => a.sort - b.sort);
+    const i = list.findIndex((a) => a.id === id);
+    const j = i + by;
+    if (j < 0 || j >= list.length) return s;
+    [list[i], list[j]] = [list[j], list[i]];
+    return { ...s, areas: list.map((a, n) => ({ ...a, sort: n })) };
+  });
 }
 
 // ---------------------------------------------------------------- Projects, templates

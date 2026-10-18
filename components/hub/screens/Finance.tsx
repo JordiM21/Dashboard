@@ -56,7 +56,7 @@ export default function Finance() {
 
   return (
     <>
-      <Toolbar title="Finance">
+      <Toolbar areas={false} title="Finance">
         <Segmented label="Scope" size="sm" value={scope} onChange={(v) => A.setUi({ finScope: v })} options={[{ value: "business", label: "Business" }, { value: "personal", label: "Personal" }, { value: "all", label: "Combined" }]} />
         <button className="btn" onClick={() => setAdding(true)}>
           <Plus size={14} /> Expense

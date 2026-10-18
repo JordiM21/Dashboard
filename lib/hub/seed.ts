@@ -4,6 +4,11 @@ import { addDays, localIso, nowIso, today, uid, weekStart } from "./util";
 
 export const STATE_VERSION = 1;
 
+export const DEFAULT_SETTINGS: HubState["settings"] = {
+  game: "full", restDay: 0, theme: "system", sidebar: "auto", dock: "auto", ownerName: "Jordi",
+  sound: true, volume: 0.5, navKeys: "arrows", keys: {},
+};
+
 const ts = (d: string = today()) => `${d}T09:00:00.000`;
 const base = (d?: string) => ({ id: uid(), createdAt: ts(d), updatedAt: ts(d), archivedAt: null });
 
@@ -140,7 +145,7 @@ function emptyState(): HubState {
     game: { xp: [], dayPlans: {}, inboxZeroDays: [], unlocked: {}, seenActive: [], automations: {} },
     reviews: [],
     monthly: [],
-    settings: { game: "full", restDay: 0, theme: "system", sidebar: "auto", dock: "auto", ownerName: "Jordi" },
+    settings: DEFAULT_SETTINGS,
     ui: { area: "all", taskView: "list", listGroup: "area", finScope: "business" },
   };
 }

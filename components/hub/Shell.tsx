@@ -6,6 +6,8 @@
  * global shortcuts and the automations of Feature Spec §7.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { sfx, sfxFor } from "@/lib/hub/sound";
+import KeyboardLayer, { CheatSheet } from "./Keys";
 import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, MotionConfig } from "motion/react";
 import { useAuth } from "@/lib/firebase/AuthContext";
@@ -13,19 +15,19 @@ import { useLive } from "@/lib/hub/live";
 import { initStore, getState, setState, useHub } from "@/lib/hub/store";
 import { demoSeed, liveSeed } from "@/lib/hub/seed";
 import * as A from "@/lib/hub/actions";
-import { fx, toast } from "@/lib/hub/fx";
+import { fx, onFx, toast } from "@/lib/hub/fx";
 import { goalProgress, members, mrr, newPaying, payingStudents, receivables } from "@/lib/hub/metrics";
-import { streak } from "@/lib/hub/game";
+import { isFocus, streak } from "@/lib/hub/game";
 import { monthKey, prevMonth, today } from "@/lib/hub/util";
 import type { Area } from "@/lib/hub/types";
-import Sidebar, { NAV } from "./Sidebar";
+import Sidebar from "./Sidebar";
 import Dock from "./Dock";
 import Inspector from "./Inspector";
 import { Palette, QuickAdd, Toasts } from "./Overlays";
 import { LessonLogSheet, PlanDaySheet, SettingsSheet } from "./Sheets";
 import { FxLayer } from "./Fx";
-import { MenuProvider, Segmented, AreaDot } from "./ui";
-import { Plus } from "@phosphor-icons/react";
+import { MenuProvider, AreaDot, useDropdown } from "./ui";
+import { Plus, CaretDown, X } from "@phosphor-icons/react";
 
 export type Rec = { kind: "task" | "student" | "note" | "item" | "goal" | "project" | "tx"; id: string };
 
@@ -122,6 +124,7 @@ function Ready({ children }: { children: ReactNode }) {
   const [log, setLog] = useState<string | null | undefined>(undefined);
   const [plan, setPlan] = useState(false);
   const [settings, setSettings] = useState(false);
+  const [cheats, setCheats] = useState(false);
 
   const sb = s.settings.sidebar === "auto" ? (width < 1280 ? "rail" : "open") : s.settings.sidebar;
   const dock = s.settings.dock === "auto" ? (width < 1440 ? "rail" : "open") : s.settings.dock;
@@ -159,29 +162,79 @@ function Ready({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const mod = e.metaKey || e.ctrlKey;
-      if (mod && e.key.toLowerCase() === "k") {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setPal((v) => !v);
-      } else if (mod && e.key === "\\") {
-        e.preventDefault();
-        A.setSettings({ sidebar: sb === "rail" ? "open" : "rail" });
-      } else if (mod && e.key === ".") {
-        e.preventDefault();
-        A.setSettings({ dock: dock === "rail" ? "open" : "rail" });
-      } else if (mod && /^[1-9]$/.test(e.key)) {
-        e.preventDefault();
-        router.push(NAV[Number(e.key) - 1].href);
-      } else if (e.key === "Escape" && rec && !pal && qa === null) {
+      } else if (e.key === "Escape" && rec && !pal && qa === null && !document.querySelector(".sheet, .kbd-ring") && !isTyping(e)) {
         setRec(null);
-      } else if (!mod && !e.altKey && !isTyping(e) && (e.key === "n" || e.key === "q")) {
-        e.preventDefault();
-        setQa("");
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sb, dock, rec, pal, qa, router]);
+  }, [rec, pal, qa]);
+
+  // Quick actions ("macros") fired by the keyboard layer.
+  const run = useCallback(
+    (id: string) => {
+      const st = getState();
+      const areas = st.areas.filter((a) => a.active && !a.archivedAt).sort((a, b) => a.sort - b.sort);
+      const cycle = (by: number) => {
+        const ids = ["all", ...areas.map((a) => a.id)];
+        A.setUi({ area: ids[(ids.indexOf(st.ui.area) + by + ids.length) % ids.length] });
+        sfx.toggle();
+      };
+      const actions: Record<string, () => void> = {
+        palette: () => setPal(true),
+        quickAdd: () => setQa(""),
+        newNote: () => setRec({ kind: "note", id: A.addNote({ title: "Untitled", areaId: st.ui.area === "all" ? "let" : st.ui.area }).id }),
+        logLesson: () => setLog(null),
+        planDay: () => setPlan(true),
+        timer: () => {
+          if (A.runningTimer(st)) return A.stopTimer();
+          const t = (rec?.kind === "task" && st.tasks.find((x) => x.id === rec.id)) || st.tasks.filter((x) => isFocus(x, today())).sort((a, b) => a.priority - b.priority)[0];
+          if (t) A.startTimer({ label: t.title, areaId: t.areaId, taskId: t.id, projectId: t.projectId, track: st.projects.find((p) => p.id === t.projectId)?.track });
+          else toast("Nothing to time. Open a task first.");
+        },
+        review: () => router.push("/goals/review"),
+        prevArea: () => cycle(-1),
+        nextArea: () => cycle(1),
+        allAreas: () => A.setUi({ area: "all" }),
+        theme: () => A.setSettings({ theme: document.documentElement.dataset.theme === "dark" ? "light" : "dark" }),
+        sidebar: () => A.setSettings({ sidebar: sb === "rail" ? "open" : "rail" }),
+        dock: () => A.setSettings({ dock: dock === "rail" ? "open" : "rail" }),
+        settings: () => setSettings(true),
+        help: () => setCheats(true),
+      };
+      actions[id]?.();
+    },
+    [rec, sb, dock, router]
+  );
+
+  // Sound: every click gets its cue, every page change a breath of air.
+  useEffect(() => {
+    const down = (e: PointerEvent) => e.button === 0 && sfxFor(e.target as Element);
+    document.addEventListener("pointerdown", down, true);
+    const off = onFx((e) => {
+      if (e.type === "xp") setTimeout(sfx.xp, 520);
+      if (e.type === "levelup") sfx.levelup();
+      if (e.type === "achievement") setTimeout(sfx.achievement, 120);
+      if (e.type === "boss-defeated") sfx.levelup();
+    });
+    return () => {
+      document.removeEventListener("pointerdown", down, true);
+      off();
+    };
+  }, []);
+  const firstPath = useRef(true);
+  useEffect(() => {
+    if (firstPath.current) return void (firstPath.current = false);
+    sfx.page();
+  }, [pathname]);
+  const hadRec = useRef(false);
+  useEffect(() => {
+    if (!!rec !== hadRec.current) (rec ? sfx.open : sfx.close)();
+    hadRec.current = !!rec;
+  }, [rec]);
 
   useAutomations();
 
@@ -204,6 +257,8 @@ function Ready({ children }: { children: ReactNode }) {
           <LessonLogSheet groupId={log} onClose={() => setLog(undefined)} />
           <PlanDaySheet open={plan} onClose={() => setPlan(false)} />
           <SettingsSheet open={settings} onClose={() => setSettings(false)} />
+          <CheatSheet open={cheats} onClose={() => setCheats(false)} />
+          <KeyboardLayer run={run} />
           <Toasts />
           {s.settings.game !== "off" && <FxLayer />}
           <div id="hub-live" className="sr-only" aria-live="polite" />
@@ -213,14 +268,18 @@ function Ready({ children }: { children: ReactNode }) {
   );
 }
 
-/** Toolbar (§3): page title, Area filter pills, optional view switch, "+ New". */
-export function Toolbar({ title, children }: { title: string; children?: ReactNode }) {
+/**
+ * Toolbar (§3): page title, the Area filter (one compact pill; the sidebar
+ * Areas list drives the same state), optional view switch, "+ New".
+ * Pass areas={false} on screens the filter doesn't apply to.
+ */
+export function Toolbar({ title, children, areas: aware = true }: { title: string; children?: ReactNode; areas?: boolean }) {
   const { area, areas } = useArea();
   const { quickAdd } = useShell();
   return (
     <header className="toolbar">
       <span className="toolbar-title">{title}</span>
-      <AreaFilter area={area} areas={areas} />
+      {aware && <AreaFilter area={area} areas={areas} />}
       <span className="spacer" />
       {children}
       <button className="btn-primary btn" onClick={() => quickAdd("")} title="New (N)">
@@ -231,25 +290,32 @@ export function Toolbar({ title, children }: { title: string; children?: ReactNo
 }
 
 function AreaFilter({ area, areas }: { area: string; areas: Area[] }) {
+  const drop = useDropdown();
+  const cur = areas.find((a) => a.id === area);
   return (
-    <Segmented
-      label="Area filter"
-      size="sm"
-      value={area}
-      onChange={(v) => A.setUi({ area: v })}
-      options={[
-        { value: "all", label: "All" },
-        ...areas.map((a) => ({
-          value: a.id,
-          label: (
-            <span className="row" style={{ gap: 6, minWidth: 8 }} title={a.name} aria-label={a.name}>
-              <AreaDot area={a} />
-              {area === a.id && <span>{a.name}</span>}
-            </span>
-          ),
-        })),
-      ]}
-    />
+    <span className="row" style={{ gap: 2 }}>
+      <button
+        className="filter-pill"
+        data-active={!!cur}
+        title="Filter by area · [ and ] to cycle"
+        onClick={(e) =>
+          drop(e, [
+            { label: "All areas", hint: area === "all" ? "✓" : "\\", onClick: () => A.setUi({ area: "all" }) },
+            { sep: true, label: "" },
+            ...areas.map((a) => ({ label: a.name, icon: <AreaDot area={a} />, hint: a.id === area ? "✓" : "", onClick: () => A.setUi({ area: a.id }) })),
+          ])
+        }
+      >
+        {cur ? <AreaDot area={cur} /> : <span className="dot" />}
+        <b>{cur?.name ?? "All areas"}</b>
+        <CaretDown size={12} />
+      </button>
+      {cur && (
+        <button className="icon-btn" style={{ width: 24, height: 24 }} aria-label="Clear area filter" title="Clear (\)" onClick={() => A.setUi({ area: "all" })}>
+          <X size={12} />
+        </button>
+      )}
+    </span>
   );
 }
 

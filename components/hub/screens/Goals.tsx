@@ -14,7 +14,8 @@ import type { Goal, Horizon } from "@/lib/hub/types";
 import { Toolbar, useArea, useShell } from "../Shell";
 import { BossCard } from "./Today";
 import { BossHp } from "../game";
-import { Fade, Progress, Sheet, AreaDot, Empty } from "../ui";
+import { Fade, Progress, Sheet, AreaDot, IconByName } from "../ui";
+import { coverCss } from "../Customize";
 
 export function PillBars({ data, fmt, kind, hiLast = true }: { data: { label: string; value: number }[]; fmt: (n: number) => string; kind?: "xp"; hiLast?: boolean }) {
   const max = Math.max(1, ...data.map((d) => d.value));
@@ -124,9 +125,10 @@ export default function Goals() {
                 const a = s.areas.find((x) => x.id === g.areaId);
                 return (
                   <button key={g.id} className="folder" style={{ "--c": a?.color } as CSSProperties} onClick={() => inspect({ kind: "goal", id: g.id })}>
+                    {g.cover && <div className="card-cover" style={{ background: coverCss(g.cover) }} />}
                     <div className="row">
                       <span className="folder-icon">
-                        <Folder size={18} weight="duotone" />
+                        <IconByName name={g.icon ?? "Folder"} weight="duotone" />
                       </span>
                       <span className="caption muted">{a?.name}</span>
                     </div>
@@ -159,12 +161,13 @@ function MiniBoss({ g, onOpen }: { g: Goal; onOpen: () => void }) {
   return (
     <button className="card hoverable edge col" style={{ "--edge": a?.color, textAlign: "left", gap: 10 } as CSSProperties} onClick={onOpen}>
       <div className="row">
-        <AreaDot area={a} />
+        {g.icon ? <span style={{ color: a?.color, display: "inline-flex" }}><IconByName name={g.icon} size={16} weight="duotone" /></span> : <AreaDot area={a} />}
         <span className="caption muted">{a?.name}</span>
         <span className="spacer" />
         {p.defeated ? <span className="chip success">Defeated</span> : game && <Skull size={16} weight="duotone" style={{ color: "var(--epic)" }} />}
       </div>
       <span className="headline">{g.title}</span>
+      {g.description && <span className="caption muted" style={{ marginTop: -6 }}>{g.description}</span>}
       <div className="kpi-row">
         <span className="display-m">{fmt(p.value)}</span>
         <span className="callout muted">

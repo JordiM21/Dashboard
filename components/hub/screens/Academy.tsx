@@ -49,7 +49,7 @@ function Academy() {
 
   return (
     <>
-      <Toolbar title="Academy">
+      <Toolbar areas={false} title="Academy">
         <Segmented label="Section" size="sm" value={tab} onChange={setTab} options={[{ value: "students", label: "Students", count: live.students.length }, { value: "groups", label: "Groups" }, { value: "curriculum", label: "Curriculum" }, { value: "lessons", label: "Lessons" }]} />
         <button className="btn" onClick={() => lessonLog()}>
           <ClipboardText size={16} /> Log lesson

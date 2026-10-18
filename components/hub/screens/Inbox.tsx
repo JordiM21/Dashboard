@@ -41,8 +41,8 @@ export default function Inbox() {
       if (!cur) return;
       const k = e.key.toLowerCase();
       const done = () => e.preventDefault();
-      if (k === "j" || k === "arrowdown") (done(), setSel((i) => Math.min(items.length - 1, i + 1)));
-      else if (k === "k" || k === "arrowup") (done(), setSel((i) => Math.max(0, i - 1)));
+      if (k === "j") (done(), setSel((i) => Math.min(items.length - 1, i + 1)));
+      else if (k === "k") (done(), setSel((i) => Math.max(0, i - 1)));
       else if (/^[1-9]$/.test(k) && areas[Number(k) - 1]) (done(), A.updateTask(cur.id, { areaId: areas[Number(k) - 1].id, status: "next" }));
       else if (k === "t") (done(), A.updateTask(cur.id, { scheduled: today(), status: "next" }));
       else if (k === "m") (done(), A.updateTask(cur.id, { scheduled: addDays(today(), 1), status: "next" }));
@@ -52,8 +52,9 @@ export default function Inbox() {
       else if (k === "backspace" || k === "delete") (done(), A.archive("tasks", cur.id, "Dropped from Inbox"));
       else if (k === "enter") (done(), inspect({ kind: "task", id: cur.id }));
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // Capture phase: triage keys (1–6, T, E…) win over the global shortcuts on this page.
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   });
 
   const keys: [string, string][] = [
@@ -70,7 +71,7 @@ export default function Inbox() {
 
   return (
     <>
-      <Toolbar title="Inbox">
+      <Toolbar title="Inbox" areas={false}>
         <span className="caption muted">{items.length} to triage</span>
       </Toolbar>
       <Fade className="canvas" style={{ maxWidth: 920 }}>

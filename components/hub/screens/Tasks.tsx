@@ -13,7 +13,8 @@ import { addDays, dayName, dayOfWeek, formatDateDMY, monthName, relDay, today, w
 import type { Task, TaskStatus } from "@/lib/hub/types";
 import { Toolbar, useArea, useShell } from "../Shell";
 import TaskRow, { rowMotion, useTaskMenu } from "../TaskRow";
-import { AreaDot, Empty, Fade, Progress, Segmented, useDropdown } from "../ui";
+import { AreaDot, Empty, Fade, IconByName, Progress, Segmented, useDropdown } from "../ui";
+import { coverCss } from "../Customize";
 
 type View = "list" | "board" | "week" | "calendar" | "projects";
 interface Filters {
@@ -496,9 +497,10 @@ function ProjectsView() {
             const a = s.areas.find((x) => x.id === p.areaId);
             return (
               <Link key={p.id} href={`/tasks/p/${p.id}`} className="folder" style={{ "--c": a?.color, minHeight: 190 } as CSSProperties}>
+                {p.cover && <div className="card-cover" style={{ background: coverCss(p.cover) }} />}
                 <div className="row">
                   <span className="folder-icon">
-                    <Kanban size={18} weight="duotone" />
+                    <IconByName name={p.icon ?? "Kanban"} weight="duotone" />
                   </span>
                   <span className="caption muted">{a?.name}</span>
                   <span className="spacer" />

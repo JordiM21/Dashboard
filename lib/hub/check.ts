@@ -5,6 +5,7 @@
  */
 import assert from "node:assert/strict";
 import { parseQuickAdd } from "./parse";
+import { bindings, comboOf } from "./keys";
 import { levelFromXp, streak, taskXp, xpForLevel } from "./game";
 import { addDays, today } from "./util";
 import type { HubState, Task } from "./types";
@@ -56,5 +57,13 @@ const s: Pick<HubState, "tasks" | "game" | "settings"> = {
 assert.equal(streak(s).current, 3);
 s.tasks = s.tasks.filter((x) => !x.id.startsWith(days[1])); // miss the middle day, no freeze banked
 assert.equal(streak(s).current, 1);
+
+// Keybind combos: shift only counts for letters/named keys, Ctrl and Cmd are one modifier.
+const ev = (key: string, m: Partial<KeyboardEvent> = {}) => ({ key, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...m }) as KeyboardEvent;
+assert.equal(comboOf(ev("N", { shiftKey: true })), "shift+n");
+assert.equal(comboOf(ev("?", { shiftKey: true })), "?");
+assert.equal(comboOf(ev(" ")), "Space");
+assert.equal(comboOf(ev("\\", { metaKey: true })), "ctrl+\\");
+assert.equal(bindings({ quickAdd: "q" }).quickAdd, "q");
 
 console.log("hub checks passed");

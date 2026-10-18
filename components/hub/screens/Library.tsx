@@ -9,7 +9,7 @@ import * as A from "@/lib/hub/actions";
 import { formatDateDMY } from "@/lib/hub/util";
 import type { NoteType } from "@/lib/hub/types";
 import { Toolbar, useArea, useShell } from "../Shell";
-import { Empty, Fade, Segmented, AreaDot } from "../ui";
+import { Empty, Fade, Segmented, AreaDot, IconByName } from "../ui";
 
 type Folder_ = { key: string; name: string; count: number; color?: string; icon: React.ReactNode };
 
@@ -44,7 +44,7 @@ export default function Library() {
     const project = s.projects.find((p) => p.id === x.projectId);
     return (
       <button className="task-row" style={{ width: "100%" }} onClick={() => inspect({ kind: "note", id: x.id })}>
-        {x.pinned ? <PushPin size={16} weight="fill" style={{ color: "var(--accent)" }} /> : <NotePencil size={16} className="faint" />}
+        {x.pinned ? <PushPin size={16} weight="fill" style={{ color: "var(--accent)" }} /> : <span style={{ color: x.icon ? a?.color : "var(--text-3)", display: "inline-flex" }}><IconByName name={x.icon ?? "Note"} size={16} weight={x.icon ? "duotone" : "regular"} /></span>}
         <span className="grow col" style={{ gap: 0, minWidth: 0, textAlign: "left" }}>
           <span className="truncate" style={{ fontWeight: 500 }}>
             {x.title}

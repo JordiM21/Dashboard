@@ -4,13 +4,14 @@
  * Collections (§5.8): one generic engine. A Collection is a name + field
  * schema; new list types need zero code. Folder cards are the focal point.
  */
-import { useState, type CSSProperties } from "react";
-import { ArrowLeft, Plus, X, GameController } from "@phosphor-icons/react";
+import { useEffect, useState, type CSSProperties } from "react";
+import { ArrowLeft, Plus, X, GameController, SlidersHorizontal } from "@phosphor-icons/react";
 import { useHub } from "@/lib/hub/store";
 import * as A from "@/lib/hub/actions";
 import type { Collection, FieldDef, FieldType, Item } from "@/lib/hub/types";
 import { Toolbar, useArea, useShell } from "../Shell";
 import { Empty, Fade, IconByName, ICONS, Segmented, Sheet, Check } from "../ui";
+import { CoverPicker, IconPicker, coverCss } from "../Customize";
 
 export default function Collections() {
   const s = useHub();
@@ -54,12 +55,13 @@ export default function Collections() {
                 const done = items.filter((i) => A.isItemDone(x, i)).length;
                 return (
                   <button key={x.id} className="folder" style={{ "--c": a?.color } as CSSProperties} onClick={() => setOpen(x.id)}>
+                    {x.cover && <div className="card-cover" style={{ background: coverCss(x.cover) }} />}
                     <span className="folder-icon">
                       <IconByName name={x.icon} weight="duotone" />
                     </span>
                     <span className="headline">{x.name}</span>
-                    <span className="caption muted">
-                      {a?.name}
+                    <span className="caption muted truncate">
+                      {x.description || a?.name}
                       {x.doneField ? ` · ${done} done` : ""}
                     </span>
                     <span className="count">{items.length}</span>
@@ -84,15 +86,27 @@ function CollectionView({ c, onBack }: { c: Collection; onBack: () => void }) {
   const boardField = c.fields.find((f) => f.key === c.boardField) ?? c.fields.find((f) => f.type === "select");
   const show = (f: FieldDef, v: unknown) => (v == null || v === "" ? "" : f.type === "checkbox" ? (v ? "✓" : "") : Array.isArray(v) ? v.join(", ") : f.type === "number" && /price|budget/i.test(f.key) ? `$${v}` : String(v));
   const open = (i: Item) => inspect({ kind: "item", id: i.id });
+  const [editing, setEditing] = useState(false);
 
   return (
     <>
+      {c.cover && (
+        <div style={{ marginBottom: 16 }}>
+          <CoverPicker value={c.cover} onChange={(cover) => A.updateCollection(c.id, { cover })} height={150} />
+        </div>
+      )}
+      <NewCollection open={editing} onClose={() => setEditing(false)} edit={c} />
       <div className="row" style={{ marginBottom: 20 }}>
         <button className="icon-btn" aria-label="Back to collections" onClick={onBack}>
           <ArrowLeft size={18} />
         </button>
-        <h1 className="display-xl">{c.name}</h1>
+        <IconPicker icon={c.icon} color={s.areas.find((a) => a.id === c.areaId)?.color} size={44} onIcon={(icon) => A.updateCollection(c.id, { icon })} />
+        <input className="input-bare display-xl inline-edit" style={{ width: `${Math.max(4, c.name.length + 1)}ch` }} value={c.name} onChange={(e) => A.updateCollection(c.id, { name: e.target.value })} aria-label="Collection name" />
         <span className="caption muted">{items.length} items</span>
+        <button className="btn btn-sm btn-ghost" onClick={() => setEditing(true)}>
+          <SlidersHorizontal size={14} /> Fields
+        </button>
+        {!c.cover && <CoverPicker value={undefined} onChange={(cover) => A.updateCollection(c.id, { cover })} />}
         <span className="spacer" />
         <form
           className="row sb-search"
@@ -108,6 +122,15 @@ function CollectionView({ c, onBack }: { c: Collection; onBack: () => void }) {
           <input className="input-bare callout" placeholder={`Add to ${c.name}`} value={title} onChange={(e) => setTitle(e.target.value)} />
         </form>
       </div>
+      <textarea
+        className="input-bare callout inline-edit"
+        rows={1}
+        style={{ resize: "none", color: "var(--text-2)", margin: "-8px 0 16px 52px", width: "calc(100% - 52px)" }}
+        value={c.description ?? ""}
+        placeholder="Add a description…"
+        onChange={(e) => A.updateCollection(c.id, { description: e.target.value })}
+        aria-label="Collection description"
+      />
       {items.length === 0 && <Empty text="Empty collection." />}
 
       {c.view === "list" && items.length > 0 && (
@@ -143,7 +166,7 @@ function CollectionView({ c, onBack }: { c: Collection; onBack: () => void }) {
         <div className="grid-cards" style={{ paddingTop: 0 }}>
           {items.map((i) => (
             <button key={i.id} className="card hoverable col" style={{ padding: 0, overflow: "hidden", textAlign: "left", gap: 0, opacity: i.doneAt ? 0.7 : 1 }} onClick={() => open(i)}>
-              <div style={{ height: 120, background: i.image ? `center/cover url(${JSON.stringify(i.image)})` : "linear-gradient(135deg, var(--bg-sunken), var(--bg-raised))", display: "grid", placeItems: "center", color: "var(--text-3)" }}>
+              <div style={{ height: 120, background: coverCss(i.image) ?? "linear-gradient(135deg, var(--bg-sunken), var(--bg-raised))", display: "grid", placeItems: "center", color: "var(--text-3)" }}>
                 {!i.image && <IconByName name={c.icon} size={32} weight="duotone" />}
               </div>
               <div className="col" style={{ padding: 14, gap: 6 }}>
@@ -201,26 +224,37 @@ function CollectionView({ c, onBack }: { c: Collection; onBack: () => void }) {
 
 const TYPES: FieldType[] = ["text", "number", "select", "multiselect", "date", "checkbox", "url", "image"];
 
-function NewCollection({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (id: string) => void }) {
+/** Create a collection, or edit an existing one's name, icon and field schema (existing values survive: field keys never change). */
+function NewCollection({ open, onClose, onCreated, edit }: { open: boolean; onClose: () => void; onCreated?: (id: string) => void; edit?: Collection }) {
   const s = useHub();
   const [name, setName] = useState("");
   const [areaId, setAreaId] = useState("hobbies");
   const [icon, setIcon] = useState("GameController");
-  const [fields, setFields] = useState<(FieldDef & { opts?: string })[]>([{ key: "status", label: "Status", type: "select", opts: "To do, Doing, Done" }]);
+  const [fields, setFields] = useState<(FieldDef & { opts?: string })[]>([]);
+  useEffect(() => {
+    if (!open) return;
+    setName(edit?.name ?? "");
+    setAreaId(edit?.areaId ?? (s.ui.area === "all" ? "hobbies" : s.ui.area));
+    setIcon(edit?.icon ?? "GameController");
+    setFields(edit ? edit.fields.map((f) => ({ ...f, opts: f.options?.join(", ") })) : [{ key: "", label: "Status", type: "select", opts: "To do, Doing, Done" }]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, edit?.id]);
   const save = () => {
     if (!name.trim()) return;
     const defs: FieldDef[] = fields
       .filter((f) => f.label.trim())
-      .map((f) => ({ key: f.label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_"), label: f.label.trim(), type: f.type, ...(f.type === "select" || f.type === "multiselect" ? { options: (f.opts ?? "").split(",").map((o) => o.trim()).filter(Boolean) } : {}) }));
+      .map((f) => ({ key: f.key || f.label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_"), label: f.label.trim(), type: f.type, ...(f.type === "select" || f.type === "multiselect" ? { options: (f.opts ?? "").split(",").map((o) => o.trim()).filter(Boolean) } : {}) }));
     const firstSelect = defs.find((f) => f.type === "select");
-    const c = A.addCollection({ name: name.trim(), areaId, icon, fields: defs, view: "list", boardField: firstSelect?.key, doneField: firstSelect?.options?.includes("Done") ? firstSelect.key : undefined, doneValue: "Done" });
-    setName("");
+    const keepDone = edit?.doneField && defs.some((f) => f.key === edit.doneField);
+    const done = keepDone ? { doneField: edit!.doneField, doneValue: edit!.doneValue } : { doneField: firstSelect?.options?.includes("Done") ? firstSelect.key : undefined, doneValue: "Done" };
+    const boardField = edit?.boardField && defs.some((f) => f.key === edit.boardField) ? edit.boardField : firstSelect?.key;
+    if (edit) A.updateCollection(edit.id, { name: name.trim(), areaId, icon, fields: defs, boardField, ...done });
+    else onCreated?.(A.addCollection({ name: name.trim(), areaId, icon, fields: defs, view: "list", boardField, ...done }).id);
     onClose();
-    onCreated(c.id);
   };
   return (
-    <Sheet open={open} onClose={onClose} label="New collection">
-      <h2 className="title">New collection</h2>
+    <Sheet open={open} onClose={onClose} label={edit ? "Edit collection" : "New collection"}>
+      <h2 className="title">{edit ? "Edit collection" : "New collection"}</h2>
       <div className="row">
         <label className="field grow">
           <span>Name</span>
@@ -270,7 +304,7 @@ function NewCollection({ open, onClose, onCreated }: { open: boolean; onClose: (
       <div className="row">
         <span className="caption faint grow">A select field with a “Done” option counts toward goals.</span>
         <button className="btn btn-primary" onClick={save} disabled={!name.trim()}>
-          <GameController size={14} /> Create
+          <GameController size={14} /> {edit ? "Save" : "Create"}
         </button>
       </div>
     </Sheet>

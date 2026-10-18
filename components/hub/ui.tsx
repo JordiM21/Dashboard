@@ -5,12 +5,14 @@ import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, u
 import { AnimatePresence, motion } from "motion/react";
 import {
   BookOpen, Books, CalendarHeart, Check as CheckIcon, Folder, GameController, Gift, GraduationCap, Heart, House, MapPin, Target, User, Star, Briefcase, Airplane, Barbell, MusicNotes, Camera, Code, Plant, PawPrint,
+  Lightning, Rocket, Trophy, Coffee, Brain, Palette, Leaf, Sun, Moon, Car, Bicycle, ShoppingCart, Wallet, PiggyBank, ChartLine, Megaphone, ChatCircle, Envelope, Calendar, Clock, FilmSlate, Television, Headphones, Book, Pencil, Lightbulb, Flag, Sparkle, Globe, Mountains, Tree, Dog, Cat, Cake, Basketball, SoccerBall, Sword, Shield, Crown, Diamond, Key, Wrench, Hammer, PaintBrush, Flask, Atom, Laptop, DeviceMobile, Users, Baby, Bed, ForkKnife, Kanban, Note,
   type Icon as PhIcon,
 } from "@phosphor-icons/react";
 import type { Area } from "@/lib/hub/types";
 
 export const ICONS: Record<string, PhIcon> = {
   GraduationCap, BookOpen, Heart, User, GameController, House, Target, Gift, Books, MapPin, CalendarHeart, Folder, Star, Briefcase, Airplane, Barbell, MusicNotes, Camera, Code, Plant, PawPrint,
+  Lightning, Rocket, Trophy, Coffee, Brain, Palette, Leaf, Sun, Moon, Car, Bicycle, ShoppingCart, Wallet, PiggyBank, ChartLine, Megaphone, ChatCircle, Envelope, Calendar, Clock, FilmSlate, Television, Headphones, Book, Pencil, Lightbulb, Flag, Sparkle, Globe, Mountains, Tree, Dog, Cat, Cake, Basketball, SoccerBall, Sword, Shield, Crown, Diamond, Key, Wrench, Hammer, PaintBrush, Flask, Atom, Laptop, DeviceMobile, Users, Baby, Bed, ForkKnife, Kanban, Note,
 };
 export const IconByName = ({ name, size = 18, weight = "regular" }: { name: string; size?: number; weight?: "regular" | "fill" | "duotone" | "bold" }) => {
   const I = ICONS[name] ?? Folder;
