@@ -718,7 +718,7 @@ function TxPanel({ id, onClose }: { id: string; onClose: () => void }) {
   if (local)
     return (
       <>
-        <Head kind="Expense · local" onClose={onClose}>
+        <Head kind="Expense" onClose={onClose}>
           <button className="icon-btn" onClick={() => (A.archive("expenses", local.id, "Expense archived"), onClose())} aria-label="Archive expense">
             <Archive size={18} />
           </button>

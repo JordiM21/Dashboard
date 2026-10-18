@@ -84,7 +84,7 @@ export function ledger(live: LiveData, st: HubState): LedgerRow[] {
   const rows: LedgerRow[] = live.transactions.map((t) => ({
     id: t.id, date: t.date, description: t.description, category: t.category, amount: t.amount, scope: "business", source: t.source ?? "manual", studentId: t.studentId, raw: t,
   }));
-  for (const e of st.expenses) if (!e.archivedAt) rows.push({ id: e.id, date: e.date, description: e.description, category: e.category, amount: -Math.abs(e.amount), scope: e.scope, source: e.recurring ? "recurring · local" : "local" });
+  for (const e of st.expenses) if (!e.archivedAt) rows.push({ id: e.id, date: e.date, description: e.description, category: e.category, amount: -Math.abs(e.amount), scope: e.scope, source: e.recurring ? "recurring" : "manual" });
   return rows.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 }
 

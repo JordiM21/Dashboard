@@ -31,7 +31,7 @@ export function coverCss(cover?: string): string | undefined {
   return `center / cover no-repeat url(${JSON.stringify(cover)})`;
 }
 
-/** Downscales an upload to ≤1200px JPEG and returns it as a data: URL (ponytail: lives in the local store until deploy moves images to Storage). */
+/** Downscales an upload to ≤1200px JPEG and returns it as a data: URL (ponytail: stored inline in the record (Firestore 1 MB/doc), move to Firebase Storage if covers get heavy). */
 async function fileToCover(file: File): Promise<string> {
   const small = await resizeImageFile(file, 1200, 0.8);
   return new Promise((res, rej) => {

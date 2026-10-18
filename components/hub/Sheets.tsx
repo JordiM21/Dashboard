@@ -239,7 +239,7 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
             <hr className="divider" />
             <div className="row">
               <span className="callout muted grow">
-                {storeMode() === "demo" ? "You’re looking at demo data. Nothing here touches the live app." : `Signed in as ${user?.email}. v2 records are stored on this device until deploy.`}
+                {storeMode() === "demo" ? "You’re looking at demo data. Nothing here touches the live app." : `Signed in as ${user?.email}. Everything saves to your database and syncs across devices.`}
               </span>
               {storeMode() === "demo" && (
                 <button className="btn btn-sm" onClick={() => (resetStore(demoSeed), onClose())}>
@@ -247,7 +247,7 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
                 </button>
               )}
               {user && (
-                <button className="btn btn-sm" onClick={() => signOut(auth)}>
+                <button className="btn btn-sm" onClick={() => signOut(auth).then(() => location.assign("/login"))}>
                   Sign out
                 </button>
               )}

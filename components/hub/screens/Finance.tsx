@@ -209,7 +209,7 @@ function Detail({ r }: { r: LedgerRow }) {
   const t = r.raw;
   return (
     <div className="col" style={{ gap: 18 }}>
-      <span className="label">{r.source.includes("local") ? "Local expense" : "Transaction"}</span>
+      <span className="label">{r.raw ? "Transaction" : "Expense"}</span>
       <Money value={r.amount} digits={2} className="display-xl" />
       <div className="prop-grid">
         <span>Description</span>
@@ -288,7 +288,7 @@ function AddExpense({ open, onClose, defaultScope }: { open: boolean; onClose: (
           <Check square checked={f.recurring} label="Recurring" onChange={() => setF({ ...f, recurring: !f.recurring })} /> Recurring monthly — next entry is created on the 1st
         </label>
         <div className="row">
-          <span className="caption faint grow">Stored locally in v2 until deploy. Stripe income keeps flowing automatically.</span>
+          <span className="caption faint grow">Stripe income keeps flowing in automatically.</span>
           <button className="btn btn-primary">Add</button>
         </div>
       </form>

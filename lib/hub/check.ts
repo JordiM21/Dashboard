@@ -1,11 +1,13 @@
 /**
  * Smallest runnable check for the rules that would silently break:
  * quick-add parsing, XP/level math and the streak walk.
- *   npx tsx lib/hub/check.ts
+ *   npx tsx --env-file=.env.local lib/hub/check.ts
  */
 import assert from "node:assert/strict";
 import { parseQuickAdd } from "./parse";
 import { bindings, comboOf } from "./keys";
+import { changes } from "./cloud";
+import { demoSeed } from "./seed";
 import { levelFromXp, streak, taskXp, xpForLevel } from "./game";
 import { addDays, today } from "./util";
 import type { HubState, Task } from "./types";
@@ -65,5 +67,13 @@ assert.equal(comboOf(ev("?", { shiftKey: true })), "?");
 assert.equal(comboOf(ev(" ")), "Space");
 assert.equal(comboOf(ev("\\", { metaKey: true })), "ctrl+\\");
 assert.equal(bindings({ quickAdd: "q" }).quickAdd, "q");
+
+// Cloud sync writes only what changed: one edited task, nothing else.
+const base0 = demoSeed();
+const edited = { ...base0, tasks: base0.tasks.map((x, i) => (i === 0 ? { ...x, title: "edited" } : x)) };
+const ch = changes(base0, edited);
+assert.deepEqual(ch.map(([c, id]) => [c, id]), [["hub_tasks", base0.tasks[0].id]]);
+assert.deepEqual(changes(base0, { ...base0, settings: { ...base0.settings, sound: false } }).map(([c, id]) => c + "/" + id), ["hub_state/settings"]);
+assert.equal(changes(base0, { ...base0, tasks: base0.tasks.slice(1) })[0][2], null);
 
 console.log("hub checks passed");

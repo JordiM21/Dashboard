@@ -12,7 +12,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, MotionConfig } from "motion/react";
 import { useAuth } from "@/lib/firebase/AuthContext";
 import { useLive } from "@/lib/hub/live";
-import { initStore, getState, setState, useHub } from "@/lib/hub/store";
+import { initCloud, initStore, getState, setState, useHub } from "@/lib/hub/store";
 import { demoSeed, liveSeed } from "@/lib/hub/seed";
 import * as A from "@/lib/hub/actions";
 import { fx, onFx, toast } from "@/lib/hub/fx";
@@ -72,20 +72,25 @@ function useWidth() {
   return w;
 }
 
+/** The signed-out demo is a local-preview tool; a deployed Hub always asks for sign-in. */
+const DEMO_ALLOWED = process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_HUB_DEMO === "1";
+
 export default function Shell({ children }: { children: ReactNode }) {
   const { loading } = useAuth();
   const live = useLive();
+  const router = useRouter();
   const [ready, setReady] = useState(false);
   const migrated = live.oldTasks !== null && live.oldProjects !== null;
 
   useEffect(() => {
     if (loading) return;
+    setReady(false);
     if (live.mode === "demo") {
+      if (!DEMO_ALLOWED) return void router.replace("/login");
       initStore("demo", demoSeed);
       setReady(true);
     } else if (migrated) {
-      initStore("live", () => liveSeed(live.oldTasks!, live.oldProjects!));
-      setReady(true);
+      return initCloud(() => liveSeed(live.oldTasks!, live.oldProjects!), () => setReady(true));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, live.mode, migrated]);
