@@ -2,82 +2,19 @@
 
 /**
  * Collections (§5.8): one generic engine. A Collection is a name + field
- * schema; new list types need zero code. Folder cards are the focal point.
+ * schema; new list types need zero code. Opened from the Library, which
+ * holds notes, files and collections in one place.
  */
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, Plus, X, GameController, SlidersHorizontal } from "@phosphor-icons/react";
 import { useHub } from "@/lib/hub/store";
 import * as A from "@/lib/hub/actions";
 import type { Collection, FieldDef, FieldType, Item } from "@/lib/hub/types";
-import { Toolbar, useArea, useShell } from "../Shell";
-import { Empty, Fade, IconByName, ICONS, Segmented, Sheet, Check } from "../ui";
+import { useShell } from "../Shell";
+import { Empty, IconByName, ICONS, Segmented, Sheet, Check } from "../ui";
 import { CoverPicker, IconPicker, coverCss } from "../Customize";
 
-export default function Collections() {
-  const s = useHub();
-  const { match } = useArea();
-  const [open, setOpen] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
-  const cols = s.collections.filter((c) => !c.archivedAt && match(c.areaId));
-  const c = s.collections.find((x) => x.id === open);
-
-  return (
-    <>
-      <Toolbar title="Collections">
-        {c && (
-          <Segmented
-            label="View"
-            size="sm"
-            value={c.view}
-            onChange={(v) => A.updateCollection(c.id, { view: v })}
-            options={[{ value: "list", label: "List" }, { value: "grid", label: "Grid" }, ...(c.fields.some((f) => f.type === "select") ? [{ value: "board" as const, label: "Board" }] : [])]}
-          />
-        )}
-        <button className="btn" onClick={() => setCreating(true)}>
-          <Plus size={14} /> Collection
-        </button>
-      </Toolbar>
-      <Fade className="canvas" k={open ?? "root"}>
-        {c ? (
-          <CollectionView c={c} onBack={() => setOpen(null)} />
-        ) : (
-          <>
-            <header className="page-head">
-              <div>
-                <h1 className="display-xl">Collections</h1>
-                <p className="callout muted">Game backlogs, wishlists, places, dates — any list, with your own fields. Quick-add with “/games Elden Ring”.</p>
-              </div>
-            </header>
-            <div className="grid-cards">
-              {cols.map((x) => {
-                const a = s.areas.find((y) => y.id === x.areaId);
-                const items = s.items.filter((i) => i.collectionId === x.id && !i.archivedAt);
-                const done = items.filter((i) => A.isItemDone(x, i)).length;
-                return (
-                  <button key={x.id} className="folder" style={{ "--c": a?.color } as CSSProperties} onClick={() => setOpen(x.id)}>
-                    {x.cover && <div className="card-cover" style={{ background: coverCss(x.cover) }} />}
-                    <span className="folder-icon">
-                      <IconByName name={x.icon} weight="duotone" />
-                    </span>
-                    <span className="headline">{x.name}</span>
-                    <span className="caption muted truncate">
-                      {x.description || a?.name}
-                      {x.doneField ? ` · ${done} done` : ""}
-                    </span>
-                    <span className="count">{items.length}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </>
-        )}
-      </Fade>
-      <NewCollection open={creating} onClose={() => setCreating(false)} onCreated={(id) => setOpen(id)} />
-    </>
-  );
-}
-
-function CollectionView({ c, onBack }: { c: Collection; onBack: () => void }) {
+export function CollectionView({ c, onBack }: { c: Collection; onBack: () => void }) {
   const s = useHub();
   const { inspect } = useShell();
   const [title, setTitle] = useState("");
@@ -97,7 +34,7 @@ function CollectionView({ c, onBack }: { c: Collection; onBack: () => void }) {
       )}
       <NewCollection open={editing} onClose={() => setEditing(false)} edit={c} />
       <div className="row head-row" style={{ marginBottom: 20 }}>
-        <button className="icon-btn" aria-label="Back to collections" onClick={onBack}>
+        <button className="icon-btn" aria-label="Back to library" onClick={onBack}>
           <ArrowLeft size={18} />
         </button>
         <IconPicker icon={c.icon} color={s.areas.find((a) => a.id === c.areaId)?.color} size={44} onIcon={(icon) => A.updateCollection(c.id, { icon })} />
@@ -107,6 +44,13 @@ function CollectionView({ c, onBack }: { c: Collection; onBack: () => void }) {
           <SlidersHorizontal size={14} /> Fields
         </button>
         {!c.cover && <CoverPicker value={undefined} onChange={(cover) => A.updateCollection(c.id, { cover })} />}
+        <Segmented
+          label="View"
+          size="sm"
+          value={c.view}
+          onChange={(v) => A.updateCollection(c.id, { view: v })}
+          options={[{ value: "list", label: "List" }, { value: "grid", label: "Grid" }, ...(c.fields.some((f) => f.type === "select") ? [{ value: "board" as const, label: "Board" }] : [])]}
+        />
         <span className="spacer" />
         <form
           className="row sb-search"
@@ -225,7 +169,7 @@ function CollectionView({ c, onBack }: { c: Collection; onBack: () => void }) {
 const TYPES: FieldType[] = ["text", "number", "select", "multiselect", "date", "checkbox", "url", "image"];
 
 /** Create a collection, or edit an existing one's name, icon and field schema (existing values survive: field keys never change). */
-function NewCollection({ open, onClose, onCreated, edit }: { open: boolean; onClose: () => void; onCreated?: (id: string) => void; edit?: Collection }) {
+export function NewCollection({ open, onClose, onCreated, edit }: { open: boolean; onClose: () => void; onCreated?: (id: string) => void; edit?: Collection }) {
   const s = useHub();
   const [name, setName] = useState("");
   const [areaId, setAreaId] = useState("hobbies");

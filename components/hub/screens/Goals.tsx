@@ -9,7 +9,7 @@ import { useLive } from "@/lib/hub/live";
 import * as A from "@/lib/hub/actions";
 import { XP } from "@/lib/hub/game";
 import { goalProgress, ledger, monthNet, mrrHistory, newPaying, payingStudents, weekDamage } from "@/lib/hub/metrics";
-import { money, monthKey, monthName, prevMonth, weekStart, minutesLabel } from "@/lib/hub/util";
+import { money, monthKey, monthName, prevMonth, weekStart } from "@/lib/hub/util";
 import type { Goal, Horizon } from "@/lib/hub/types";
 import { Toolbar, useArea, useShell } from "../Shell";
 import { BossCard } from "./Today";
@@ -57,7 +57,9 @@ export default function Goals() {
         <header className="page-head">
           <div>
             <h1 className="display-xl">Goals</h1>
-            <p className="callout muted">Progress is computed from Stripe, tasks and collections — never typed by hand.</p>
+            <p className="callout muted" style={{ maxWidth: 720 }}>
+              A <b>goal</b> is a result you can measure, with a target and a deadline (“$1,500 MRR by June”). The work to get there lives in <b>projects</b> and tasks. Progress comes from Stripe, tasks and collections.
+            </p>
           </div>
           <span className="spacer" />
           <button className="btn" onClick={() => setMonthly(true)}>
@@ -190,10 +192,6 @@ function MonthlySheet({ open, onClose }: { open: boolean; onClose: () => void })
   const inS = newPaying(live, s, month);
   const out = live.students.filter((x) => s.studentMeta[x.id]?.churnedAt?.startsWith(month));
   const tasksByArea = s.areas.map((a) => ({ a, n: s.tasks.filter((t) => t.areaId === a.id && t.completedAt?.startsWith(month)).length }));
-  const hours = s.areas.map((a) => ({
-    a,
-    m: s.time.filter((e) => e.areaId === a.id && e.start.startsWith(month) && e.end && !e.archivedAt).reduce((x, e) => x + (Date.parse(e.end!) - Date.parse(e.start)) / 60000, 0),
-  }));
   return (
     <Sheet open={open} onClose={onClose} wide label="Monthly review">
       <h2 className="title">
@@ -216,19 +214,11 @@ function MonthlySheet({ open, onClose }: { open: boolean; onClose: () => void })
           <span className="callout muted">Students out</span>
           <span className="display-m">−{out.length}</span>
         </div>
-        <div className="tile span-6">
+        <div className="tile span-12">
           <div className="label" style={{ marginBottom: 8 }}>Tasks done by area</div>
           {tasksByArea.map(({ a, n }) => (
             <div key={a.id} className="row callout" style={{ minHeight: 24 }}>
               <AreaDot area={a} /> <span className="grow">{a.name}</span> <b>{n}</b>
-            </div>
-          ))}
-        </div>
-        <div className="tile span-6">
-          <div className="label" style={{ marginBottom: 8 }}>Hours by area</div>
-          {hours.map(({ a, m }) => (
-            <div key={a.id} className="row callout" style={{ minHeight: 24 }}>
-              <AreaDot area={a} /> <span className="grow">{a.name}</span> <b>{minutesLabel(Math.round(m))}</b>
             </div>
           ))}
         </div>

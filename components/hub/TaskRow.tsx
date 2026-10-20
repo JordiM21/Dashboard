@@ -3,7 +3,7 @@
 /** Task row (§7) with the signature completion moment (§9.1). */
 import { useRef, useState, type CSSProperties } from "react";
 import { motion, useMotionValue, useTransform } from "motion/react";
-import { DotsSixVertical, Play, CalendarBlank, ArrowRight, Archive, Hourglass, ListChecks, Repeat, CheckCircle } from "@phosphor-icons/react";
+import { DotsSixVertical, CalendarBlank, ArrowRight, Archive, Hourglass, ListChecks, Repeat, CheckCircle } from "@phosphor-icons/react";
 import { useHub } from "@/lib/hub/store";
 import * as A from "@/lib/hub/actions";
 import { taskXp } from "@/lib/hub/game";
@@ -40,7 +40,6 @@ export function useTaskMenu() {
       { sep: true, label: "" },
       ...s.areas.filter((a) => a.id !== t.areaId).map((a) => ({ label: `Move to ${a.name}`, onClick: () => A.updateTask(t.id, { areaId: a.id, status: t.status === "inbox" ? "next" : t.status }) })),
       { sep: true, label: "" },
-      { label: "Start timer", onClick: () => A.startTimer({ label: t.title, areaId: t.areaId, taskId: t.id, projectId: t.projectId, track: s.projects.find((p) => p.id === t.projectId)?.track }) },
       { label: "Archive", danger: true, onClick: () => A.archive("tasks", t.id, "Task archived") },
     ]);
 }
@@ -102,9 +101,6 @@ export default function TaskRow({ t, selected, showProject = true, draggable, co
       <span className="t-actions">
         <button className="icon-btn" style={{ width: 26, height: 26 }} title="Do today" aria-label="Do today" onClick={() => A.updateTask(t.id, { scheduled: today(), status: t.status === "inbox" ? "next" : t.status })}>
           <CalendarBlank size={15} />
-        </button>
-        <button className="icon-btn" style={{ width: 26, height: 26 }} title="Start timer" aria-label="Start timer" onClick={() => A.startTimer({ label: t.title, areaId: t.areaId, taskId: t.id, projectId: t.projectId })}>
-          <Play size={15} />
         </button>
         <button className="icon-btn" style={{ width: 26, height: 26 }} title="Archive" aria-label="Archive" onClick={() => A.archive("tasks", t.id, "Task archived")}>
           <Archive size={15} />

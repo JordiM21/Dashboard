@@ -92,6 +92,9 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
+/* No visible scrollbars anywhere: they steal width and make views jump. Scrolling still works (wheel, touch, keys). */
+* { scrollbar-width: none; }
+*::-webkit-scrollbar { display: none; }
 body {
   background: var(--bg-canvas);
   color: var(--text-1);
@@ -193,7 +196,7 @@ img { display: block; max-width: 100%; }
 .page-head p { margin: 6px 0 0; }
 
 .right { position: relative; min-width: 0; overflow: hidden; border-left: 1px solid var(--line); }
-.dock { height: 100%; overflow: hidden auto; padding: 18px 16px; display: flex; flex-direction: column; gap: 16px; background: var(--bg-canvas); transition: opacity var(--slow) var(--ease), filter var(--slow); scrollbar-width: thin; }
+.dock { height: 100%; overflow: hidden auto; padding: 18px 16px; display: flex; flex-direction: column; gap: 16px; background: var(--bg-canvas); transition: opacity var(--slow) var(--ease), filter var(--slow); }
 .hub[data-inspector="open"] .dock { opacity: 0.8; filter: saturate(0.6); pointer-events: none; }
 .hub[data-dock="rail"] .dock { padding: 18px 8px; align-items: center; }
 .inspector {

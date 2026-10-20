@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import type { CSSProperties } from "react";
 import {
-  Sun, Tray, CheckSquare, Target, GraduationCap, Wallet, Books, SquaresFour, Timer, MagnifyingGlass, GearSix, SidebarSimple, SignIn, PushPin, Kanban, PlugsConnected,
+  Sun, Tray, CheckSquare, Target, GraduationCap, Wallet, Books, MagnifyingGlass, GearSix, SidebarSimple, SignIn, PushPin, Kanban, PlugsConnected,
   type Icon,
 } from "@phosphor-icons/react";
 import { useHub } from "@/lib/hub/store";
@@ -17,7 +17,7 @@ import { today } from "@/lib/hub/util";
 import { useShell, type Rec } from "./Shell";
 import { spring } from "./ui";
 
-const AREA_PAGES = ["/today", "/tasks", "/goals", "/library", "/collections"];
+const AREA_PAGES = ["/today", "/tasks", "/goals", "/library"];
 
 export const NAV: { href: string; label: string; icon: Icon }[] = [
   { href: "/today", label: "Today", icon: Sun },
@@ -27,8 +27,6 @@ export const NAV: { href: string; label: string; icon: Icon }[] = [
   { href: "/academy", label: "Academy", icon: GraduationCap },
   { href: "/finance", label: "Finance", icon: Wallet },
   { href: "/library", label: "Library", icon: Books },
-  { href: "/collections", label: "Collections", icon: SquaresFour },
-  { href: "/time", label: "Time", icon: Timer },
   { href: "/connections", label: "Connections", icon: PlugsConnected },
 ];
 
@@ -95,7 +93,7 @@ export default function Sidebar({ rail }: { rail: boolean }) {
               title={`${a.name} · filter`}
               onClick={() => {
                 A.setUi({ area: on ? "all" : a.id });
-                // The filter only shapes Today, Tasks, Goals, Library and Collections — elsewhere, take you to the tasks.
+                // The filter only shapes Today, Tasks, Goals and Library — elsewhere, take you to the tasks.
                 if (!on && !AREA_PAGES.some((p) => path.startsWith(p))) router.push("/tasks");
               }}
               style={on ? { background: `color-mix(in srgb, ${a.color} 14%, transparent)` } : undefined}

@@ -2,16 +2,16 @@
 
 /** Command palette (⌘K), quick-add (N) and toasts. */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { Layer } from "./ui";
-import { MagnifyingGlass, Plus, ArrowRight, CheckCircle, Note, User, Kanban, Target, SquaresFour, UsersThree, Moon, NotePencil, CalendarCheck, ClipboardText, Lightning, GearSix } from "@phosphor-icons/react";
+import { MagnifyingGlass, Plus, ArrowRight, CheckCircle, Note, User, Kanban, Target, SquaresFour, UsersThree, Moon, NotePencil, CalendarCheck, Lightning, GearSix } from "@phosphor-icons/react";
 import { getState, useHub } from "@/lib/hub/store";
 import { useLive } from "@/lib/hub/live";
 import { parseQuickAdd } from "@/lib/hub/parse";
 import * as A from "@/lib/hub/actions";
 import { dismiss, toast, useToasts } from "@/lib/hub/fx";
-import { formatDateDMY, relDay } from "@/lib/hub/util";
+import { formatDateDMY, relDay, today } from "@/lib/hub/util";
 import { NAV } from "./Sidebar";
 import { useShell, useArea } from "./Shell";
 
@@ -32,7 +32,7 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
   const s = useHub();
   const live = useLive();
   const router = useRouter();
-  const { inspect, quickAdd, lessonLog, planDay, settings } = useShell();
+  const { inspect, quickAdd, planDay, settings } = useShell();
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -47,7 +47,6 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
     const actions: Cmd[] = [
       { id: "new-task", group: "Create", label: q ? `Create task “${q}”` : "New task", icon: <Plus size={18} />, hint: "N", run: () => (q ? createFromText(q, live.students) : quickAdd("")) },
       { id: "new-note", group: "Create", label: "New note", icon: <NotePencil size={18} />, run: () => inspect({ kind: "note", id: A.addNote({ title: q || "Untitled" }).id }) },
-      { id: "log", group: "Create", label: "Log a lesson", icon: <ClipboardText size={18} />, run: () => lessonLog() },
       { id: "plan", group: "Actions", label: "Plan my day", icon: <CalendarCheck size={18} />, run: planDay },
       { id: "review", group: "Actions", label: "Start weekly review", icon: <Lightning size={18} />, run: go("/goals/review") },
       { id: "settings", group: "Actions", label: "Settings · areas, keys, sound", icon: <GearSix size={18} />, hint: ",", run: settings },
@@ -149,7 +148,8 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
 }
 
 /** Shared by palette and quick-add: parse one line and create a task or a Collection item. */
-function createFromText(text: string, students: { id: string; name: string }[], areaDefault?: string) {
+/** `where` is the page you captured from: on Tasks it's a task straight away, on Today it's a task for today, anywhere else it's Inbox unless you gave it a date/area/project. */
+function createFromText(text: string, students: { id: string; name: string }[], areaDefault?: string, where: "inbox" | "tasks" | "today" = "inbox") {
   const st = getState();
   const p = parseQuickAdd(text, {
     areas: st.areas,
@@ -172,7 +172,8 @@ function createFromText(text: string, students: { id: string; name: string }[], 
     priority: p.priority ?? 2,
     due: p.due,
     studentId: p.studentId,
-    status: p.due || p.projectId || p.areaId ? "next" : "inbox",
+    ...(where === "today" && !p.due ? { scheduled: today() } : {}),
+    status: p.due || p.projectId || p.areaId || where !== "inbox" ? "next" : "inbox",
   });
   toast(t.status === "inbox" ? `Captured to Inbox` : `Added “${t.title}”${t.due ? ` · ${relDay(t.due)}` : ""}`);
 }
@@ -182,6 +183,8 @@ export function QuickAdd({ value, onClose }: { value: string | null; onClose: ()
   const s = useHub();
   const live = useLive();
   const { area } = useArea();
+  const path = usePathname() ?? "";
+  const where = path.startsWith("/tasks") ? "tasks" : path.startsWith("/today") ? "today" : "inbox";
   useEffect(() => {
     if (value !== null) setText(value);
   }, [value]);
@@ -208,7 +211,7 @@ export function QuickAdd({ value, onClose }: { value: string | null; onClose: ()
                 onSubmit={(e) => {
                   e.preventDefault();
                   if (!text.trim()) return;
-                  createFromText(text, live.students, area === "all" ? undefined : area);
+                  createFromText(text, live.students, area === "all" ? undefined : area, where);
                   setText("");
                   onClose();
                 }}
@@ -221,7 +224,9 @@ export function QuickAdd({ value, onClose }: { value: string | null; onClose: ()
               </form>
               <div className="row" style={{ padding: "12px 18px", flexWrap: "wrap", minHeight: 48 }}>
                 {p.chips.length === 0 ? (
-                  <span className="callout faint">Lands in the Inbox. Add a date, #area, +project, !1–!3, @student, or start with /games to add to a Collection.</span>
+                  <span className="callout faint">
+                    {where === "tasks" ? "Becomes a task." : where === "today" ? "Becomes a task for today." : "Lands in the Inbox to sort later."} Add a date, #area, +project, !1–!3, @student, or start with /games to add to a Collection.
+                  </span>
                 ) : (
                   <>
                     {p.chips.map((c) => (

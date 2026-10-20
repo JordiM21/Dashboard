@@ -5,7 +5,7 @@
  * the screen updates in the same frame. Game XP is awarded here so a
  * completion can never forget its reward.
  */
-import type { Collection, Goal, HubState, Item, LessonLog, LocalExpense, Note, Project, Recurrence, Task, TimeEntry, XpEvent } from "./types";
+import type { Collection, Goal, HubState, Item, LocalExpense, Note, Project, Recurrence, Task, XpEvent } from "./types";
 import { XP, compactXp, levelFromXp, taskXp, totalXp } from "./game";
 import { fx, toast, announce } from "./fx";
 import { getState, setState } from "./store";
@@ -120,17 +120,17 @@ export function archive(kind: "areas" | "tasks" | "notes" | "projects" | "goals"
   checkInboxZero();
 }
 
-export function planDay(taskIds: string[]): void {
-  const t0 = today();
-  const first = !getState().game.dayPlans[t0];
+/** Plans `day` (today, or tomorrow the night before). A plan made the evening before counts for that day's streak and XP. */
+export function planDay(taskIds: string[], day: string = today()): void {
+  const first = !getState().game.dayPlans[day];
   setState((s) => ({
     ...s,
-    tasks: s.tasks.map((t) => (taskIds.includes(t.id) ? touch(t, { scheduled: t0, status: t.status === "inbox" ? "next" : t.status }) : t)),
-    game: { ...s.game, dayPlans: { ...s.game.dayPlans, [t0]: { at: nowIso(), taskIds } } },
+    tasks: s.tasks.map((t) => (taskIds.includes(t.id) ? touch(t, { scheduled: day, status: t.status === "inbox" ? "next" : t.status }) : t)),
+    game: { ...s.game, dayPlans: { ...s.game.dayPlans, [day]: { at: nowIso(), taskIds } } },
   }));
   if (first) {
-    if (new Date().getHours() < 11) award(XP.plan, "Day planned", "plan", null, "plan:" + t0);
-    else toast("Day planned. Plan before 11:00 to earn +30 XP");
+    if (day > today() || new Date().getHours() < 11) award(XP.plan, day > today() ? "Tomorrow planned" : "Day planned", "plan", null, "plan:" + day);
+    else toast("Day planned. Plan the night before (or before 11:00) to earn +30 XP");
   }
   checkInboxZero();
 }
@@ -272,37 +272,7 @@ export function updateItem(id: string, patch: Partial<Item>): void {
   if (item.doneAt && col?.name === "Games backlog" && !s.game.unlocked.completionist) unlock("completionist");
 }
 
-// ---------------------------------------------------------------- Time
-
-export function runningTimer(s: HubState = getState()): TimeEntry | undefined {
-  return s.time.find((e) => e.end === null && !e.archivedAt);
-}
-
-export function startTimer(p: { label: string; areaId: string; taskId?: string; projectId?: string | null; track?: "delivery" | "growth" }): void {
-  stopTimer(true);
-  const e: TimeEntry = { id: uid(), createdAt: nowIso(), updatedAt: nowIso(), archivedAt: null, start: nowIso(), end: null, source: "timer", ...p };
-  setState((s) => ({ ...s, time: [e, ...s.time] }));
-  toast(`Timer started · ${p.label}`);
-}
-
-export function stopTimer(silent = false): void {
-  const r = runningTimer();
-  if (!r) return;
-  setState((s) => ({ ...s, time: s.time.map((e) => (e.id === r.id ? touch(e, { end: nowIso() }) : e)) }));
-  if (!silent) toast(`Logged ${Math.max(1, Math.round((Date.now() - Date.parse(r.start)) / 60000))} min · ${r.label}`);
-}
-
-export function addTimeEntry(e: Omit<TimeEntry, "id" | "createdAt" | "updatedAt">): void {
-  setState((s) => ({ ...s, time: [{ id: uid(), createdAt: nowIso(), updatedAt: nowIso(), ...e }, ...s.time] }));
-}
-
 // ---------------------------------------------------------------- Academy, finance
-
-export function logLesson(l: Omit<LessonLog, "id" | "createdAt" | "updatedAt">): void {
-  const log: LessonLog = { id: uid(), createdAt: nowIso(), updatedAt: nowIso(), archivedAt: null, ...l };
-  setState((s) => ({ ...s, lessons: [log, ...s.lessons] }));
-  award(XP.lesson, "Lesson logged", "lesson", "let", "lesson:" + log.id);
-}
 
 export function setStudentMeta(id: string, patch: HubState["studentMeta"][string]): void {
   setState((s) => ({ ...s, studentMeta: { ...s.studentMeta, [id]: { ...s.studentMeta[id], ...patch } } }));

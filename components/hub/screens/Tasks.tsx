@@ -15,7 +15,7 @@ import { addDays, dayName, dayOfWeek, formatDateDMY, monthName, relDay, today, w
 import type { Task, TaskStatus } from "@/lib/hub/types";
 import { Toolbar, useArea, useShell } from "../Shell";
 import TaskRow, { rowMotion, useTaskMenu } from "../TaskRow";
-import { AreaDot, Empty, Fade, IconByName, Progress, Segmented, useDropdown, useLongPress, useCoarse } from "../ui";
+import { AreaDot, Empty, Fade, IconByName, Progress, Segmented, useDrop, useDropdown, useLongPress, useCoarse } from "../ui";
 import { coverCss } from "../Customize";
 
 type View = "list" | "board" | "week" | "calendar" | "projects";
@@ -91,6 +91,13 @@ export default function Tasks() {
         />
       </Toolbar>
       <div className="canvas">
+        <p className="callout muted" style={{ margin: "0 0 16px", maxWidth: 720 }}>
+          {view === "projects" ? (
+            <>A <b>project</b> is a finished thing you deliver, made of tasks — it ends when its tasks are done (“Launch summer camp”). A <b>goal</b> is a number you want to reach by a date (“$1,500 MRR”); projects are how you get there.</>
+          ) : (
+            <>Things you’ve decided to do. Each one has an area and, ideally, a day. Unsorted ideas live in the <b>Inbox</b> until you decide.</>
+          )}
+        </p>
         {view !== "projects" && (
           <div className="row" style={{ marginBottom: 20, flexWrap: "wrap" }}>
             {view !== "board" && (
@@ -214,23 +221,6 @@ const COLS: { status: TaskStatus; label: string }[] = [
   { status: "waiting", label: "Waiting" },
   { status: "done", label: "Done" },
 ];
-
-function useDrop(onDrop: (id: string) => void) {
-  const [over, setOver] = useState(false);
-  return {
-    over,
-    props: {
-      onDragOver: (e: React.DragEvent) => (e.preventDefault(), setOver(true)),
-      onDragLeave: () => setOver(false),
-      onDrop: (e: React.DragEvent) => {
-        e.preventDefault();
-        setOver(false);
-        const id = e.dataTransfer.getData("text/plain");
-        if (id) onDrop(id);
-      },
-    },
-  };
-}
 
 function TaskCard({ t, style }: { t: Task; style?: CSSProperties }) {
   const s = useHub();

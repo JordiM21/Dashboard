@@ -440,3 +440,20 @@ export function useLongPress(onLong: (p: { clientX: number; clientY: number }) =
   };
 }
 
+/** HTML5 drop target for a dragged id (Tasks board/calendar, Social calendar). */
+export function useDrop(onDrop: (id: string) => void) {
+  const [over, setOver] = useState(false);
+  return {
+    over,
+    props: {
+      onDragOver: (e: React.DragEvent) => (e.preventDefault(), setOver(true)),
+      onDragLeave: () => setOver(false),
+      onDrop: (e: React.DragEvent) => {
+        e.preventDefault();
+        setOver(false);
+        const id = e.dataTransfer.getData("text/plain");
+        if (id) onDrop(id);
+      },
+    },
+  };
+}

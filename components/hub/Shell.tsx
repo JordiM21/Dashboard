@@ -18,7 +18,7 @@ import { demoSeed, liveSeed } from "@/lib/hub/seed";
 import * as A from "@/lib/hub/actions";
 import { fx, onFx, toast } from "@/lib/hub/fx";
 import { goalProgress, members, mrr, newPaying, payingStudents, receivables } from "@/lib/hub/metrics";
-import { isFocus, streak } from "@/lib/hub/game";
+import { streak } from "@/lib/hub/game";
 import { monthKey, prevMonth, today } from "@/lib/hub/util";
 import type { Area } from "@/lib/hub/types";
 import Sidebar from "./Sidebar";
@@ -33,7 +33,6 @@ import { Plus, CaretDown, X } from "@phosphor-icons/react";
 // Inspector (with react-markdown) is warmed on idle so the first click is instant.
 const loadInspector = () => import("./Inspector");
 const Inspector = dynamic(loadInspector, { ssr: false });
-const LessonLogSheet = dynamic(() => import("./Sheets").then((m) => m.LessonLogSheet), { ssr: false });
 const PlanDaySheet = dynamic(() => import("./Sheets").then((m) => m.PlanDaySheet), { ssr: false });
 const SettingsSheet = dynamic(() => import("./Sheets").then((m) => m.SettingsSheet), { ssr: false });
 
@@ -44,7 +43,6 @@ interface HubCtx {
   inspect: (r: Rec | null) => void;
   palette: () => void;
   quickAdd: (initial?: string) => void;
-  lessonLog: (groupId?: string) => void;
   planDay: () => void;
   settings: () => void;
   mobile: boolean;
@@ -141,7 +139,6 @@ function Ready({ children }: { children: ReactNode }) {
   const [rec, setRec] = useState<Rec | null>(null);
   const [pal, setPal] = useState(false);
   const [qa, setQa] = useState<string | null>(null);
-  const [log, setLog] = useState<string | null | undefined>(undefined);
   const [plan, setPlan] = useState(false);
   const [settings, setSettings] = useState(false);
   const [cheats, setCheats] = useState(false);
@@ -179,7 +176,6 @@ function Ready({ children }: { children: ReactNode }) {
       inspect: setRec,
       palette: () => setPal(true),
       quickAdd: (initial = "") => setQa(initial),
-      lessonLog: (g) => setLog(g ?? null),
       planDay: () => setPlan(true),
       settings: () => setSettings(true),
       mobile,
@@ -215,14 +211,7 @@ function Ready({ children }: { children: ReactNode }) {
         palette: () => setPal(true),
         quickAdd: () => setQa(""),
         newNote: () => setRec({ kind: "note", id: A.addNote({ title: "Untitled", areaId: st.ui.area === "all" ? "let" : st.ui.area }).id }),
-        logLesson: () => setLog(null),
         planDay: () => setPlan(true),
-        timer: () => {
-          if (A.runningTimer(st)) return A.stopTimer();
-          const t = (rec?.kind === "task" && st.tasks.find((x) => x.id === rec.id)) || st.tasks.filter((x) => isFocus(x, today())).sort((a, b) => a.priority - b.priority)[0];
-          if (t) A.startTimer({ label: t.title, areaId: t.areaId, taskId: t.id, projectId: t.projectId, track: st.projects.find((p) => p.id === t.projectId)?.track });
-          else toast("Nothing to time. Open a task first.");
-        },
         review: () => router.push("/goals/review"),
         prevArea: () => cycle(-1),
         nextArea: () => cycle(1),
@@ -304,7 +293,6 @@ function Ready({ children }: { children: ReactNode }) {
           )}
           <Palette open={pal} onClose={() => setPal(false)} />
           <QuickAdd value={qa} onClose={() => setQa(null)} />
-          <LessonLogSheet groupId={log} onClose={() => setLog(undefined)} />
           <PlanDaySheet open={plan} onClose={() => setPlan(false)} />
           <SettingsSheet open={settings} onClose={() => setSettings(false)} />
           <CheatSheet open={cheats} onClose={() => setCheats(false)} />

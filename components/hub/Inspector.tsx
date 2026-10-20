@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { X, Archive, Play, Plus, Trash, ArrowSquareOut, PushPin, CheckCircle, ArrowCounterClockwise, Eye, PencilSimple } from "@phosphor-icons/react";
+import { X, Archive, Plus, Trash, ArrowSquareOut, PushPin, CheckCircle, ArrowCounterClockwise, Eye, PencilSimple } from "@phosphor-icons/react";
 import { useHub } from "@/lib/hub/store";
 import { useLive } from "@/lib/hub/live";
 import * as A from "@/lib/hub/actions";
@@ -87,17 +87,10 @@ function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
   if (!t) return <Gone onClose={onClose} />;
   const up = (patch: Partial<Task>) => A.updateTask(t.id, patch);
   const area = s.areas.find((a) => a.id === t.areaId);
-  const running = A.runningTimer(s);
 
   return (
     <>
       <Head kind="Task" onClose={onClose}>
-        <button
-          className="btn btn-sm"
-          onClick={() => (running?.taskId === t.id ? A.stopTimer() : A.startTimer({ label: t.title, areaId: t.areaId, taskId: t.id, projectId: t.projectId, track: s.projects.find((p) => p.id === t.projectId)?.track }))}
-        >
-          <Play size={14} weight={running?.taskId === t.id ? "fill" : "regular"} /> {running?.taskId === t.id ? "Stop timer" : "Start timer"}
-        </button>
         <button className="icon-btn" onClick={() => (A.archive("tasks", t.id, "Task archived"), onClose())} aria-label="Archive task" title="Archive">
           <Archive size={18} />
         </button>

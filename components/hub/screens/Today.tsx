@@ -5,13 +5,13 @@ import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { Play, CheckCircle, BookOpen, ClipboardText, Warning, CurrencyDollar, Tray, Kanban, Hourglass, CalendarHeart, CalendarCheck, Lightning, Sparkle, Skull } from "@phosphor-icons/react";
+import { CheckCircle, UsersThree, Warning, CurrencyDollar, Tray, Kanban, Hourglass, CalendarHeart, CalendarCheck, Lightning, Sparkle, Skull } from "@phosphor-icons/react";
 import { useHub } from "@/lib/hub/store";
 import { useLive } from "@/lib/hub/live";
 import * as A from "@/lib/hub/actions";
 import { isFocus, taskXp, XP } from "@/lib/hub/game";
-import { classesOn, dueSoon, goalProgress, missingLogs, receivables, weekDamage, type ClassOccurrence } from "@/lib/hub/metrics";
-import { daysBetween, greeting, money, relDay, today, toMinutes, hhmm, formatDateDMY } from "@/lib/hub/util";
+import { classesOn, dueSoon, goalProgress, members, receivables, weekDamage, type ClassOccurrence } from "@/lib/hub/metrics";
+import { addDays, daysBetween, greeting, money, relDay, today, toMinutes, hhmm, formatDateDMY } from "@/lib/hub/util";
 import { Toolbar, useArea, useShell } from "../Shell";
 import TaskRow, { rowMotion } from "../TaskRow";
 import { BossHp, PhaseBanner } from "../game";
@@ -79,7 +79,7 @@ export default function Today() {
 function NextUp({ focus, tint }: { focus: ReturnType<typeof useHub>["tasks"]; tint?: string }) {
   const s = useHub();
   const live = useLive();
-  const { lessonLog, planDay, inspect } = useShell();
+  const { planDay, inspect } = useShell();
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const i = setInterval(() => setNow(new Date()), 30000);
@@ -88,13 +88,11 @@ function NextUp({ focus, tint }: { focus: ReturnType<typeof useHub>["tasks"]; ti
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const cls = classesOn(today(), live, s).find((c) => c.endMin > nowMin && c.startMin - nowMin <= 120);
   const top = focus[0];
-  const running = A.runningTimer(s);
   const style = { "--hero": tint ?? "var(--accent)" } as CSSProperties;
 
   if (cls) {
-    const level = live.curriculum.find((l) => l.levelNumber === cls.group.currentLevel);
     const live_ = cls.startMin <= nowMin;
-    const files = live.files.filter((f) => f.tags.some((t) => t.toLowerCase() === cls.group.currentTopic.toLowerCase())).length;
+    const seats = members(cls.group, live.students).length;
     return (
       <section className="hero" style={style} aria-label="Next up">
         <span className="hero-deco" />
@@ -103,17 +101,13 @@ function NextUp({ focus, tint }: { focus: ReturnType<typeof useHub>["tasks"]; ti
         </span>
         <h2 className="display-l">{cls.group.name}</h2>
         <p className="muted" style={{ margin: 0, fontSize: 15 }}>
-          {cls.slot.start}–{hhmm(new Date(0, 0, 0, 0, cls.endMin))} · Level {cls.group.currentLevel}
-          {level ? ` · ${level.title}` : ""} · <b style={{ color: "#fff" }}>{cls.group.currentTopic}</b>
+          {cls.slot.start}–{hhmm(new Date(0, 0, 0, 0, cls.endMin))} · {seats} student{seats === 1 ? "" : "s"}
         </p>
         <span className="spacer" />
         <div className="row">
-          <Link className="btn btn-hero" href={`/academy?group=${cls.group.id}&tab=curriculum`}>
-            <BookOpen size={16} weight="bold" /> Resources{files ? ` · ${files}` : ""}
+          <Link className="btn btn-hero" href={`/academy?tab=groups&group=${cls.group.id}`}>
+            <UsersThree size={16} weight="bold" /> Open group
           </Link>
-          <button className="btn btn-hero-ghost" onClick={() => lessonLog(cls.group.id)}>
-            <ClipboardText size={16} /> Log lesson
-          </button>
         </div>
       </section>
     );
@@ -122,7 +116,6 @@ function NextUp({ focus, tint }: { focus: ReturnType<typeof useHub>["tasks"]; ti
   if (top) {
     const area = s.areas.find((a) => a.id === top.areaId);
     const project = s.projects.find((p) => p.id === top.projectId);
-    const isRunning = running?.taskId === top.id;
     return (
       <section className="hero" style={style} aria-label="Next up">
         <span className="hero-deco" />
@@ -141,14 +134,11 @@ function NextUp({ focus, tint }: { focus: ReturnType<typeof useHub>["tasks"]; ti
         </p>
         <span className="spacer" />
         <div className="row">
-          <button
-            className="btn btn-hero"
-            onClick={() => (isRunning ? A.stopTimer() : A.startTimer({ label: top.title, areaId: top.areaId, taskId: top.id, projectId: top.projectId, track: project?.track }))}
-          >
-            <Play size={16} weight="fill" /> {isRunning ? `Stop · ${Math.round((Date.now() - Date.parse(running!.start)) / 60000)}m` : "Start timer"}
+          <button className="btn btn-hero" onClick={(e) => A.completeTask(top.id, { x: e.clientX, y: e.clientY })}>
+            <CheckCircle size={16} weight="bold" /> Complete
           </button>
-          <button className="btn btn-hero-ghost" onClick={(e) => A.completeTask(top.id, { x: e.clientX, y: e.clientY })}>
-            <CheckCircle size={16} /> Complete
+          <button className="btn btn-hero-ghost" onClick={() => inspect({ kind: "task", id: top.id })}>
+            Open
           </button>
           {s.settings.game !== "off" && <span className="xp-chip" style={{ marginLeft: "auto" }}>+{taskXp(top, new Date(), 0)} XP</span>}
         </div>
@@ -164,7 +154,7 @@ function NextUp({ focus, tint }: { focus: ReturnType<typeof useHub>["tasks"]; ti
       </span>
       <h2 className="display-l">{s.game.dayPlans[today()] ? "Focus list clear." : "Nothing planned yet."}</h2>
       <p className="muted" style={{ margin: 0, fontSize: 15 }}>
-        {s.game.dayPlans[today()] ? "Pull something from Next, or call it a day." : "Pick up to 7 tasks for today. Before 11:00 it’s worth +30 XP."}
+        {s.game.dayPlans[today()] ? "Pull something from Next, or call it a day." : "Pick up to 7 tasks. Best done the night before — it’s worth +30 XP."}
       </p>
       <span className="spacer" />
       <div className="row">
@@ -225,6 +215,8 @@ function Quests({ focus }: { focus: ReturnType<typeof useHub>["tasks"] }) {
   const weekly = (review?.priorities ?? []).map((id) => s.tasks.find((t) => t.id === id)).filter(Boolean) as typeof s.tasks;
   const game = s.settings.game !== "off";
   const planned = !!s.game.dayPlans[t0];
+  const evening = new Date().getHours() >= 17;
+  const tmrPlanned = !!s.game.dayPlans[addDays(t0, 1)];
   const alertsVisible = useAlerts().length > 0;
 
   return (
@@ -237,9 +229,10 @@ function Quests({ focus }: { focus: ReturnType<typeof useHub>["tasks"] }) {
         </span>
         {game && xpLeft > 0 && <span className="caption faint">{xpLeft} XP on the table</span>}
         <span className="spacer" />
+        {tmrPlanned && <span className="chip success">Tomorrow planned</span>}
         <button className="btn btn-sm" onClick={planDay}>
-          <CalendarCheck size={14} /> {planned ? "Re-plan" : "Plan my day"}
-          {!planned && game && new Date().getHours() < 11 && <span className="xp-ghost">+{XP.plan}</span>}
+          <CalendarCheck size={14} /> {evening ? (tmrPlanned ? "Edit tomorrow" : "Plan tomorrow") : planned ? "Re-plan" : "Plan my day"}
+          {game && ((evening && !tmrPlanned) || (!evening && !planned && new Date().getHours() < 11)) && <span className="xp-ghost">+{XP.plan}</span>}
         </button>
       </div>
       <Progress value={total ? doneToday.length / total : 0} thin kind={doneToday.length && game ? "xp" : undefined} label="Quests done" />
@@ -301,7 +294,7 @@ interface Alert {
 function useAlerts(): Alert[] {
   const s = useHub();
   const live = useLive();
-  const { inspect, lessonLog } = useShell();
+  const { inspect } = useShell();
   const { match } = useArea();
   const router = useRouter();
   return useMemo(() => {
@@ -322,8 +315,6 @@ function useAlerts(): Alert[] {
         });
       for (const st of dueSoon(live, s))
         out.push({ id: "due" + st.id, icon: <CurrencyDollar size={16} />, tone: "default", text: <><b>{st.name}</b> · payment due {relDay(st.nextPayment!).toLowerCase()}</>, action: { label: "Open", run: () => inspect({ kind: "student", id: st.id }) } });
-      for (const c of missingLogs(live, s))
-        out.push({ id: "log" + c.group.id + c.date, icon: <ClipboardText size={16} />, tone: "warning", text: <><b>{c.group.name}</b> · no lesson log for {relDay(c.date).toLowerCase()}</>, action: { label: "Log", run: () => lessonLog(c.group.id) } });
     }
     const inbox = s.tasks.filter((t) => t.status === "inbox" && !t.archivedAt).length;
     if (inbox > 10) out.push({ id: "inbox", icon: <Tray size={16} />, tone: "default", text: <><b>Inbox at {inbox}</b> · triage before it buries you</>, action: { label: "Triage", run: () => router.push("/inbox") } });
@@ -342,7 +333,7 @@ function useAlerts(): Alert[] {
       if (left <= Number(i.values.remind ?? 7)) out.push({ id: "date" + i.id, icon: <CalendarHeart size={16} />, tone: "default", text: <><b>{i.title}</b> · {left === 0 ? "today" : `in ${left} days`}</>, action: { label: "Open", run: () => inspect({ kind: "item", id: i.id }) } });
     }
     return out;
-  }, [s, live, match, inspect, lessonLog, router]);
+  }, [s, live, match, inspect, router]);
 }
 
 function Alerts() {
@@ -379,7 +370,7 @@ function Alerts() {
 function Schedule() {
   const s = useHub();
   const live = useLive();
-  const { lessonLog } = useShell();
+  const router = useRouter();
   const t0 = today();
   const classes = classesOn(t0, live, s);
   const [nowMin, setNowMin] = useState(() => new Date().getHours() * 60 + new Date().getMinutes());
@@ -387,8 +378,7 @@ function Schedule() {
     const i = setInterval(() => setNowMin(new Date().getHours() * 60 + new Date().getMinutes()), 60000);
     return () => clearInterval(i);
   }, []);
-  const timed = s.time.filter((e) => e.start.slice(0, 10) === t0 && !e.archivedAt);
-  const startH = Math.min(8, ...classes.map((c) => Math.floor(c.startMin / 60)), ...timed.map((e) => new Date(e.start).getHours()));
+  const startH = Math.min(8, ...classes.map((c) => Math.floor(c.startMin / 60)));
   const endH = Math.max(21, ...classes.map((c) => Math.ceil(c.endMin / 60)));
   const span = (endH - startH) * 60;
   const pos = (m: number) => `${((m - startH * 60) / span) * 100}%`;
@@ -410,22 +400,9 @@ function Schedule() {
             {startH + i}
           </span>
         ))}
-        {timed.map((e) => {
-          const st = new Date(e.start);
-          const m = st.getHours() * 60 + st.getMinutes();
-          const end = e.end ? new Date(e.end) : new Date();
-          const len = Math.max(15, (end.getTime() - st.getTime()) / 60000);
-          const a = s.areas.find((x) => x.id === e.areaId);
-          return (
-            <span key={e.id} className="tl-event" title={`${e.label} · ${Math.round(len)}m`} style={{ left: pos(m), width: `calc(${(len / span) * 100}% - 2px)`, "--c": a?.color, top: 70, height: 18, padding: "1px 6px", fontSize: 10, opacity: 0.8 } as CSSProperties}>
-              {e.label}
-            </span>
-          );
-        })}
         {classes.map((c: ClassOccurrence) => (
-          <button key={c.group.id + c.startMin} className="tl-event" style={{ left: pos(c.startMin), width: `calc(${(c.slot.minutes / span) * 100}% - 2px)`, "--c": let_, height: 38 } as CSSProperties} onClick={() => lessonLog(c.group.id)} title="Log lesson">
+          <button key={c.group.id + c.startMin} className="tl-event" style={{ left: pos(c.startMin), width: `calc(${(c.slot.minutes / span) * 100}% - 2px)`, "--c": let_, height: 38 } as CSSProperties} onClick={() => router.push(`/academy?tab=groups&group=${c.group.id}`)} title="Open group">
             <b>{c.group.name}</b> <span className="muted">{c.slot.start}</span>
-            <div className="truncate muted">{c.group.currentTopic}</div>
           </button>
         ))}
         {nowMin >= startH * 60 && nowMin <= endH * 60 && <span className="tl-now" style={{ left: pos(nowMin) }} aria-label="Now" />}

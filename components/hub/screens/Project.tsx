@@ -107,13 +107,6 @@ export default function Project() {
             <span className="spacer" />
             <span className="callout muted">Target</span>
             <input className="input" type="date" style={{ width: 160 }} value={p.target ?? ""} onChange={(e) => up({ target: e.target.value || null })} />
-            {p.areaId === "let" && (
-              <select className="select" style={{ width: 130 }} value={p.track ?? ""} onChange={(e) => up({ track: (e.target.value || undefined) as P["track"] })} aria-label="Track">
-                <option value="">No track</option>
-                <option value="delivery">Delivery</option>
-                <option value="growth">Growth</option>
-              </select>
-            )}
           </div>
           <div className="boss-hp" style={{ height: 12 }}>
             <i style={{ width: `${pr.pct * 100}%`, left: 0, right: "auto", background: area?.color ?? "var(--accent)" }} />

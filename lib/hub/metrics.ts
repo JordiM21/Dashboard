@@ -8,7 +8,7 @@ import { studentPaymentStatus } from "@/lib/studentStatus";
 import type { LiveData } from "./live";
 import type { ClassSlot, Goal, HubState, StudentMeta } from "./types";
 import { isItemDone } from "./actions";
-import { addDays, daysBetween, dayOfWeek, monthKey, prevMonth, today, toMinutes, weekStart } from "./util";
+import { daysBetween, dayOfWeek, monthKey, prevMonth, today, toMinutes, weekStart } from "./util";
 
 export const MRR_TARGET = 1500;
 export const PRICE = 50;
@@ -153,22 +153,6 @@ export function classesOn(date: string, live: LiveData, st: HubState): ClassOccu
   return live.groups
     .flatMap((g) => (st.groupMeta[g.id]?.slots ?? []).filter((x) => x.day === dow).map((slot) => ({ group: g, slot, date, startMin: toMinutes(slot.start), endMin: toMinutes(slot.start) + slot.minutes })))
     .sort((a, b) => a.startMin - b.startMin);
-}
-
-/** Classes that ended 2h+ ago in the last 3 days with no lesson log. */
-export function missingLogs(live: LiveData, st: HubState): ClassOccurrence[] {
-  const now = new Date();
-  const nowMin = now.getHours() * 60 + now.getMinutes();
-  const out: ClassOccurrence[] = [];
-  for (let i = 0; i < 3; i++) {
-    const d = addDays(today(), -i);
-    for (const c of classesOn(d, live, st)) {
-      if (i === 0 && c.endMin + 120 > nowMin) continue;
-      const logged = st.lessons.some((l) => l.groupId === c.group.id && l.date === d) || live.plans.some((p) => p.groupId === c.group.id && p.date.slice(0, 10) === d && p.historyEntryId);
-      if (!logged) out.push(c);
-    }
-  }
-  return out;
 }
 
 // ---------------------------------------------------------------- goals

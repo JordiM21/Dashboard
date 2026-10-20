@@ -1,21 +1,28 @@
 "use client";
 
-/** Academy (§5.5): capacity strip is the focal point; students list + detail, groups, curriculum track, lessons. */
-import { Suspense, useEffect, useMemo, useState, type CSSProperties } from "react";
+/**
+ * Academy (§5.5): capacity strip is the focal point; students (payments,
+ * parents), groups (members, schedule, seats) and the curriculum board.
+ * Groups and curriculum are deliberately separate: planning which lesson a
+ * group does lives in the Keeds app.
+ */
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ClipboardText, MagnifyingGlass, Plus, X, FileText, Image as ImageIcon, UsersThree, ArrowSquareOut } from "@phosphor-icons/react";
+import { MagnifyingGlass, Plus, X, UsersThree, DotsThree, DotsSixVertical } from "@phosphor-icons/react";
 import { useHub } from "@/lib/hub/store";
 import { useLive } from "@/lib/hub/live";
 import * as A from "@/lib/hub/actions";
 import { capacity, currentTeachingHours, freeSeats, hoursAtTarget, lifecycle, members, mrr, PRICE, studentsToTarget, tenureMonths, payingStudents, CAPACITY, type Lifecycle } from "@/lib/hub/metrics";
 import { studentPaymentStatus, PAYMENT_STATUS_LABEL } from "@/lib/studentStatus";
-import { formatDateDMY, monthKey, relDay } from "@/lib/hub/util";
-import type { GroupDoc } from "@/lib/types";
+import { monthKey } from "@/lib/hub/util";
+import { toast } from "@/lib/hub/fx";
+import { authFetch } from "@/lib/firebase/authFetch";
+import type { CurriculumLevelDoc } from "@/lib/types";
 import { Toolbar, useShell } from "../Shell";
 import { StudentBody } from "../Inspector";
-import { Avatar, Fade, Kpi, Progress, Segmented, Empty } from "../ui";
+import { Avatar, Fade, Kpi, Progress, Segmented, Empty, useDropdown } from "../ui";
 
-type Tab = "students" | "groups" | "curriculum" | "lessons";
+type Tab = "students" | "groups" | "curriculum";
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export default function AcademyPage() {
@@ -31,8 +38,7 @@ function Academy() {
   const live = useLive();
   const params = useSearchParams();
   const router = useRouter();
-  const { lessonLog } = useShell();
-  const tab = (params.get("tab") as Tab) ?? (params.get("group") ? "groups" : "students");
+  const tab = ((["students", "groups", "curriculum"] as const).find((t) => t === params.get("tab")) ?? (params.get("group") ? "groups" : "students")) as Tab;
   const setTab = (t: Tab) => router.replace(`/academy?tab=${t}`, { scroll: false });
   const [groupId, setGroupId] = useState<string | null>(params.get("group"));
   useEffect(() => {
@@ -50,10 +56,7 @@ function Academy() {
   return (
     <>
       <Toolbar areas={false} title="Academy">
-        <Segmented label="Section" size="sm" value={tab} onChange={setTab} options={[{ value: "students", label: "Students", count: live.students.length }, { value: "groups", label: "Groups" }, { value: "curriculum", label: "Curriculum" }, { value: "lessons", label: "Lessons" }]} />
-        <button className="btn" onClick={() => lessonLog()}>
-          <ClipboardText size={16} /> Log lesson
-        </button>
+        <Segmented label="Section" size="sm" value={tab} onChange={setTab} options={[{ value: "students", label: "Students", count: live.students.length }, { value: "groups", label: "Groups", count: live.groups.length }, { value: "curriculum", label: "Curriculum" }]} />
       </Toolbar>
       <Fade className="canvas">
         <section aria-label="Capacity" style={{ marginBottom: 28 }}>
@@ -67,12 +70,11 @@ function Academy() {
             {live.groups.map((g) => {
               const mem = members(g, live.students);
               const cap = capacity(s, g.id);
-              const lvl = live.curriculum.find((l) => l.levelNumber === g.currentLevel);
+              const late = mem.filter((x) => studentPaymentStatus(x.nextPayment) === "late").length;
               return (
                 <button key={g.id} className="card hoverable col" style={{ textAlign: "left", gap: 10, ...(groupId === g.id && tab === "groups" ? { boxShadow: "0 0 0 2px var(--accent)" } : {}) }} onClick={() => (setGroupId(g.id), router.replace(`/academy?tab=groups&group=${g.id}`, { scroll: false }))}>
                   <div className="row">
                     <span className="headline grow">{g.name}</span>
-                    <span className="caption muted">Lv {g.currentLevel}</span>
                   </div>
                   <div className="row" style={{ gap: 5 }} aria-label={`${mem.length} of ${cap} seats`}>
                     {Array.from({ length: cap }, (_, i) => (
@@ -82,8 +84,9 @@ function Academy() {
                       {mem.length}/{cap}
                     </span>
                   </div>
-                  <span className="callout muted truncate">{g.currentTopic}</span>
-                  {lvl && <span className="caption faint truncate">{lvl.title}</span>}
+                  <span className="callout muted truncate">
+                    ${mem.length * PRICE}/mo{late ? ` · ${late} late` : ""}
+                  </span>
                 </button>
               );
             })}
@@ -124,8 +127,7 @@ function Academy() {
         <Fade k={tab}>
           {tab === "students" && <Students />}
           {tab === "groups" && <Groups groupId={groupId ?? live.groups[0]?.id} />}
-          {tab === "curriculum" && <Curriculum focusGroup={params.get("group")} />}
-          {tab === "lessons" && <Lessons />}
+          {tab === "curriculum" && <Curriculum />}
         </Fade>
       </Fade>
     </>
@@ -194,17 +196,12 @@ function Students() {
 function Groups({ groupId }: { groupId?: string }) {
   const s = useHub();
   const live = useLive();
-  const { inspect, lessonLog } = useShell();
+  const { inspect } = useShell();
   const g = live.groups.find((x) => x.id === groupId);
   if (!g) return <Empty text="No groups yet." />;
   const mem = members(g, live.students);
-  const lvl = live.curriculum.find((l) => l.levelNumber === g.currentLevel);
-  const covered = new Set([...s.lessons.filter((l) => l.groupId === g.id).map((l) => l.topic), ...live.plans.filter((p) => p.groupId === g.id && p.historyEntryId).map((p) => p.topic)]);
-  const topics = lvl?.subtopics ?? [];
-  const pct = topics.length ? topics.filter((t) => covered.has(t)).length / topics.length : 0;
   const meta = s.groupMeta[g.id] ?? {};
   const slots = meta.slots ?? [];
-  const logs = s.lessons.filter((l) => l.groupId === g.id).sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 8);
 
   return (
     <div className="bento">
@@ -213,25 +210,8 @@ function Groups({ groupId }: { groupId?: string }) {
           <UsersThree size={18} className="faint" />
           <h2 className="title">{g.name}</h2>
           <span className="spacer" />
-          <button className="btn btn-sm" onClick={() => lessonLog(g.id)}>
-            <ClipboardText size={14} /> Log lesson
-          </button>
+          <span className="callout muted">${mem.length * PRICE}/mo</span>
         </div>
-        <div className="row" style={{ marginBottom: 6 }}>
-          <span className="callout">
-            Level {g.currentLevel}
-            {lvl ? ` · ${lvl.title}` : ""} — <b>{Math.round(pct * 100)}%</b> of level covered
-          </span>
-        </div>
-        <Progress value={pct} label="Level covered" />
-        <div className="row" style={{ flexWrap: "wrap", gap: 6, marginTop: 12 }}>
-          {topics.map((t) => (
-            <span key={t} className={`chip ${covered.has(t) ? "success" : t === g.currentTopic ? "accent" : ""}`}>
-              {t}
-            </span>
-          ))}
-        </div>
-        <hr className="divider" style={{ margin: "18px 0" }} />
         <div className="label" style={{ marginBottom: 8 }}>
           Members · {mem.length}/{capacity(s, g.id)}
         </div>
@@ -241,7 +221,10 @@ function Groups({ groupId }: { groupId?: string }) {
             <span className="grow" style={{ textAlign: "left" }}>
               {x.name}
             </span>
-            <span className="caption muted">{PAYMENT_STATUS_LABEL[studentPaymentStatus(x.nextPayment)]}</span>
+            {(() => {
+              const pay = studentPaymentStatus(x.nextPayment);
+              return <span className={`chip ${pay === "late" ? "danger" : pay === "pending" ? "warning" : pay === "up_to_date" ? "success" : ""}`}>{PAYMENT_STATUS_LABEL[pay]}</span>;
+            })()}
           </button>
         ))}
       </section>
@@ -271,24 +254,6 @@ function Groups({ groupId }: { groupId?: string }) {
           Capacity
           <input className="input" type="number" min={1} style={{ width: 80 }} value={capacity(s, g.id)} onChange={(e) => A.setGroupMeta(g.id, { capacity: Number(e.target.value) || CAPACITY })} />
         </label>
-        <hr className="divider" />
-        <div className="headline">Recent lessons</div>
-        {logs.length === 0 && <span className="callout faint">No lessons logged in v2 yet.</span>}
-        {logs.map((l) => {
-          const n = Object.values(l.attendance).length;
-          const here = Object.values(l.attendance).filter(Boolean).length;
-          return (
-            <div key={l.id} className="row callout" style={{ minHeight: 26 }}>
-              <span className="faint" style={{ width: 86 }}>
-                {formatDateDMY(l.date)}
-              </span>
-              <span className="grow truncate">{l.topic}</span>
-              <span className="caption muted">
-                {here}/{n}
-              </span>
-            </div>
-          );
-        })}
       </section>
     </div>
   );
@@ -296,132 +261,168 @@ function Groups({ groupId }: { groupId?: string }) {
 
 /* ---------------------------------------------------------------- curriculum */
 
-function Curriculum({ focusGroup }: { focusGroup: string | null }) {
-  const s = useHub();
-  const live = useLive();
-  const levels = [...live.curriculum].sort((a, b) => a.levelNumber - b.levelNumber);
-  const [open, setOpen] = useState<string | null>(null);
-  const focus = live.groups.find((g) => g.id === focusGroup);
-  useEffect(() => {
-    if (focus) setOpen(`${focus.currentLevel}:${focus.currentTopic}`);
-    document.getElementById(`lvl-${focus?.currentLevel}`)?.scrollIntoView({ block: "center" });
-  }, [focus]);
+const TINTS = ["var(--accent)", "var(--success)", "var(--warning)", "var(--epic)", "var(--ember)", "var(--volt)"];
 
-  const coverage = (topic: string) => {
-    const out: { group: GroupDoc; date: string }[] = [];
-    for (const g of live.groups) {
-      const dates = [...s.lessons.filter((l) => l.groupId === g.id && l.topic === topic).map((l) => l.date), ...live.plans.filter((p) => p.groupId === g.id && p.topic === topic && p.historyEntryId).map((p) => p.date.slice(0, 10))].sort();
-      if (dates.length) out.push({ group: g, date: dates.at(-1)! });
-    }
-    return out;
+async function board(path: string, method: string, body?: object): Promise<void> {
+  const r = await authFetch(`/api/board/curriculum${path}`, { method, headers: { "Content-Type": "application/json" }, body: body && JSON.stringify(body) }).catch(() => null);
+  if (!r?.ok) toast(r?.status === 401 ? "Sign in to edit the curriculum" : "That didn’t save. Try again.");
+}
+
+/**
+ * The syllabus as an editable board, on its own: stages → levels → lessons.
+ * Click any text to edit it, drag lessons between levels, drag level cards to
+ * reorder them or move them to another stage. Lesson planning per group lives
+ * in the Keeds app, so nothing here is tied to a group.
+ */
+function Curriculum() {
+  const live = useLive();
+  const drop = useDropdown();
+  const levels = useMemo(() => [...live.curriculum].sort((a, b) => a.levelNumber - b.levelNumber), [live.curriculum]);
+  const stages = [...new Set(levels.map((l) => l.stageName))];
+  const [over, setOver] = useState<string | null>(null);
+
+  const reorder = (order: { id: string; stageName: string }[]) => board("/reorder", "PATCH", { order });
+  const moveLevel = (id: string, stageName: string, beforeId: string | null) => {
+    const rest = levels.filter((l) => l.id !== id).map((l) => ({ id: l.id, stageName: l.stageName }));
+    const at = beforeId ? rest.findIndex((l) => l.id === beforeId) : rest.map((l) => l.stageName).lastIndexOf(stageName) + 1;
+    rest.splice(at < 0 ? rest.length : at, 0, { id, stageName });
+    reorder(rest);
   };
-  const resources = (topic: string) => live.files.filter((f) => f.tags.some((t) => t.toLowerCase() === topic.toLowerCase()));
+  const moveLesson = (from: string, i: number, to: string, before: number | null) => {
+    const src = levels.find((l) => l.id === from)!;
+    const topic = src.subtopics[i];
+    const srcTopics = src.subtopics.filter((_, j) => j !== i);
+    const dst = from === to ? srcTopics : [...levels.find((l) => l.id === to)!.subtopics];
+    const at = before == null ? dst.length : before - (from === to && before > i ? 1 : 0);
+    dst.splice(at, 0, topic);
+    if (from !== to) board(`/${from}`, "PATCH", { subtopics: srcTopics });
+    board(`/${to}`, "PATCH", { subtopics: dst });
+  };
+  /** One handler for every drop: `level:<id>` cards and `lesson:<levelId>:<index>` chips. */
+  const onDrop = (stageName: string, levelId: string | null, before: number | null) => (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setOver(null);
+    const [kind, id, idx] = e.dataTransfer.getData("text/plain").split(":");
+    if (kind === "level" && id !== levelId) moveLevel(id, stageName, levelId);
+    if (kind === "lesson" && levelId) moveLesson(id, Number(idx), levelId, before);
+  };
+  const hover = (key: string) => (e: React.DragEvent) => (e.preventDefault(), e.stopPropagation(), setOver(key));
+  const commit = (l: CurriculumLevelDoc, patch: Partial<Pick<CurriculumLevelDoc, "title" | "emoji" | "subtopics">>) => {
+    if (Object.entries(patch).some(([k, v]) => JSON.stringify(v) !== JSON.stringify(l[k as keyof CurriculumLevelDoc]))) board(`/${l.id}`, "PATCH", patch);
+  };
+  const renameStage = (from: string) => {
+    const to = prompt("Stage name", from)?.trim();
+    if (to && to !== from) reorder(levels.map((l) => ({ id: l.id, stageName: l.stageName === from ? to : l.stageName })));
+  };
+
+  if (!levels.length) return <Empty text="No curriculum yet." action="Add a stage" onAction={() => board("", "POST", { stageName: "Stage 1" })} />;
 
   return (
-    <div className="card" style={{ padding: "8px 24px" }}>
-      {levels.map((l, i) => {
-        const here = live.groups.filter((g) => g.currentLevel === l.levelNumber);
-        const stage = i === 0 || levels[i - 1].stageName !== l.stageName;
+    <div className="col" style={{ gap: 28 }}>
+      <p className="callout muted" style={{ margin: 0, maxWidth: 720 }}>
+        Your syllabus, separate from the groups. Click any text to edit it. Drag lessons between levels and drag level cards to reorder them or move them to another stage.
+      </p>
+      {stages.map((stage, si) => {
+        const tint = TINTS[si % TINTS.length];
+        const own = levels.filter((l) => l.stageName === stage);
         return (
-          <div key={l.id} id={`lvl-${l.levelNumber}`}>
-            {stage && <div className="label" style={{ padding: "18px 0 8px" }}>{l.stageName}</div>}
-            <div className="row" style={{ alignItems: "flex-start", gap: 16, padding: "10px 0" }}>
-              <div className="col" style={{ alignItems: "center", gap: 0, width: 36 }}>
-                <span className="display-m" style={{ color: here.length ? "var(--accent)" : "var(--text-3)" }}>
-                  {l.levelNumber}
-                </span>
-              </div>
-              <div className="grow col" style={{ gap: 4 }}>
-                <div className="row">
-                  <span className="headline">{l.title}</span>
-                  {here.map((g) => (
-                    <span key={g.id} className="chip accent">
-                      {g.name}
-                    </span>
-                  ))}
-                </div>
-                {l.subtopics.map((t) => {
-                  const cov = coverage(t);
-                  const res = resources(t);
-                  const key = `${l.levelNumber}:${t}`;
-                  return (
-                    <div key={t}>
-                      <button className="task-row" style={{ width: "100%", minHeight: 36 }} onClick={() => setOpen(open === key ? null : key)} aria-expanded={open === key}>
-                        <span className="grow" style={{ textAlign: "left" }}>
-                          {t}
-                        </span>
-                        {cov.map((c) => (
-                          <span key={c.group.id} className="caption muted" title={`Covered ${formatDateDMY(c.date)}`}>
-                            {c.group.name.replace("Group ", "")} · {relDay(c.date)}
-                          </span>
-                        ))}
-                        <span className="chip">
-                          <FileText size={12} /> {res.length}
-                        </span>
-                      </button>
-                      {open === key && (
-                        <div className="tile" style={{ margin: "4px 0 8px 10px" }}>
-                          {res.length === 0 && <span className="callout faint">No resources tagged “{t}”. Tag files in the library to link them here.</span>}
-                          {res.map((f) => (
-                            <a key={f.id} className="row callout task-row" style={{ minHeight: 32 }} href={`/api/resources/files/${f.id}/content`} target="_blank" rel="noreferrer">
-                              {f.mimeType.startsWith("image") ? <ImageIcon size={16} /> : <FileText size={16} />}
-                              <span className="grow">{f.title}</span>
-                              <ArrowSquareOut size={14} className="faint" />
-                            </a>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+          <section key={stage} className="col" style={{ gap: 12 }} onDragOver={hover("stage:" + stage)} onDrop={onDrop(stage, null, null)}>
+            <div className="row">
+              <span className="sb-dot" style={{ background: tint, width: 10, height: 10 }} />
+              <button className="headline" onClick={() => renameStage(stage)} title="Rename stage">
+                {stage}
+              </button>
+              <span className="caption faint">
+                Levels {own[0]?.levelNumber}–{own.at(-1)?.levelNumber}
+              </span>
             </div>
-          </div>
+            <div className="grid-cards" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", paddingTop: 0, outline: over === "stage:" + stage ? `2px dashed ${tint}` : undefined, outlineOffset: 6, borderRadius: "var(--r-card)" }}>
+              {own.map((l) => {
+                const c = l.color ?? tint;
+                return (
+                  <article
+                    key={l.id}
+                    className="card col"
+                    draggable
+                    onDragStart={(e) => e.dataTransfer.setData("text/plain", `level:${l.id}`)}
+                    onDragOver={hover("level:" + l.id)}
+                    onDragLeave={() => setOver(null)}
+                    onDrop={onDrop(stage, l.id, null)}
+                    style={{ gap: 10, padding: 16, cursor: "grab", borderTop: `3px solid ${c}`, boxShadow: over === "level:" + l.id ? `0 0 0 2px ${c}` : undefined }}
+                  >
+                    <div className="row" style={{ gap: 8 }}>
+                      <input key={l.emoji} className="input-bare" style={{ width: 28, fontSize: 20 }} defaultValue={l.emoji} aria-label="Level emoji" onBlur={(e) => commit(l, { emoji: e.target.value })} />
+                      <span className="display-m" style={{ color: c }}>
+                        {l.levelNumber}
+                      </span>
+                      <input key={l.title} className="input-bare headline grow" defaultValue={l.title} aria-label="Level title" onBlur={(e) => commit(l, { title: e.target.value.trim() || l.title })} onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()} />
+                      <button
+                        className="icon-btn"
+                        aria-label={`More for level ${l.levelNumber}`}
+                        onClick={(e) =>
+                          drop(e, [
+                            ...stages.filter((x) => x !== stage).map((x) => ({ label: `Move to ${x}`, onClick: () => moveLevel(l.id, x, null) })),
+                            { sep: true, label: "" },
+                            { label: "Delete level", danger: true, onClick: () => confirm(`Delete level ${l.levelNumber} · ${l.title}?`) && board(`/${l.id}`, "DELETE") },
+                          ])
+                        }
+                      >
+                        <DotsThree size={18} />
+                      </button>
+                    </div>
+                    <div className="col" style={{ gap: 4 }}>
+                      {l.subtopics.map((t, i) => (
+                        <div
+                          key={`${t}-${i}`}
+                          className="row"
+                          draggable
+                          onDragStart={(e) => (e.stopPropagation(), e.dataTransfer.setData("text/plain", `lesson:${l.id}:${i}`))}
+                          onDragOver={hover(`lesson:${l.id}:${i}`)}
+                          onDrop={onDrop(stage, l.id, i)}
+                          style={{ gap: 6, padding: "4px 8px", borderRadius: "var(--r-ctl)", background: "var(--bg-sunken)", cursor: "grab", borderTop: over === `lesson:${l.id}:${i}` ? `2px solid ${c}` : "2px solid transparent" }}
+                        >
+                          <DotsSixVertical size={14} className="faint" />
+                          <input className="input-bare callout grow" defaultValue={t} aria-label="Lesson" onBlur={(e) => commit(l, { subtopics: l.subtopics.map((x, j) => (j === i ? e.target.value.trim() || x : x)) })} onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()} />
+                          <button className="icon-btn" style={{ width: 22, height: 22 }} aria-label={`Remove ${t}`} onClick={() => commit(l, { subtopics: l.subtopics.filter((_, j) => j !== i) })}>
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ))}
+                      <input
+                        className="input-bare callout"
+                        style={{ padding: "4px 8px" }}
+                        placeholder="+ Add a lesson"
+                        aria-label={`Add a lesson to level ${l.levelNumber}`}
+                        onKeyDown={(e) => {
+                          const v = e.currentTarget.value.trim();
+                          if (e.key === "Enter" && v) {
+                            commit(l, { subtopics: [...l.subtopics, v] });
+                            e.currentTarget.value = "";
+                          }
+                        }}
+                      />
+                    </div>
+                  </article>
+                );
+              })}
+              <button className="card col" style={{ placeItems: "center", justifyContent: "center", minHeight: 120, borderStyle: "dashed", color: "var(--text-3)", boxShadow: "none" }} onClick={() => board("", "POST", { stageName: stage })}>
+                <Plus size={18} /> Add level
+              </button>
+            </div>
+          </section>
         );
       })}
+      <button
+        className="btn"
+        style={{ alignSelf: "flex-start" }}
+        onClick={() => {
+          const name = prompt("New stage name")?.trim();
+          if (name) board("", "POST", { stageName: name });
+        }}
+      >
+        <Plus size={14} /> Add stage
+      </button>
     </div>
   );
 }
-
-/* ---------------------------------------------------------------- lessons */
-
-function Lessons() {
-  const s = useHub();
-  const live = useLive();
-  const rows = [...s.lessons].filter((l) => !l.archivedAt).sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 60);
-  return (
-    <div className="card" style={{ padding: 8 }}>
-      <table className="table">
-        <thead>
-          <tr>
-            <th className="label">Date</th>
-            <th className="label">Group</th>
-            <th className="label">Topic</th>
-            <th className="label num">Attendance</th>
-            <th className="label">Notes</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((l) => {
-            const v = Object.values(l.attendance);
-            return (
-              <tr key={l.id}>
-                <td>{formatDateDMY(l.date)}</td>
-                <td>{live.groups.find((g) => g.id === l.groupId)?.name ?? "—"}</td>
-                <td>{l.topic}</td>
-                <td className="num">
-                  {v.filter(Boolean).length}/{v.length}
-                </td>
-                <td className="muted truncate" style={{ maxWidth: 280 }}>
-                  {l.notes}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      {rows.length === 0 && <Empty text="No lessons logged yet." />}
-    </div>
-  );
-}
-

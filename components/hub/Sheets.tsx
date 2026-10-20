@@ -6,13 +6,11 @@ import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/firebase/AuthContext";
 import { useHub, resetStore, storeMode } from "@/lib/hub/store";
-import { useLive } from "@/lib/hub/live";
 import * as A from "@/lib/hub/actions";
-import { classesOn, members } from "@/lib/hub/metrics";
 import { isFocus, XP } from "@/lib/hub/game";
 import { demoSeed } from "@/lib/hub/seed";
-import { relDay, today } from "@/lib/hub/util";
-import { Avatar, Segmented, Sheet, AreaDot } from "./ui";
+import { addDays, relDay, today, weekStart } from "@/lib/hub/util";
+import { Segmented, Sheet } from "./ui";
 import { CaretDown, CaretUp, Plus } from "@phosphor-icons/react";
 import { bindings, comboOf, KEY_ACTIONS, prettyCombo } from "@/lib/hub/keys";
 import { sfx } from "@/lib/hub/sound";
@@ -20,103 +18,35 @@ import { toast } from "@/lib/hub/fx";
 import { CoverPicker, IconPicker, SWATCHES, coverCss } from "./Customize";
 import { useArea } from "./Shell";
 
-export function LessonLogSheet({ groupId, onClose }: { groupId: string | null | undefined; onClose: () => void }) {
-  const live = useLive();
-  const s = useHub();
-  const [gid, setGid] = useState<string>("");
-  const [topic, setTopic] = useState("");
-  const [att, setAtt] = useState<Record<string, boolean>>({});
-  const [notes, setNotes] = useState("");
-  const open = groupId !== undefined;
-
-  useEffect(() => {
-    if (!open) return;
-    const fallback = classesOn(today(), live, s).at(-1)?.group.id ?? live.groups[0]?.id ?? "";
-    setGid(groupId || fallback);
-    setNotes("");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, groupId]);
-
-  const group = live.groups.find((g) => g.id === gid);
-  const roster = group ? members(group, live.students) : [];
-  const level = live.curriculum.find((l) => l.levelNumber === group?.currentLevel);
-  useEffect(() => {
-    setTopic(group?.currentTopic ?? "");
-    setAtt(Object.fromEntries(roster.map((r) => [r.id, true])));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gid]);
-
-  return (
-    <Sheet open={open} onClose={onClose} label="Log lesson">
-      <div className="row">
-        <h2 className="title">Log lesson</h2>
-        <span className="spacer" />
-        <span className="xp-chip" style={{ background: "transparent", border: "1px solid var(--line-strong)", color: "var(--text-2)" }}>
-          +{XP.lesson} XP
-        </span>
-      </div>
-      <Segmented label="Group" value={gid} onChange={setGid} options={live.groups.map((g) => ({ value: g.id, label: g.name }))} />
-      <label className="field">
-        <span>Topic covered · Level {group?.currentLevel} {level ? `· ${level.title}` : ""}</span>
-        <select className="select" value={topic} onChange={(e) => setTopic(e.target.value)}>
-          {[...(level?.subtopics ?? []), ...(group && !level?.subtopics.includes(group.currentTopic) ? [group.currentTopic] : [])].map((t) => (
-            <option key={t}>{t}</option>
-          ))}
-        </select>
-      </label>
-      <div className="field">
-        <span>Attendance · tap to toggle</span>
-        <div className="row" style={{ flexWrap: "wrap" }}>
-          {roster.length === 0 && <span className="callout faint">No students in this group.</span>}
-          {roster.map((r) => (
-            <button
-              key={r.id}
-              className="chip"
-              aria-pressed={att[r.id]}
-              onClick={() => setAtt((a) => ({ ...a, [r.id]: !a[r.id] }))}
-              style={{ height: 36, paddingLeft: 4, paddingRight: 12, gap: 8, ...(att[r.id] ? { borderColor: "var(--accent)", color: "var(--text-1)", background: "var(--accent-soft)" } : { opacity: 0.6, textDecoration: "line-through" }) }}
-            >
-              <Avatar name={r.name} src={r.photoUrl} />
-              {r.name.split(" ")[0]}
-            </button>
-          ))}
-        </div>
-      </div>
-      <label className="field">
-        <span>Notes</span>
-        <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="What landed, what to review…" style={{ minHeight: 70 }} />
-      </label>
-      <div className="row">
-        <span className="spacer" />
-        <button className="btn btn-ghost" onClick={onClose}>
-          Cancel
-        </button>
-        <button
-          className="btn btn-primary"
-          disabled={!gid}
-          onClick={() => {
-            A.logLesson({ date: today(), groupId: gid, topic, attendance: att, notes, archivedAt: null });
-            onClose();
-          }}
-        >
-          Save log
-        </button>
-      </div>
-    </Sheet>
-  );
-}
-
 export function PlanDaySheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const s = useHub();
   const { match } = useArea();
   const t0 = today();
+  const tmr = addDays(t0, 1);
+  // From 17:00 the sheet plans tomorrow: the evening is when the plan gets made.
+  const [day, setDay] = useState(t0);
   const [picked, setPicked] = useState<string[]>([]);
   const [over, setOver] = useState<"pool" | "today" | null>(null);
   useEffect(() => {
-    if (open) setPicked(s.tasks.filter((t) => isFocus(t, t0)).sort((a, b) => a.priority - b.priority).map((t) => t.id));
+    if (open) setDay(new Date().getHours() >= 17 ? tmr : t0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
-  const pool = useMemo(() => s.tasks.filter((t) => !t.archivedAt && (t.status === "inbox" || t.status === "next" || t.status === "doing") && !picked.includes(t.id) && match(t.areaId)).sort((a, b) => a.priority - b.priority), [s.tasks, picked, match]);
+  useEffect(() => {
+    if (open) setPicked(s.tasks.filter((t) => isFocus(t, day) && (day === t0 || t.scheduled !== t0)).sort((a, b) => a.priority - b.priority).map((t) => t.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, day]);
+  const weekEnd = addDays(weekStart(), 6);
+  // "Due soon" = everything you said needs doing by tomorrow or by the end of this week.
+  const soon = (t: (typeof s.tasks)[number]) => [t.due, t.scheduled].some((d) => d != null && d <= (weekEnd > tmr ? weekEnd : tmr));
+  const pool = useMemo(
+    () =>
+      s.tasks
+        .filter((t) => !t.archivedAt && (t.status === "inbox" || t.status === "next" || t.status === "doing") && !picked.includes(t.id) && match(t.areaId))
+        .sort((a, b) => Number(soon(b)) - Number(soon(a)) || (a.due ?? a.scheduled ?? "9").localeCompare(b.due ?? b.scheduled ?? "9") || a.priority - b.priority),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [s.tasks, picked, match, weekEnd, tmr]
+  );
+  const soonCount = pool.filter(soon).length;
   const chosen = picked.map((id) => s.tasks.find((t) => t.id === id)).filter(Boolean) as typeof s.tasks;
   const est = chosen.reduce((a, t) => a + (t.estimate ?? 0), 0);
   const area = (id: string) => s.areas.find((a) => a.id === id);
@@ -132,7 +62,7 @@ export function PlanDaySheet({ open, onClose }: { open: boolean; onClose: () => 
       <span className="grow truncate">{t.title}</span>
       <span className="caption faint">
         P{t.priority}
-        {t.estimate ? ` · ${t.estimate}m` : ""}
+        {t.due ? ` · due ${relDay(t.due).toLowerCase()}` : t.scheduled ? ` · ${relDay(t.scheduled).toLowerCase()}` : ""}
         {t.status === "inbox" ? " · Inbox" : ""}
       </span>
     </button>
@@ -150,24 +80,30 @@ export function PlanDaySheet({ open, onClose }: { open: boolean; onClose: () => 
   return (
     <Sheet open={open} onClose={onClose} wide label="Plan my day">
       <div className="row">
-        <div className="col" style={{ gap: 2 }}>
-          <h2 className="title">Plan my day</h2>
-          <span className="callout muted">Drag or click tasks into today. Keep it to 7. Planned before 11:00 earns +{XP.plan} XP.</span>
+        <div className="col grow" style={{ gap: 2 }}>
+          <h2 className="title">{day === t0 ? "Plan today" : "Plan tomorrow"}</h2>
+          <span className="callout muted">
+            Drag or click tasks in. Keep it to 7. Everything due by the end of this week is at the top. A plan made the night before earns +{XP.plan} XP and counts for tomorrow’s streak.
+          </span>
         </div>
+        <Segmented label="Day" size="sm" value={day} onChange={setDay} options={[{ value: t0, label: "Today" }, { value: tmr, label: "Tomorrow" }]} />
       </div>
       <div className="bento" style={{ gap: 12 }}>
         <div className="span-6 col">
-          <span className="label">Inbox & Next</span>
+          <span className="label">Due this week · {soonCount}</span>
           <div className="week-col" data-over={over === "pool"} style={{ minHeight: 360, maxHeight: 420, overflow: "auto", background: "var(--bg-raised)" }} {...drop("pool")}>
-            {pool.map((t) => (
-              <Row key={t.id} t={t} side="pool" />
+            {pool.map((t, i) => (
+              <div key={t.id} style={{ display: "contents" }}>
+                {i === soonCount && <span className="label" style={{ padding: "8px 2px 2px" }}>Everything else</span>}
+                <Row t={t} side="pool" />
+              </div>
             ))}
             {pool.length === 0 && <span className="callout faint">Nothing left to pull in.</span>}
           </div>
         </div>
         <div className="span-6 col">
           <div className="row">
-            <span className="label">Today · {chosen.length}/7</span>
+            <span className="label">{day === t0 ? "Today" : "Tomorrow"} · {chosen.length}/7</span>
             <span className="spacer" />
             <span className="caption muted">{Math.round(est / 6) / 10}h estimated</span>
           </div>
@@ -188,11 +124,11 @@ export function PlanDaySheet({ open, onClose }: { open: boolean; onClose: () => 
         <button
           className="btn btn-primary"
           onClick={() => {
-            A.planDay(picked);
+            A.planDay(picked, day);
             onClose();
           }}
         >
-          Set today’s focus
+          {day === t0 ? "Set today’s focus" : "Set tomorrow’s focus"}
         </button>
       </div>
     </Sheet>

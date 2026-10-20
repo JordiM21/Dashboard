@@ -78,7 +78,9 @@ export default function Inbox() {
         <header className="page-head">
           <div>
             <h1 className="display-xl">Inbox</h1>
-            <p className="callout muted">Capture fast, organise later. Each item takes one key.</p>
+            <p className="callout muted" style={{ maxWidth: 640 }}>
+              Your brain dump: half-thoughts you haven’t decided on yet. Nothing here counts as a task. Sort each item once — give it a day or an area and it moves to <b>Tasks</b>, turn it into a note, or drop it.
+            </p>
           </div>
           <span className="spacer" />
           <button className="btn" onClick={() => quickAdd("")}>
