@@ -4,7 +4,7 @@
 //   weak 4G connection never leaves the app on a blank screen.
 // - /api and anything cross-origin (Firebase, Stripe) is never cached.
 // Bump CACHE when routes are removed so old pages stop being served.
-const CACHE = "hub-v2-1";
+const CACHE = "hub-v2-2";
 const SHELL = ["/today", "/inbox", "/tasks", "/academy"];
 
 self.addEventListener("install", (event) => {
@@ -21,8 +21,12 @@ self.addEventListener("activate", (event) =>
   )
 );
 
+// Clone before handing `res` to the page: once the page reads the body, clone() throws.
 const put = (req, res) => {
-  if (res.ok && res.type === "basic") caches.open(CACHE).then((c) => c.put(req, res.clone()));
+  if (res.ok && res.type === "basic") {
+    const copy = res.clone();
+    caches.open(CACHE).then((c) => c.put(req, copy));
+  }
   return res;
 };
 

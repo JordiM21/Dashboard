@@ -3,6 +3,7 @@
 /** Today (Feature Spec §5.1, Design Guide §10): answers "what do I do now". */
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { Play, CheckCircle, BookOpen, ClipboardText, Warning, CurrencyDollar, Tray, Kanban, Hourglass, CalendarHeart, CalendarCheck, Lightning, Sparkle, Skull } from "@phosphor-icons/react";
 import { useHub } from "@/lib/hub/store";
@@ -302,6 +303,7 @@ function useAlerts(): Alert[] {
   const live = useLive();
   const { inspect, lessonLog } = useShell();
   const { match } = useArea();
+  const router = useRouter();
   return useMemo(() => {
     const out: Alert[] = [];
     const t0 = today();
@@ -324,10 +326,10 @@ function useAlerts(): Alert[] {
         out.push({ id: "log" + c.group.id + c.date, icon: <ClipboardText size={16} />, tone: "warning", text: <><b>{c.group.name}</b> · no lesson log for {relDay(c.date).toLowerCase()}</>, action: { label: "Log", run: () => lessonLog(c.group.id) } });
     }
     const inbox = s.tasks.filter((t) => t.status === "inbox" && !t.archivedAt).length;
-    if (inbox > 10) out.push({ id: "inbox", icon: <Tray size={16} />, tone: "default", text: <><b>Inbox at {inbox}</b> · triage before it buries you</>, action: { label: "Triage", run: () => (location.href = "/inbox") } });
+    if (inbox > 10) out.push({ id: "inbox", icon: <Tray size={16} />, tone: "default", text: <><b>Inbox at {inbox}</b> · triage before it buries you</>, action: { label: "Triage", run: () => router.push("/inbox") } });
     for (const p of s.projects.filter((p) => p.status === "active" && !p.archivedAt && match(p.areaId)))
       if (!s.tasks.some((t) => t.projectId === p.id && !t.archivedAt && !["done", "dropped"].includes(t.status)))
-        out.push({ id: "proj" + p.id, icon: <Kanban size={16} />, tone: "warning", text: <><b>{p.title}</b> · active with no next task</>, action: { label: "Open", run: () => (location.href = `/tasks/p/${p.id}`) } });
+        out.push({ id: "proj" + p.id, icon: <Kanban size={16} />, tone: "warning", text: <><b>{p.title}</b> · active with no next task</>, action: { label: "Open", run: () => router.push(`/tasks/p/${p.id}`) } });
     for (const t of s.tasks.filter((t) => t.status === "waiting" && t.followUp && t.followUp <= t0 && !t.archivedAt && match(t.areaId)))
       out.push({ id: "wait" + t.id, icon: <Hourglass size={16} />, tone: "default", text: <>Follow up · <b>{t.waitingOn || t.title}</b></>, action: { label: "Open", run: () => inspect({ kind: "task", id: t.id }) } });
     const dates = s.collections.find((c) => c.name === "Important dates");
@@ -340,7 +342,7 @@ function useAlerts(): Alert[] {
       if (left <= Number(i.values.remind ?? 7)) out.push({ id: "date" + i.id, icon: <CalendarHeart size={16} />, tone: "default", text: <><b>{i.title}</b> · {left === 0 ? "today" : `in ${left} days`}</>, action: { label: "Open", run: () => inspect({ kind: "item", id: i.id }) } });
     }
     return out;
-  }, [s, live, match, inspect, lessonLog]);
+  }, [s, live, match, inspect, lessonLog, router]);
 }
 
 function Alerts() {

@@ -3,6 +3,7 @@
 /** Inspector (§3): any record opens here, over the Dock, never over the canvas. Edits save as you type. */
 import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -549,6 +550,7 @@ const FieldRow = ({ label, children }: { label: string; children: ReactNode }) =
 /* ---------------------------------------------------------------- goal */
 
 function GoalPanel({ id, onClose }: { id: string; onClose: () => void }) {
+  const router = useRouter();
   const s = useHub();
   const live = useLive();
   const g = s.goals.find((x) => x.id === id);
@@ -566,7 +568,7 @@ function GoalPanel({ id, onClose }: { id: string; onClose: () => void }) {
             onClick={() => {
               const p = A.addProject({ title: g.title, areaId: g.areaId, outcome: "", status: "planned" });
               A.updateGoal(g.id, { planStatus: "booked", projectId: p.id });
-              location.href = `/tasks/p/${p.id}`;
+              router.push(`/tasks/p/${p.id}`);
             }}
           >
             Promote to project

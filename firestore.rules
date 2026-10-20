@@ -1,28 +1,18 @@
 rules_version = '2';
 
-// Firebase Authentication is now enforced (Email/Password, single admin
-// user, provisioned manually in the Firebase console — no self-serve
-// sign-up exists anywhere in this app).
+// Owner-only. The client config is public, so "any signed-in user" would let
+// anyone who creates a Firebase account read everything — pin to one UID.
+// Keep the UID in sync with storage.rules and lib/firebase/verifyAuth.ts.
 //
-// This only protects direct Firestore access from the client SDK
-// (onSnapshot in lib/firebase/useFirestoreCollection.ts). It does NOT cover
-// app/api/students/route.ts or app/api/finance/route.ts — those use
-// firebase-admin, which bypasses these rules entirely by design. Their
-// protection is requireAuth() in lib/firebase/verifyAuth.ts, which verifies
-// the same Firebase ID token via firebase-admin/auth. Both layers must stay
-// in sync: this file is the boundary for reads/writes coming straight from
-// a browser; verifyAuth.ts is the boundary for anything going through our
-// own server.
-//
-// TODO(before any public-facing deployment): this only requires *a*
-// signed-in user, not a specific admin — fine for a single-operator tool,
-// not fine once/if multiple accounts could exist. Add role-based checks
-// (e.g. a custom claim) or IP allowlisting at the hosting layer if that
-// changes.
+// firebase-admin (app/api/**, functions/) bypasses these rules; its boundary
+// is requireAuth() in lib/firebase/verifyAuth.ts.
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isOwner() {
+      return request.auth != null && request.auth.uid == "Nabyq1LVHfRG8c7acQzyZZerJSB3";
+    }
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isOwner();
     }
   }
 }

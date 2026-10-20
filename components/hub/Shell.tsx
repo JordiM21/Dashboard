@@ -76,7 +76,8 @@ function useWidth() {
 const DEMO_ALLOWED = process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_HUB_DEMO === "1";
 
 export default function Shell({ children }: { children: ReactNode }) {
-  const { loading } = useAuth();
+  const { user, loading } = useAuth();
+  const signedIn = !!user;
   const live = useLive();
   const router = useRouter();
   const [ready, setReady] = useState(false);
@@ -85,7 +86,9 @@ export default function Shell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (loading) return;
     setReady(false);
-    if (live.mode === "demo") {
+    // Decide on auth, not live.mode: on a hard load this effect runs before LiveProvider's
+    // (children first), so live.mode still reads "demo" for a signed-in user for one commit.
+    if (!signedIn) {
       if (!DEMO_ALLOWED) return void router.replace("/login");
       initStore("demo", demoSeed);
       setReady(true);
@@ -93,7 +96,7 @@ export default function Shell({ children }: { children: ReactNode }) {
       return initCloud(() => liveSeed(live.oldTasks!, live.oldProjects!), () => setReady(true));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, live.mode, migrated]);
+  }, [loading, signedIn, migrated]);
 
   if (!ready) return <BootSkeleton />;
   return <Ready>{children}</Ready>;

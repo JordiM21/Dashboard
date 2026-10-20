@@ -143,7 +143,11 @@ export function subscribeCloud(seed: () => HubState, ui: HubState["ui"], onState
     return onSnapshot(
       collection(db, col(k)),
       (snap) => {
-        parts[k] = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
+        // Keep unchanged records' identity so a save doesn't re-render (and re-measure) every row in the app.
+        const changed = new Set(snap.docChanges().map((c) => c.doc.id));
+        if (!first && changed.size === 0) return;
+        const prev = new Map(((parts[k] as { id: string }[] | undefined) ?? []).map((x) => [x.id, x]));
+        parts[k] = snap.docs.map((d) => (!changed.has(d.id) && prev.get(d.id)) || { ...d.data(), id: d.id });
         if (first) (first = false), seen++;
         emit();
       },

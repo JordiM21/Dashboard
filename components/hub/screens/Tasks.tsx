@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { sfx } from "@/lib/hub/sound";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { CaretLeft, CaretRight, CaretDown, Plus, Warning, X, Kanban } from "@phosphor-icons/react";
 import { useHub } from "@/lib/hub/store";
@@ -495,6 +496,7 @@ function CalendarView({ tasks }: { tasks: Task[] }) {
 
 function ProjectsView() {
   const s = useHub();
+  const router = useRouter();
   const { match } = useArea();
   const [status, setStatus] = useState<"active" | "planned" | "paused" | "done">("active");
   const list = s.projects.filter((p) => !p.archivedAt && match(p.areaId));
@@ -502,7 +504,7 @@ function ProjectsView() {
   const count = (st: string) => list.filter((p) => p.status === st).length;
   const create = () => {
     const p = A.addProject({ title: "New project", areaId: s.ui.area === "all" ? "let" : s.ui.area });
-    location.href = `/tasks/p/${p.id}`;
+    router.push(`/tasks/p/${p.id}`);
   };
   return (
     <>

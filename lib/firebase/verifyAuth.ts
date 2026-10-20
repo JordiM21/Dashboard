@@ -17,16 +17,22 @@ export class UnauthorizedError extends Error {
   }
 }
 
+/** The only account allowed in — same UID as firestore.rules / storage.rules. */
+const OWNER_UID = "Nabyq1LVHfRG8c7acQzyZZerJSB3";
+
 export async function requireAuth(req: NextRequest): Promise<DecodedIdToken> {
   const header = req.headers.get("authorization");
   const token = header?.startsWith("Bearer ") ? header.slice("Bearer ".length) : null;
   if (!token) throw new UnauthorizedError();
 
+  let decoded: DecodedIdToken;
   try {
-    return await getAdminAuth().verifyIdToken(token);
+    decoded = await getAdminAuth().verifyIdToken(token);
   } catch {
     throw new UnauthorizedError("Invalid or expired session — please sign in again.");
   }
+  if (decoded.uid !== OWNER_UID) throw new UnauthorizedError();
+  return decoded;
 }
 
 /** Route-handler shorthand: a 401 Response when the caller isn't signed in, else null. */
