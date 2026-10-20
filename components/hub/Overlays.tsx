@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
+import { Layer } from "./ui";
 import { MagnifyingGlass, Plus, ArrowRight, CheckCircle, Note, User, Kanban, Target, SquaresFour, UsersThree, Moon, NotePencil, CalendarCheck, ClipboardText, Lightning, GearSix } from "@phosphor-icons/react";
 import { getState, useHub } from "@/lib/hub/store";
 import { useLive } from "@/lib/hub/live";
@@ -97,51 +98,53 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
 
   let lastGroup = "";
   return (
-    <AnimatePresence>
-      {open && (
-        <>
-          <motion.div className="scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
-          <motion.div className="palette" role="dialog" aria-label="Command palette" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.12 } }} transition={{ duration: 0.16, ease: [0.32, 0.72, 0, 1] }}>
-            <div className="palette-input">
-              <MagnifyingGlass size={20} className="faint" />
-              <input
-                autoFocus
-                className="input-bare"
-                placeholder="Search, jump, create…"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                role="combobox"
-                aria-expanded
-                aria-controls="pal-list"
-              />
-              <span className="kbd">Esc</span>
-            </div>
-            <div className="palette-list" id="pal-list" role="listbox" ref={listRef}>
-              {cmds.map((c, i) => {
-                const head = c.group !== lastGroup;
-                lastGroup = c.group;
-                return (
-                  <div key={c.group + c.id}>
-                    {head && <div className="pal-group label">{c.group}</div>}
-                    <button className="pal-item" role="option" aria-selected={i === sel} data-i={i} onMouseMove={() => setSel(i)} onClick={() => run(c)}>
-                      {c.icon}
-                      <span className="grow truncate">{c.label}</span>
-                      {c.hint && <span className="faint caption">{c.hint}</span>}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="pal-foot">
-              <span>Space to open</span>
-              <span>↑↓ to move</span>
-              <span>↵ to open</span>
-              <span>#area +project !1 @student tomorrow</span>
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+    <Layer open={open}>
+      <AnimatePresence>
+        {open && (
+          <>
+            <motion.div className="scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
+            <motion.div className="palette" role="dialog" aria-label="Command palette" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.12 } }} transition={{ duration: 0.16, ease: [0.32, 0.72, 0, 1] }}>
+              <div className="palette-input">
+                <MagnifyingGlass size={20} className="faint" />
+                <input
+                  autoFocus
+                  className="input-bare"
+                  placeholder="Search, jump, create…"
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  role="combobox"
+                  aria-expanded
+                  aria-controls="pal-list"
+                />
+                <span className="kbd">Esc</span>
+              </div>
+              <div className="palette-list" id="pal-list" role="listbox" ref={listRef}>
+                {cmds.map((c, i) => {
+                  const head = c.group !== lastGroup;
+                  lastGroup = c.group;
+                  return (
+                    <div key={c.group + c.id}>
+                      {head && <div className="pal-group label">{c.group}</div>}
+                      <button className="pal-item" role="option" aria-selected={i === sel} data-i={i} onMouseMove={() => setSel(i)} onClick={() => run(c)}>
+                        {c.icon}
+                        <span className="grow truncate">{c.label}</span>
+                        {c.hint && <span className="faint caption">{c.hint}</span>}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="pal-foot">
+                <span>Space to open</span>
+                <span>↑↓ to move</span>
+                <span>↵ to open</span>
+                <span>#area +project !1 @student tomorrow</span>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </Layer>
   );
 }
 
@@ -195,44 +198,46 @@ export function QuickAdd({ value, onClose }: { value: string | null; onClose: ()
   );
 
   return (
-    <AnimatePresence>
-      {value !== null && (
-        <>
-          <motion.div className="scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
-          <motion.div className="palette" role="dialog" aria-label="Quick add" initial={{ opacity: 0, scale: 0.98, y: 6 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.12 } }} transition={{ duration: 0.16, ease: [0.32, 0.72, 0, 1] }}>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!text.trim()) return;
-                createFromText(text, live.students, area === "all" ? undefined : area);
-                setText("");
-                onClose();
-              }}
-            >
-              <div className="palette-input">
-                <Plus size={20} className="faint" />
-                <input autoFocus className="input-bare" placeholder="Capture anything… e.g. Call Mateo's mum tomorrow #let !1" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Escape" && onClose()} aria-label="Quick add" />
-                <span className="kbd">↵</span>
+    <Layer open={value !== null}>
+      <AnimatePresence>
+        {value !== null && (
+          <>
+            <motion.div className="scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
+            <motion.div className="palette" role="dialog" aria-label="Quick add" initial={{ opacity: 0, scale: 0.98, y: 6 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.12 } }} transition={{ duration: 0.16, ease: [0.32, 0.72, 0, 1] }}>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!text.trim()) return;
+                  createFromText(text, live.students, area === "all" ? undefined : area);
+                  setText("");
+                  onClose();
+                }}
+              >
+                <div className="palette-input">
+                  <Plus size={20} className="faint" />
+                  <input autoFocus className="input-bare" placeholder="Capture anything… e.g. Call Mateo's mum tomorrow #let !1" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Escape" && onClose()} aria-label="Quick add" />
+                  <span className="kbd">↵</span>
+                </div>
+              </form>
+              <div className="row" style={{ padding: "12px 18px", flexWrap: "wrap", minHeight: 48 }}>
+                {p.chips.length === 0 ? (
+                  <span className="callout faint">Lands in the Inbox. Add a date, #area, +project, !1–!3, @student, or start with /games to add to a Collection.</span>
+                ) : (
+                  <>
+                    {p.chips.map((c) => (
+                      <span key={c.kind + c.label} className="chip accent">
+                        {c.kind === "date" ? `${relDay(c.label)} · ${formatDateDMY(c.label)}` : c.label}
+                      </span>
+                    ))}
+                    <span className="callout muted truncate">{p.title}</span>
+                  </>
+                )}
               </div>
-            </form>
-            <div className="row" style={{ padding: "12px 18px", flexWrap: "wrap", minHeight: 48 }}>
-              {p.chips.length === 0 ? (
-                <span className="callout faint">Lands in the Inbox. Add a date, #area, +project, !1–!3, @student, or start with /games to add to a Collection.</span>
-              ) : (
-                <>
-                  {p.chips.map((c) => (
-                    <span key={c.kind + c.label} className="chip accent">
-                      {c.kind === "date" ? `${relDay(c.label)} · ${formatDateDMY(c.label)}` : c.label}
-                    </span>
-                  ))}
-                  <span className="callout muted truncate">{p.title}</span>
-                </>
-              )}
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </Layer>
   );
 }
 

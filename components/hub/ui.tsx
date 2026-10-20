@@ -237,47 +237,49 @@ export function MenuProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
-      <AnimatePresence>
-        {menu && (
-          <motion.div
-            ref={ref}
-            className="menu"
-            role="menu"
-            style={{ left: menu.x, top: menu.y }}
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, transition: { duration: 0.1 } }}
-            transition={{ duration: 0.12 }}
-            onPointerDown={(e) => e.stopPropagation()}
-            onKeyDown={(e) => {
-              const btns = Array.from(ref.current?.querySelectorAll<HTMLButtonElement>("button") ?? []);
-              const i = btns.indexOf(document.activeElement as HTMLButtonElement);
-              if (e.key === "ArrowDown") btns[(i + 1) % btns.length]?.focus();
-              if (e.key === "ArrowUp") btns[(i - 1 + btns.length) % btns.length]?.focus();
-            }}
-          >
-            {menu.items.map((it, i) =>
-              it.sep ? (
-                <div key={i} className="menu-sep" />
-              ) : (
-                <button
-                  key={i}
-                  role="menuitem"
-                  className={`menu-item ${it.danger ? "btn-danger" : ""}`}
-                  onClick={() => {
-                    setMenu(null);
-                    it.onClick?.();
-                  }}
-                >
-                  {it.icon}
-                  <span className="grow">{it.label}</span>
-                  {it.hint && <span className="faint caption">{it.hint}</span>}
-                </button>
-              )
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <Layer open={!!menu}>
+        <AnimatePresence>
+          {menu && (
+            <motion.div
+              ref={ref}
+              className="menu"
+              role="menu"
+              style={{ left: menu.x, top: menu.y }}
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, transition: { duration: 0.1 } }}
+              transition={{ duration: 0.12 }}
+              onPointerDown={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                const btns = Array.from(ref.current?.querySelectorAll<HTMLButtonElement>("button") ?? []);
+                const i = btns.indexOf(document.activeElement as HTMLButtonElement);
+                if (e.key === "ArrowDown") btns[(i + 1) % btns.length]?.focus();
+                if (e.key === "ArrowUp") btns[(i - 1 + btns.length) % btns.length]?.focus();
+              }}
+            >
+              {menu.items.map((it, i) =>
+                it.sep ? (
+                  <div key={i} className="menu-sep" />
+                ) : (
+                  <button
+                    key={i}
+                    role="menuitem"
+                    className={`menu-item ${it.danger ? "btn-danger" : ""}`}
+                    onClick={() => {
+                      setMenu(null);
+                      it.onClick?.();
+                    }}
+                  >
+                    {it.icon}
+                    <span className="grow">{it.label}</span>
+                    {it.hint && <span className="faint caption">{it.hint}</span>}
+                  </button>
+                )
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </Layer>
     </MenuCtx.Provider>
   );
 }
@@ -332,6 +334,27 @@ export function useSheetDrag(onClose: () => void) {
   };
 }
 
+/**
+ * Wraps an overlay's AnimatePresence. Closed, its subtree goes `inert` at
+ * once: no clicks, no focus. Without this a sheet stays mounted (invisible,
+ * full-screen, catching every click) until its exit animation finishes —
+ * which never happens while the window is covered or the main thread is busy.
+ */
+export function Layer({ open, children }: { open: boolean; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  // The browser only moves focus off inert content on its next frame; don't leave typing in a closing input.
+  useLayoutEffect(() => {
+    const a = document.activeElement as HTMLElement | null;
+    if (!open && a && ref.current?.contains(a)) a.blur();
+  }, [open]);
+  // React 18 has no `inert` prop; as a plain attribute it is set before an opening input's autoFocus runs.
+  return (
+    <div ref={ref} className="layer" {...({ inert: open ? undefined : "" } as object)}>
+      {children}
+    </div>
+  );
+}
+
 export function Sheet({ open, onClose, children, wide, label }: { open: boolean; onClose: () => void; children: ReactNode; wide?: boolean; label: string }) {
   const mobile = useMobile();
   const drag = useSheetDrag(onClose);
@@ -342,32 +365,34 @@ export function Sheet({ open, onClose, children, wide, label }: { open: boolean;
     return () => window.removeEventListener("keydown", k, true);
   }, [open, onClose]);
   return (
-    <AnimatePresence>
-      {open && (
-        <>
-          <motion.div className="scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
-          {mobile ? (
-            <motion.div role="dialog" aria-modal aria-label={label} className="sheet" initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%", transition: { duration: 0.24, ease: [0.4, 0, 1, 1] } }} transition={spring.panel} {...drag}>
-              <div className="sheet-grab" aria-hidden />
-              {children}
-            </motion.div>
-          ) : (
-            <motion.div
-              role="dialog"
-              aria-modal
-              aria-label={label}
-              className={`sheet ${wide ? "sheet-wide" : ""}`}
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.14 } }}
-              transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
-            >
-              {children}
-            </motion.div>
-          )}
-        </>
-      )}
-    </AnimatePresence>
+    <Layer open={open}>
+      <AnimatePresence>
+        {open && (
+          <>
+            <motion.div className="scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
+            {mobile ? (
+              <motion.div role="dialog" aria-modal aria-label={label} className="sheet" initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%", transition: { duration: 0.24, ease: [0.4, 0, 1, 1] } }} transition={spring.panel} {...drag}>
+                <div className="sheet-grab" aria-hidden />
+                {children}
+              </motion.div>
+            ) : (
+              <motion.div
+                role="dialog"
+                aria-modal
+                aria-label={label}
+                className={`sheet ${wide ? "sheet-wide" : ""}`}
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.14 } }}
+                transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
+              >
+                {children}
+              </motion.div>
+            )}
+          </>
+        )}
+      </AnimatePresence>
+    </Layer>
   );
 }
 
@@ -414,3 +439,4 @@ export function useLongPress(onLong: (p: { clientX: number; clientY: number }) =
     },
   };
 }
+

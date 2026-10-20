@@ -26,7 +26,7 @@ import { Fab, MoreSheet, PlayerChip, PlayerSheet, TabBar } from "./MobileNav";
 import Dock from "./Dock";
 import { Palette, QuickAdd, Toasts } from "./Overlays";
 import { FxLayer } from "./Fx";
-import { MenuProvider, AreaDot, useDropdown } from "./ui";
+import { MenuProvider, AreaDot, Layer, useDropdown } from "./ui";
 import { Plus, CaretDown, X } from "@phosphor-icons/react";
 
 // Off the first-load path: nothing here is on screen when a page opens. The
@@ -282,7 +282,9 @@ function Ready({ children }: { children: ReactNode }) {
               </main>
               <Fab onClick={() => setQa("")} hidden={!!rec || more || player} />
               <TabBar onMore={() => setMore(!more)} moreOpen={more} />
-              <AnimatePresence>{rec && <Inspector key={rec.kind + rec.id} rec={rec} onClose={() => setRec(null)} mobile />}</AnimatePresence>
+              <Layer open={!!rec}>
+                <AnimatePresence>{rec && <Inspector key={rec.kind + rec.id} rec={rec} onClose={() => setRec(null)} mobile />}</AnimatePresence>
+              </Layer>
               <MoreSheet open={more} onClose={() => setMore(false)} onSearch={() => setPal(true)} onSettings={() => setSettings(true)} />
               {s.settings.game !== "off" && <PlayerSheet open={player} onClose={() => setPlayer(false)} />}
             </div>
@@ -294,7 +296,9 @@ function Ready({ children }: { children: ReactNode }) {
               </main>
               <aside className="right">
                 {s.settings.game !== "off" ? <Dock rail={dock === "rail" && !rec} /> : <div className="dock" />}
-                <AnimatePresence>{rec && <Inspector key={rec.kind + rec.id} rec={rec} onClose={() => setRec(null)} />}</AnimatePresence>
+                <Layer open={!!rec}>
+                  <AnimatePresence>{rec && <Inspector key={rec.kind + rec.id} rec={rec} onClose={() => setRec(null)} />}</AnimatePresence>
+                </Layer>
               </aside>
             </div>
           )}

@@ -101,7 +101,7 @@ export function FxLayer() {
           <motion.div
             role="status"
             className="card row"
-            style={{ position: "fixed", top: 72, left: "50%", x: "-50%", zIndex: 110, gap: 14, padding: "14px 20px 14px 14px", boxShadow: "var(--e3), 0 0 24px var(--glow)" }}
+            style={{ position: "fixed", top: 72, left: "50%", x: "-50%", zIndex: 110, pointerEvents: "none", gap: 14, padding: "14px 20px 14px 14px", boxShadow: "var(--e3), 0 0 24px var(--glow)" }}
             initial={{ y: -30, opacity: 0, scale: 0.9 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: -20, opacity: 0, transition: { duration: 0.18 } }}

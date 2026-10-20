@@ -398,6 +398,7 @@ img { display: block; max-width: 100%; }
 :root[data-theme="dark"] .toast button { color: var(--accent); }
 .toast button:hover { background: rgba(255, 255, 255, 0.1); }
 
+.layer { display: contents; }
 .scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 90; }
 .palette { position: fixed; top: 16vh; left: 50%; width: 640px; max-width: calc(100vw - 32px); margin-left: -320px; z-index: 91; border-radius: var(--r-card); background: var(--material); backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%); box-shadow: var(--e3); border: 1px solid var(--line); overflow: hidden; }
 .palette-input { display: flex; align-items: center; gap: 10px; padding: 0 18px; height: 56px; border-bottom: 1px solid var(--line); font-size: 16px; }

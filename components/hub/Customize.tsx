@@ -7,7 +7,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { ImageSquare, UploadSimple, Trash, Link as LinkIcon } from "@phosphor-icons/react";
 import { resizeImageFile } from "@/lib/imageResize";
 import { toast } from "@/lib/hub/fx";
-import { ICONS, IconByName } from "./ui";
+import { ICONS, IconByName, Layer } from "./ui";
 
 export const SWATCHES = ["#FF6B4A", "#FFB020", "#30C48D", "#2FC9A0", "#14B8C4", "#3AA0FF", "#5E5CE6", "#8F7CFF", "#B26BFF", "#E86FD8", "#FF5C9A", "#8C9AA8"];
 
@@ -74,22 +74,24 @@ export function Popover({ anchor, open, onClose, children, width = 320 }: { anch
   }, [open, anchor, onClose]);
   if (typeof document === "undefined") return null;
   return createPortal(
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          ref={ref}
-          className="menu popover"
-          role="dialog"
-          style={{ left: pos.x, top: pos.y, width }}
-          initial={{ opacity: 0, scale: 0.97, y: -4 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.1 } }}
-          transition={{ type: "spring", stiffness: 500, damping: 38 }}
-        >
-          {children}
-        </motion.div>
-      )}
-    </AnimatePresence>,
+    <Layer open={open}>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            ref={ref}
+            className="menu popover"
+            role="dialog"
+            style={{ left: pos.x, top: pos.y, width }}
+            initial={{ opacity: 0, scale: 0.97, y: -4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.1 } }}
+            transition={{ type: "spring", stiffness: 500, damping: 38 }}
+          >
+            {children}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </Layer>,
     document.body
   );
 }
