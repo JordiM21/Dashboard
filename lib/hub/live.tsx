@@ -8,7 +8,7 @@
  * writes to these collections — its own records live in lib/hub/store.ts.
  */
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { collection, onSnapshot, Timestamp } from "firebase/firestore";
+import { collection, getDocs, onSnapshot, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/firebase/AuthContext";
 import type { CurriculumLevelDoc, FinanceEntry, GroupDoc, Project as OldProject, RecurringTransaction, ResourceFile, ResourceFolder, Student, Task as OldTask, WeeklyPlanDoc } from "@/lib/types";
@@ -25,8 +25,6 @@ export interface LiveData {
   plans: WeeklyPlanDoc[];
   folders: ResourceFolder[];
   files: ResourceFile[];
-  oldTasks: OldTask[] | null;
-  oldProjects: OldProject[] | null;
   error: string | null;
 }
 
@@ -41,8 +39,6 @@ const DEMO: LiveData = {
   plans: demo.demoPlans,
   folders: demo.demoFolders,
   files: demo.demoFiles,
-  oldTasks: null,
-  oldProjects: null,
   error: null,
 };
 
@@ -55,11 +51,19 @@ const SOURCES = {
   plans: "weeklyPlans",
   folders: "resourceFolders",
   files: "resourceFiles",
-  oldTasks: "tasks",
-  oldProjects: "projects",
 } as const;
 
 const iso = (v: unknown) => (v instanceof Timestamp ? v.toDate().toISOString() : typeof v === "string" ? v : undefined);
+const withDates = (d: { id: string; data: () => Record<string, unknown> }) => {
+  const raw = d.data();
+  return { ...raw, id: d.id, createdAt: iso(raw.createdAt), updatedAt: iso(raw.updatedAt) };
+};
+
+/** v1's tasks/projects, read once — only the v1 → v2 migration needs them (see initCloud). */
+export async function fetchV1(): Promise<{ tasks: OldTask[]; projects: OldProject[] }> {
+  const [t, p] = await Promise.all([getDocs(collection(db, "tasks")), getDocs(collection(db, "projects"))]);
+  return { tasks: t.docs.map(withDates) as unknown as OldTask[], projects: p.docs.map(withDates) as unknown as OldProject[] };
+}
 
 const Ctx = createContext<LiveData>(DEMO);
 
@@ -73,18 +77,15 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       setData(DEMO);
       return;
     }
-    const empty = { ...DEMO, mode: "live" as const, ready: false, oldTasks: null, oldProjects: null };
-    for (const k of Object.keys(SOURCES)) (empty as any)[k] = k === "oldTasks" || k === "oldProjects" ? null : [];
+    const empty = { ...DEMO, mode: "live" as const, ready: false };
+    for (const k of Object.keys(SOURCES)) (empty as any)[k] = [];
     setData(empty);
     const seen = new Set<string>();
     const unsubs = Object.entries(SOURCES).map(([key, name]) =>
       onSnapshot(
         collection(db, name),
         (snap) => {
-          const docs = snap.docs.map((d) => {
-            const raw = d.data();
-            return { ...raw, id: d.id, createdAt: iso(raw.createdAt), updatedAt: iso(raw.updatedAt) };
-          });
+          const docs = snap.docs.map(withDates);
           seen.add(key);
           setData((prev) => ({ ...prev, [key]: docs, ready: seen.size >= Object.keys(SOURCES).length }));
         },

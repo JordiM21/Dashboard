@@ -40,7 +40,7 @@ export function initStore(mode: "demo", seed: () => HubState): void {
 }
 
 /** Signed-in mode. `onReady` fires once the first full state has arrived (cache or network). */
-export function initCloud(seed: () => HubState, onReady: () => void): () => void {
+export function initCloud(seed: () => Promise<HubState>, onReady: () => void): () => void {
   key = "hub-v2:live";
   cloud = true;
   let ui: HubState["ui"] | null = null;
@@ -53,7 +53,7 @@ export function initCloud(seed: () => HubState, onReady: () => void): () => void
       // A device that already used v2 locally before deploy keeps that work; otherwise migrate v1.
       try {
         const local = JSON.parse(localStorage.getItem("hub-v2:live") ?? "null") as HubState | null;
-        if (local?.version === STATE_VERSION) return { ...local, settings: { ...DEFAULT_SETTINGS, ...local.settings } };
+        if (local?.version === STATE_VERSION) return Promise.resolve({ ...local, settings: { ...DEFAULT_SETTINGS, ...local.settings } });
       } catch {}
       return seed();
     },

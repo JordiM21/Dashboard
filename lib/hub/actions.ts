@@ -6,7 +6,7 @@
  * completion can never forget its reward.
  */
 import type { Collection, Goal, HubState, Item, LessonLog, LocalExpense, Note, Project, Recurrence, Task, TimeEntry, XpEvent } from "./types";
-import { XP, levelFromXp, taskXp, totalXp } from "./game";
+import { XP, compactXp, levelFromXp, taskXp, totalXp } from "./game";
 import { fx, toast, announce } from "./fx";
 import { getState, setState } from "./store";
 import { makeTask } from "./seed";
@@ -23,7 +23,10 @@ export function award(amount: number, label: string, source: string, areaId: str
   if (amount <= 0) return;
   const before = levelFromXp(totalXp(getState().game.xp)).level;
   const ev: XpEvent = { id: uid(), at: nowIso(), amount, label, source, areaId, refId };
-  setState((s) => ({ ...s, game: { ...s.game, xp: [...s.game.xp, ev] } }));
+  setState((s) => {
+    const xp = [...s.game.xp, ev];
+    return { ...s, game: { ...s.game, xp: xp.length > 1500 ? compactXp(xp, addDays(today(), -60)) : xp } };
+  });
   const after = levelFromXp(totalXp(getState().game.xp)).level;
   if (getState().settings.game !== "off") {
     fx({ type: "xp", amount, from, label });

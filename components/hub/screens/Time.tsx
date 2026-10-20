@@ -29,9 +29,10 @@ export default function Time() {
   const running = A.runningTimer(s);
   const [tick, setTick] = useState(0);
   useEffect(() => {
+    if (!running) return; // the clock only moves while a timer runs
     const i = setInterval(() => setTick((n) => n + 1), 1000);
     return () => clearInterval(i);
-  }, []);
+  }, [!!running]);
   const [ws, setWs] = useState(() => weekStart());
   const [label, setLabel] = useState("");
   const [areaId, setAreaId] = useState("let");

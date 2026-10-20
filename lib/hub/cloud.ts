@@ -104,7 +104,7 @@ function pushAll(s: HubState): void {
  * device, or this one's writes settling. If the cloud is empty, `seed()`
  * runs once and its result is uploaded: that's the v1 → v2 migration.
  */
-export function subscribeCloud(seed: () => HubState, ui: HubState["ui"], onState: (s: HubState) => void): () => void {
+export function subscribeCloud(seed: () => Promise<HubState>, ui: HubState["ui"], onState: (s: HubState) => void): () => void {
   const parts: Partial<Record<string, unknown>> = {};
   const expected = ENTITY_KEYS.length + 1;
   let seen = 0;
@@ -116,9 +116,10 @@ export function subscribeCloud(seed: () => HubState, ui: HubState["ui"], onState
     if (!st?.meta) {
       if (seeded) return;
       seeded = true;
-      const s = seed();
-      pushAll(s);
-      onState(s);
+      seed().then((s) => {
+        pushAll(s);
+        onState(s);
+      });
       return;
     }
     const s: HubState = {

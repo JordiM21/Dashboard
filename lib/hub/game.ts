@@ -49,6 +49,27 @@ export function levelFromXp(total: number): { level: number; into: number; need:
 
 export const totalXp = (xp: XpEvent[]) => xp.reduce((s, e) => s + e.amount, 0);
 
+/**
+ * hub_state/game is one Firestore doc (1 MB cap) rewritten on every award, so
+ * the history can't grow forever. Events before `cutoff` fold into one per
+ * area per month: totals, area totals and the 8-week chart are unchanged.
+ */
+export function compactXp(xp: XpEvent[], cutoff: string): XpEvent[] {
+  const keep: XpEvent[] = [];
+  const rolled = new Map<string, XpEvent>();
+  for (const e of xp) {
+    if (e.at.slice(0, 10) >= cutoff) {
+      keep.push(e);
+      continue;
+    }
+    const k = `${e.at.slice(0, 7)}|${e.areaId ?? ""}`;
+    const r = rolled.get(k);
+    if (r) rolled.set(k, { ...r, amount: r.amount + e.amount });
+    else rolled.set(k, { id: "xp-" + k, at: `${e.at.slice(0, 7)}-01T00:00:00.000Z`, amount: e.amount, areaId: e.areaId, label: "Earlier XP", source: "archive" });
+  }
+  return [...rolled.values(), ...keep];
+}
+
 export function xpByArea(xp: XpEvent[]): Record<string, number> {
   const out: Record<string, number> = {};
   for (const e of xp) if (e.areaId) out[e.areaId] = (out[e.areaId] ?? 0) + e.amount;

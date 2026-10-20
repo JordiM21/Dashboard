@@ -8,7 +8,7 @@ import { parseQuickAdd } from "./parse";
 import { bindings, comboOf } from "./keys";
 import { changes } from "./cloud";
 import { demoSeed } from "./seed";
-import { levelFromXp, streak, taskXp, xpForLevel } from "./game";
+import { compactXp, levelFromXp, streak, taskXp, totalXp, xpByArea, xpForLevel } from "./game";
 import { addDays, today } from "./util";
 import type { HubState, Task } from "./types";
 
@@ -75,5 +75,14 @@ const ch = changes(base0, edited);
 assert.deepEqual(ch.map(([c, id]) => [c, id]), [["hub_tasks", base0.tasks[0].id]]);
 assert.deepEqual(changes(base0, { ...base0, settings: { ...base0.settings, sound: false } }).map(([c, id]) => c + "/" + id), ["hub_state/settings"]);
 assert.equal(changes(base0, { ...base0, tasks: base0.tasks.slice(1) })[0][2], null);
+
+// XP compaction keeps every total and the recent detail.
+const xpEv = (at: string, amount: number, areaId: string | null) => ({ id: at + amount, at, amount, areaId, label: "x", source: "task" });
+const hist = [xpEv("2026-01-03T10:00:00Z", 10, "let"), xpEv("2026-01-20T10:00:00Z", 15, "let"), xpEv("2026-01-21T10:00:00Z", 5, null), xpEv("2026-03-01T10:00:00Z", 7, "home")];
+const packed = compactXp(hist, "2026-02-01");
+assert.equal(packed.length, 3);
+assert.equal(totalXp(packed), totalXp(hist));
+assert.deepEqual(xpByArea(packed), xpByArea(hist));
+assert.deepEqual(compactXp(packed, "2026-02-01"), packed); // idempotent
 
 console.log("hub checks passed");

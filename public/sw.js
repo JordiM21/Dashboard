@@ -1,10 +1,12 @@
 // Hub service worker: installable PWA + offline shell.
 // - Hashed build assets (/_next/static) are immutable: cache-first.
-// - Pages: network-first with a 2.5s timeout, then the cached copy — so a
+// - Page loads: network-first with a 2.5s timeout, then the cached copy — so a
 //   weak 4G connection never leaves the app on a blank screen.
+// - Everything else (RSC payloads with a random ?_rsc= key, data) passes
+//   through: caching it would add an entry per navigation, forever.
 // - /api and anything cross-origin (Firebase, Stripe) is never cached.
 // Bump CACHE when routes are removed so old pages stop being served.
-const CACHE = "hub-v2-2";
+const CACHE = "hub-v2-3";
 const SHELL = ["/today", "/inbox", "/tasks", "/academy"];
 
 self.addEventListener("install", (event) => {
@@ -40,6 +42,8 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(caches.match(req).then((hit) => hit || fetch(req).then((res) => put(req, res))));
     return;
   }
+
+  if (req.mode !== "navigate") return;
 
   event.respondWith(
     new Promise((resolve) => {

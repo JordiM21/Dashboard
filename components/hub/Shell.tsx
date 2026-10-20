@@ -8,10 +8,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { sfx, sfxFor } from "@/lib/hub/sound";
 import KeyboardLayer, { CheatSheet } from "./Keys";
+import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, MotionConfig } from "motion/react";
 import { useAuth } from "@/lib/firebase/AuthContext";
-import { useLive } from "@/lib/hub/live";
+import { fetchV1, useLive } from "@/lib/hub/live";
 import { initCloud, initStore, getState, setState, useHub } from "@/lib/hub/store";
 import { demoSeed, liveSeed } from "@/lib/hub/seed";
 import * as A from "@/lib/hub/actions";
@@ -23,12 +24,18 @@ import type { Area } from "@/lib/hub/types";
 import Sidebar from "./Sidebar";
 import { Fab, MoreSheet, PlayerChip, PlayerSheet, TabBar } from "./MobileNav";
 import Dock from "./Dock";
-import Inspector from "./Inspector";
 import { Palette, QuickAdd, Toasts } from "./Overlays";
-import { LessonLogSheet, PlanDaySheet, SettingsSheet } from "./Sheets";
 import { FxLayer } from "./Fx";
 import { MenuProvider, AreaDot, useDropdown } from "./ui";
 import { Plus, CaretDown, X } from "@phosphor-icons/react";
+
+// Off the first-load path: nothing here is on screen when a page opens. The
+// Inspector (with react-markdown) is warmed on idle so the first click is instant.
+const loadInspector = () => import("./Inspector");
+const Inspector = dynamic(loadInspector, { ssr: false });
+const LessonLogSheet = dynamic(() => import("./Sheets").then((m) => m.LessonLogSheet), { ssr: false });
+const PlanDaySheet = dynamic(() => import("./Sheets").then((m) => m.PlanDaySheet), { ssr: false });
+const SettingsSheet = dynamic(() => import("./Sheets").then((m) => m.SettingsSheet), { ssr: false });
 
 export type Rec = { kind: "task" | "student" | "note" | "item" | "goal" | "project" | "tx"; id: string };
 
@@ -60,11 +67,14 @@ const isTyping = (e: KeyboardEvent) => {
   return t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName);
 };
 
+/** Snaps to the layout breakpoints (768 / 1280 / 1440) so dragging a window edge doesn't re-render the shell per pixel. */
+const widthBucket = (w: number) => (w < 768 ? 767 : w < 1280 ? 1279 : w < 1440 ? 1439 : 1600);
+
 function useWidth() {
   // The shell only renders client-side, so the real width is known on first paint — no desktop flash on phones.
-  const [w, setW] = useState(() => (typeof window === "undefined" ? 1600 : innerWidth));
+  const [w, setW] = useState(() => (typeof window === "undefined" ? 1600 : widthBucket(innerWidth)));
   useEffect(() => {
-    const f = () => setW(innerWidth);
+    const f = () => setW(widthBucket(innerWidth));
     f();
     addEventListener("resize", f);
     return () => removeEventListener("resize", f);
@@ -78,10 +88,8 @@ const DEMO_ALLOWED = process.env.NODE_ENV === "development" || process.env.NEXT_
 export default function Shell({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   const signedIn = !!user;
-  const live = useLive();
   const router = useRouter();
   const [ready, setReady] = useState(false);
-  const migrated = live.oldTasks !== null && live.oldProjects !== null;
 
   useEffect(() => {
     if (loading) return;
@@ -92,11 +100,11 @@ export default function Shell({ children }: { children: ReactNode }) {
       if (!DEMO_ALLOWED) return void router.replace("/login");
       initStore("demo", demoSeed);
       setReady(true);
-    } else if (migrated) {
-      return initCloud(() => liveSeed(live.oldTasks!, live.oldProjects!), () => setReady(true));
+    } else {
+      return initCloud(() => fetchV1().then((v1) => liveSeed(v1.tasks, v1.projects)), () => setReady(true));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, signedIn, migrated]);
+  }, [loading, signedIn]);
 
   if (!ready) return <BootSkeleton />;
   return <Ready>{children}</Ready>;
@@ -257,6 +265,11 @@ function Ready({ children }: { children: ReactNode }) {
   }, [rec]);
 
   useAutomations();
+
+  useEffect(() => {
+    const idle = window.requestIdleCallback ?? ((f: () => void) => setTimeout(f, 1500));
+    idle(() => void loadInspector());
+  }, []);
 
   return (
     <MotionConfig reducedMotion={s.settings.game === "off" ? "always" : "user"}>
@@ -431,26 +444,30 @@ function useAutomations() {
     }
   }, [live, s.lessons.length]);
 
-  // Achievements and bosses
+  // Achievements and bosses — settled after edits, not re-walked on every keystroke.
   useEffect(() => {
     if (!live.ready) return;
-    const st = s;
-    if (live.groups.some((g) => members(g, live.students).length >= (st.groupMeta[g.id]?.capacity ?? 4))) A.unlock("full-house");
-    if (st.game.inboxZeroDays.length >= 10) A.unlock("zero-inbox");
-    if (streak(st).longest >= 30) A.unlock("iron-streak");
-    if (newPaying(live, st, monthKey()).length >= 5) A.unlock("recruiter");
-    const months = st.monthly.map((m) => m.month);
-    if (months.some((m) => months.includes(prevMonth(m)) && months.includes(prevMonth(m, 2)))) A.unlock("bookkeeper");
-    for (const g of st.goals) {
-      if (g.archivedAt || g.horizon === "someday") continue;
-      if (goalProgress(g, st, live).defeated && A.markAutomation(`boss:${g.id}`)) {
-        A.unlock("boss-slayer");
-        if (st.settings.game === "full") fx({ type: "boss-defeated", goalId: g.id });
-      }
+    const t = setTimeout(() => checkTrophies(getState()), 400);
+    return () => clearTimeout(t);
+
+    function checkTrophies(st: typeof s) {
+      if (live.groups.some((g) => members(g, live.students).length >= (st.groupMeta[g.id]?.capacity ?? 4))) A.unlock("full-house");
+      if (st.game.inboxZeroDays.length >= 10) A.unlock("zero-inbox");
+      if (streak(st).longest >= 30) A.unlock("iron-streak");
+      if (newPaying(live, st, monthKey()).length >= 5) A.unlock("recruiter");
+      const months = st.monthly.map((m) => m.month);
+      if (months.some((m) => months.includes(prevMonth(m)) && months.includes(prevMonth(m, 2)))) A.unlock("bookkeeper");
+      for (const g of st.goals) {
+        if (g.archivedAt || g.horizon === "someday") continue;
+        if (goalProgress(g, st, live).defeated && A.markAutomation(`boss:${g.id}`)) {
+          A.unlock("boss-slayer");
+          if (st.settings.game === "full") fx({ type: "boss-defeated", goalId: g.id });
+        }
     }
     const m = mrr(live, st);
     if (lastMrr.current !== null && m > lastMrr.current) fx({ type: "boss-damage", amount: m - lastMrr.current });
     lastMrr.current = m;
+    }
   }, [s, live]);
 }
 
