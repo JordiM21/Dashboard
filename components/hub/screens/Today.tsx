@@ -11,7 +11,7 @@ import { useLive } from "@/lib/hub/live";
 import * as A from "@/lib/hub/actions";
 import { isFocus, taskXp, XP } from "@/lib/hub/game";
 import { classesOn, dueSoon, goalProgress, members, receivables, weekDamage, type ClassOccurrence } from "@/lib/hub/metrics";
-import { addDays, daysBetween, greeting, money, relDay, today, toMinutes, hhmm, formatDateDMY } from "@/lib/hub/util";
+import { addDays, dayOf, daysBetween, greeting, isEvening, money, relDay, today, toMinutes, hhmm, formatDateDMY } from "@/lib/hub/util";
 import { Toolbar, useArea, useShell } from "../Shell";
 import TaskRow, { rowMotion } from "../TaskRow";
 import { BossHp, PhaseBanner } from "../game";
@@ -207,7 +207,7 @@ function Quests({ focus }: { focus: ReturnType<typeof useHub>["tasks"] }) {
   const { planDay } = useShell();
   const [all, setAll] = useState(false);
   const t0 = today();
-  const doneToday = s.tasks.filter((t) => t.completedAt?.slice(0, 10) === t0 && ((t.scheduled ?? "9") <= t0 || (t.due ?? "9") <= t0) && match(t.areaId));
+  const doneToday = s.tasks.filter((t) => dayOf(t.completedAt) === t0 && ((t.scheduled ?? "9") <= t0 || (t.due ?? "9") <= t0) && match(t.areaId));
   const shown = all ? focus : focus.slice(0, 7);
   const total = focus.length + doneToday.length;
   const xpLeft = focus.reduce((a, t) => a + taskXp(t, new Date(), 0), 0);
@@ -215,7 +215,7 @@ function Quests({ focus }: { focus: ReturnType<typeof useHub>["tasks"] }) {
   const weekly = (review?.priorities ?? []).map((id) => s.tasks.find((t) => t.id === id)).filter(Boolean) as typeof s.tasks;
   const game = s.settings.game !== "off";
   const planned = !!s.game.dayPlans[t0];
-  const evening = new Date().getHours() >= 17;
+  const evening = isEvening();
   const tmrPlanned = !!s.game.dayPlans[addDays(t0, 1)];
   const alertsVisible = useAlerts().length > 0;
 
@@ -391,8 +391,6 @@ function Schedule() {
         <span className="callout muted">
           {classes.length} class{classes.length === 1 ? "" : "es"} · {Math.round(classes.reduce((a, c) => a + c.slot.minutes, 0) / 6) / 10}h teaching
         </span>
-        <span className="spacer" />
-        <span className="caption faint">Google Calendar events arrive in Phase 2</span>
       </div>
       <div className="timeline">
         {Array.from({ length: endH - startH }, (_, i) => (

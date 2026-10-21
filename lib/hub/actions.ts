@@ -10,7 +10,7 @@ import { XP, compactXp, levelFromXp, taskXp, totalXp } from "./game";
 import { fx, toast, announce } from "./fx";
 import { getState, setState } from "./store";
 import { makeTask } from "./seed";
-import { addDays, dayOfWeek, hhmm, nowIso, today, uid } from "./util";
+import { addDays, dayOf, dayOfWeek, hhmm, nowIso, today, uid } from "./util";
 import { addMonths } from "@/lib/dateUtils";
 
 type Origin = { x: number; y: number } | undefined;
@@ -36,7 +36,7 @@ export function award(amount: number, label: string, source: string, areaId: str
 }
 
 function revokeXp(refId: string): void {
-  setState((s) => ({ ...s, game: { ...s.game, xp: s.game.xp.filter((e) => e.refId !== refId || e.at.slice(0, 10) !== today()) } }));
+  setState((s) => ({ ...s, game: { ...s.game, xp: s.game.xp.filter((e) => e.refId !== refId || dayOf(e.at) !== today()) } }));
 }
 
 // ---------------------------------------------------------------- Tasks
@@ -74,8 +74,8 @@ export function completeTask(id: string, from?: Origin): void {
   if (!task || task.status === "done") return;
   const now = new Date();
   const t0 = today();
-  const todayTaskXp = s.game.xp.filter((e) => e.source === "task" && e.at.slice(0, 10) === t0).reduce((a, e) => a + e.amount, 0);
-  const recurringEarned = !!task.recurrence && s.game.xp.some((e) => e.refId === id && e.at.slice(0, 10) === t0);
+  const todayTaskXp = s.game.xp.filter((e) => e.source === "task" && dayOf(e.at) === t0).reduce((a, e) => a + e.amount, 0);
+  const recurringEarned = !!task.recurrence && s.game.xp.some((e) => e.refId === id && dayOf(e.at) === t0);
   const amount = taskXp(task, now, todayTaskXp, recurringEarned);
 
   let spawned: Task | null = null;
@@ -139,7 +139,7 @@ function checkInboxZero(): void {
   const s = getState();
   const t0 = today();
   const inbox = s.tasks.filter((t) => t.status === "inbox" && !t.archivedAt).length;
-  if (inbox === 0 && !s.game.inboxZeroDays.includes(t0) && s.tasks.some((t) => t.log.length || t.updatedAt.slice(0, 10) === t0)) {
+  if (inbox === 0 && !s.game.inboxZeroDays.includes(t0) && s.tasks.some((t) => t.log.length || dayOf(t.updatedAt) === t0)) {
     setState((st) => ({ ...st, game: { ...st.game, inboxZeroDays: [...st.game.inboxZeroDays, t0] } }));
     award(XP.inbox, "Inbox zero", "inbox", null, "inbox:" + t0);
   }

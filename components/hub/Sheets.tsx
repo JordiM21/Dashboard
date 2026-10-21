@@ -9,7 +9,7 @@ import { useHub, resetStore, storeMode } from "@/lib/hub/store";
 import * as A from "@/lib/hub/actions";
 import { isFocus, XP } from "@/lib/hub/game";
 import { demoSeed } from "@/lib/hub/seed";
-import { addDays, relDay, today, weekStart } from "@/lib/hub/util";
+import { addDays, isEvening, relDay, today, weekStart } from "@/lib/hub/util";
 import { Segmented, Sheet } from "./ui";
 import { CaretDown, CaretUp, Plus } from "@phosphor-icons/react";
 import { bindings, comboOf, KEY_ACTIONS, prettyCombo } from "@/lib/hub/keys";
@@ -23,12 +23,12 @@ export function PlanDaySheet({ open, onClose }: { open: boolean; onClose: () => 
   const { match } = useArea();
   const t0 = today();
   const tmr = addDays(t0, 1);
-  // From 17:00 the sheet plans tomorrow: the evening is when the plan gets made.
+  // From 17:00 (until the 04:00 rollover) the sheet plans tomorrow: the evening is when the plan gets made.
   const [day, setDay] = useState(t0);
   const [picked, setPicked] = useState<string[]>([]);
   const [over, setOver] = useState<"pool" | "today" | null>(null);
   useEffect(() => {
-    if (open) setDay(new Date().getHours() >= 17 ? tmr : t0);
+    if (open) setDay(isEvening() ? tmr : t0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
   useEffect(() => {

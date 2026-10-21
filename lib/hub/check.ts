@@ -9,7 +9,8 @@ import { bindings, comboOf } from "./keys";
 import { changes } from "./cloud";
 import { demoSeed } from "./seed";
 import { compactXp, levelFromXp, streak, taskXp, totalXp, xpByArea, xpForLevel } from "./game";
-import { addDays, today } from "./util";
+import { addDays, dayOf, isEvening, today } from "./util";
+import { PIP_LINES, pipLine } from "./pip";
 import type { HubState, Task } from "./types";
 
 const ctx = {
@@ -86,3 +87,13 @@ assert.deepEqual(xpByArea(packed), xpByArea(hist));
 assert.deepEqual(compactXp(packed, "2026-02-01"), packed); // idempotent
 
 console.log("hub checks passed");
+
+// Night owl: the day rolls over at 04:00, not midnight.
+assert.equal(dayOf("2026-10-22T01:30:00.000"), "2026-10-21");
+assert.equal(dayOf("2026-10-22T04:00:00.000"), "2026-10-22");
+assert.equal(isEvening(new Date(2026, 9, 22, 1, 30)), true);
+assert.equal(isEvening(new Date(2026, 9, 22, 9, 0)), false);
+
+// Pip cycles through every line before repeating (3h slots).
+const seen = new Set(Array.from({ length: PIP_LINES.length }, (_, i) => pipLine(i * 3 * 3600e3)));
+assert.equal(seen.size, PIP_LINES.length);

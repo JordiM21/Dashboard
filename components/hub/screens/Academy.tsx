@@ -321,7 +321,7 @@ function Curriculum() {
   return (
     <div className="col" style={{ gap: 28 }}>
       <p className="callout muted" style={{ margin: 0, maxWidth: 720 }}>
-        Your syllabus, separate from the groups. Click any text to edit it. Drag lessons between levels and drag level cards to reorder them or move them to another stage.
+        Your syllabus. Click to edit, drag to reorder.
       </p>
       {stages.map((stage, si) => {
         const tint = TINTS[si % TINTS.length];

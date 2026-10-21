@@ -146,7 +146,7 @@ function emptyState(): HubState {
     reviews: [],
     monthly: [],
     settings: DEFAULT_SETTINGS,
-    ui: { area: "all", taskView: "list", listGroup: "area", finScope: "business" },
+    ui: { area: "all", taskView: "projects", listGroup: "area", finScope: "business" },
   };
 }
 

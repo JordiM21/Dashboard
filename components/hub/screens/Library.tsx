@@ -335,7 +335,7 @@ export default function Library() {
                 <div>
                   <h1 className="display-xl">Library</h1>
                   <p className="callout muted" style={{ maxWidth: 720 }}>
-                    Everything you keep, in one place: notes by area, collections (lists with your own fields, like games, books or ideas) and folders of files. Drop any file on the page to upload it. Drag notes, files and folders onto a folder to move them.
+                    Notes, collections and files. Drop a file anywhere to upload.
                   </p>
                 </div>
               </header>

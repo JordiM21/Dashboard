@@ -3,7 +3,7 @@
  * numbers can be checked without React — see game.check.ts.
  */
 import type { HubState, Task, XpEvent } from "./types";
-import { addDays, dayOfWeek, today as todayIso } from "./util";
+import { addDays, DAY_START_HOUR, dayOf, dayOfWeek, today as todayIso } from "./util";
 
 export const XP = {
   plan: 30,
@@ -87,7 +87,7 @@ export function focusDoneOn(tasks: Task[], day: string): number {
   return tasks.filter(
     (t) =>
       t.completedAt &&
-      t.completedAt.slice(0, 10) === day &&
+      dayOf(t.completedAt) === day &&
       ((t.scheduled != null && t.scheduled <= day) || (t.due != null && t.due <= day))
   ).length;
 }
@@ -150,7 +150,7 @@ export function streak(state: Pick<HubState, "tasks" | "game" | "settings">, now
     longest,
     freezes,
     todayCounted,
-    atRisk: !todayCounted && now.getHours() >= 18 && dayOfWeek(t) !== rest,
+    atRisk: !todayCounted && (now.getHours() >= 18 || now.getHours() < DAY_START_HOUR) && dayOfWeek(t) !== rest,
     week,
   };
 }

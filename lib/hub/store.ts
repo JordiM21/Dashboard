@@ -34,7 +34,7 @@ export function initStore(mode: "demo", seed: () => HubState): void {
     if (raw) loaded = JSON.parse(raw);
   } catch {}
   // Settings added after a device first saved get their defaults.
-  state = loaded && loaded.version === STATE_VERSION ? { ...loaded, settings: { ...DEFAULT_SETTINGS, ...loaded.settings } } : seed();
+  state = loaded && loaded.version === STATE_VERSION ? { ...loaded, settings: { ...DEFAULT_SETTINGS, ...loaded.settings }, ui: { ...loaded.ui, taskView: "projects" } } : seed();
   if (!loaded) persist();
   emit();
 }
@@ -57,7 +57,8 @@ export function initCloud(seed: () => Promise<HubState>, onReady: () => void): (
       } catch {}
       return seed();
     },
-    ui ?? { area: "all", taskView: "list", listGroup: "area", finScope: "business" },
+    // Tasks always opens on Projects; a view switch holds for the session.
+    { area: "all", listGroup: "area", finScope: "business", ...ui, taskView: "projects" },
     (s) => {
       if (hasPending()) return; // our own edit is on its way; the snapshot after the flush carries it
       state = { ...s, ui: state?.ui ?? s.ui };

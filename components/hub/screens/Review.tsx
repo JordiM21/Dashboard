@@ -10,7 +10,7 @@ import { useLive } from "@/lib/hub/live";
 import * as A from "@/lib/hub/actions";
 import { XP } from "@/lib/hub/game";
 import { goalProgress, projectProgress } from "@/lib/hub/metrics";
-import { addDays, daysBetween, relDay, today, weekStart } from "@/lib/hub/util";
+import { addDays, dayOf, daysBetween, relDay, today, weekStart } from "@/lib/hub/util";
 import { Toolbar } from "../Shell";
 import TaskRow from "../TaskRow";
 import { Progress, Pip, spring } from "../ui";
@@ -75,7 +75,7 @@ export default function Review() {
                 <div className="col" style={{ gap: 10 }}>
                   {projects.map((p) => {
                     const pr = projectProgress(p.id, s.tasks);
-                    const stale = !pr.next && daysBetween(p.updatedAt.slice(0, 10), today()) >= 3;
+                    const stale = !pr.next && daysBetween(dayOf(p.updatedAt), today()) >= 3;
                     return (
                       <div key={p.id} className="card col" style={{ gap: 8 }}>
                         <div className="row">

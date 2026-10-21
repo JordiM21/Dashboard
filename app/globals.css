@@ -355,7 +355,7 @@ img { display: block; max-width: 100%; }
 .day-pill .num { font: 700 18px/22px var(--font-display-stack); }
 
 .week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; }
-.week-col { min-height: 420px; border-radius: var(--r-tile); padding: 8px; display: flex; flex-direction: column; gap: 6px; transition: background var(--fast); }
+.week-col { min-height: 260px; border-radius: var(--r-tile); padding: 8px; display: flex; flex-direction: column; gap: 6px; transition: background var(--fast); }
 .week-col[data-over="true"] { background: var(--accent-soft); }
 .week-head { padding: 4px 6px 10px; }
 .week-head .big { font: 700 32px/34px var(--font-display-stack); letter-spacing: -0.02em; color: var(--text-3); }

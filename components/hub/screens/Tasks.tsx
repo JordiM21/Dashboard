@@ -1,6 +1,6 @@
 "use client";
 
-/** Tasks (§5.3 rebuild): List · Board · Week · Calendar · Projects. The list itself is the focal point. */
+/** Tasks (§5.3 rebuild): Projects · List · Board · Week. The list itself is the focal point. */
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { sfx } from "@/lib/hub/sound";
 import Link from "next/link";
@@ -11,14 +11,14 @@ import { useHub } from "@/lib/hub/store";
 import * as A from "@/lib/hub/actions";
 import { taskXp } from "@/lib/hub/game";
 import { projectProgress } from "@/lib/hub/metrics";
-import { addDays, dayName, dayOfWeek, formatDateDMY, monthName, relDay, today, weekStart } from "@/lib/hub/util";
+import { addDays, dayName, dayOf, formatDateDMY, monthName, relDay, today, weekStart } from "@/lib/hub/util";
 import type { Task, TaskStatus } from "@/lib/hub/types";
 import { Toolbar, useArea, useShell } from "../Shell";
 import TaskRow, { rowMotion, useTaskMenu } from "../TaskRow";
 import { AreaDot, Empty, Fade, IconByName, Progress, Segmented, useDrop, useDropdown, useLongPress, useCoarse } from "../ui";
 import { coverCss } from "../Customize";
 
-type View = "list" | "board" | "week" | "calendar" | "projects";
+type View = "projects" | "list" | "board" | "week";
 interface Filters {
   status: "open" | "done" | "all";
   priority: 0 | 1 | 2 | 3;
@@ -82,20 +82,19 @@ export default function Tasks() {
           value={view}
           onChange={(v) => A.setUi({ taskView: v })}
           options={[
+            { value: "projects", label: "Projects" },
             { value: "list", label: "List" },
             { value: "board", label: "Board" },
             { value: "week", label: "Week" },
-            { value: "calendar", label: "Calendar" },
-            { value: "projects", label: "Projects" },
           ]}
         />
       </Toolbar>
       <div className="canvas">
         <p className="callout muted" style={{ margin: "0 0 16px", maxWidth: 720 }}>
           {view === "projects" ? (
-            <>A <b>project</b> is a finished thing you deliver, made of tasks — it ends when its tasks are done (“Launch summer camp”). A <b>goal</b> is a number you want to reach by a date (“$1,500 MRR”); projects are how you get there.</>
+            <>Things you deliver, made of tasks. Done when its tasks are.</>
           ) : (
-            <>Things you’ve decided to do. Each one has an area and, ideally, a day. Unsorted ideas live in the <b>Inbox</b> until you decide.</>
+            <>What you’ve decided to do. A day is optional.</>
           )}
         </p>
         {view !== "projects" && (
@@ -133,7 +132,6 @@ export default function Tasks() {
           {view === "list" && <ListView tasks={tasks} />}
           {view === "board" && <BoardView tasks={tasks} />}
           {view === "week" && <WeekView tasks={tasks} />}
-          {view === "calendar" && <CalendarView tasks={tasks} />}
           {view === "projects" && <ProjectsView />}
         </Fade>
       </div>
@@ -144,7 +142,7 @@ export default function Tasks() {
 /* ---------------------------------------------------------------- list */
 
 function dateBucket(t: Task): [number, string] {
-  const d = t.status === "done" ? t.completedAt?.slice(0, 10) : t.scheduled ?? t.due;
+  const d = t.status === "done" ? dayOf(t.completedAt) : t.scheduled ?? t.due;
   const t0 = today();
   if (!d) return [6, "No date"];
   if (t.status === "done") return [d === t0 ? 1 : 0, d === t0 ? "Done today" : "Done earlier"];
@@ -408,76 +406,6 @@ function WeekView({ tasks }: { tasks: Task[] }) {
           ))}
         </div>
       </section>
-    </>
-  );
-}
-
-/* ---------------------------------------------------------------- calendar */
-
-function MonthCell({ date, out, tasks }: { date: string; out: boolean; tasks: Task[] }) {
-  const s = useHub();
-  const { inspect } = useShell();
-  const { over, props } = useDrop((id) => A.updateTask(id, { scheduled: date }));
-  return (
-    <div className="month-cell" data-out={out} data-today={date === today()} data-over={over} {...props}>
-      <span className="month-num">{Number(date.slice(8))}</span>
-      {tasks.slice(0, 4).map((t) => (
-        <button
-          key={t.id}
-          draggable
-          onDragStart={(e) => e.dataTransfer.setData("text/plain", t.id)}
-          className="month-ev"
-          style={{ "--c": s.areas.find((a) => a.id === t.areaId)?.color, ...(t.status === "done" ? { textDecoration: "line-through", opacity: 0.6 } : {}) } as CSSProperties}
-          onClick={() => inspect({ kind: "task", id: t.id })}
-          title={t.title}
-        >
-          {t.title}
-        </button>
-      ))}
-      {tasks.length > 4 && <span className="caption faint">+{tasks.length - 4} more</span>}
-    </div>
-  );
-}
-
-function CalendarView({ tasks }: { tasks: Task[] }) {
-  const [month, setMonth] = useState(() => today().slice(0, 7));
-  const first = `${month}-01`;
-  const gridStart = addDays(first, -((dayOfWeek(first) + 6) % 7));
-  const cells = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
-  const shift = (n: number) => {
-    const [y, m] = month.split("-").map(Number);
-    const d = new Date(y, m - 1 + n, 1);
-    setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
-  };
-  return (
-    <>
-      <div className="row" style={{ marginBottom: 12 }}>
-        <h2 className="title">
-          {monthName(month)} {month.slice(0, 4)}
-        </h2>
-        <span className="spacer" />
-        <button className="icon-btn" aria-label="Previous month" onClick={() => shift(-1)}>
-          <CaretLeft size={16} />
-        </button>
-        <button className="btn btn-sm" onClick={() => setMonth(today().slice(0, 7))}>
-          Today
-        </button>
-        <button className="icon-btn" aria-label="Next month" onClick={() => shift(1)}>
-          <CaretRight size={16} />
-        </button>
-      </div>
-      <div className="week" style={{ gap: 0, marginBottom: 6 }}>
-        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-          <span key={d} className="label" style={{ padding: "0 8px" }}>
-            {d}
-          </span>
-        ))}
-      </div>
-      <div className="month">
-        {cells.map((d) => (
-          <MonthCell key={d} date={d} out={!d.startsWith(month)} tasks={tasks.filter((t) => (t.scheduled ?? t.due) === d)} />
-        ))}
-      </div>
     </>
   );
 }

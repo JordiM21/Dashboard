@@ -4,7 +4,7 @@
 import { useMemo, type CSSProperties } from "react";
 import { useHub } from "@/lib/hub/store";
 import { ACHIEVEMENTS, levelFromXp, xpByArea, streak, totalXp } from "@/lib/hub/game";
-import { addDays, formatDateDMY, weekStart } from "@/lib/hub/util";
+import { addDays, dayOf, formatDateDMY, weekStart } from "@/lib/hub/util";
 import { Toolbar } from "../Shell";
 import { Badge, Flame, LevelRing } from "../game";
 import { Fade, Pip } from "../ui";
@@ -22,7 +22,7 @@ export default function Character() {
     return Array.from({ length: 8 }, (_, i) => {
       const w = addDays(cur, -7 * (7 - i));
       const end = addDays(w, 7);
-      return { label: formatDateDMY(w).slice(0, 5), value: s.game.xp.filter((e) => e.at.slice(0, 10) >= w && e.at.slice(0, 10) < end).reduce((a, e) => a + e.amount, 0) };
+      return { label: formatDateDMY(w).slice(0, 5), value: s.game.xp.filter((e) => dayOf(e.at) >= w && dayOf(e.at) < end).reduce((a, e) => a + e.amount, 0) };
     });
   }, [s.game.xp]);
   const maxArea = Math.max(1, ...Object.values(areaXp));

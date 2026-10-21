@@ -9,7 +9,8 @@ import { useHub } from "@/lib/hub/store";
 import { ACHIEVEMENTS, levelFromXp, streak, totalXp, isFocus } from "@/lib/hub/game";
 import { onFx } from "@/lib/hub/fx";
 import * as A from "@/lib/hub/actions";
-import { hhmm, today } from "@/lib/hub/util";
+import { dayOf, hhmm, today } from "@/lib/hub/util";
+import { pipLine } from "@/lib/hub/pip";
 import { Badge, Flame, LevelRing, StreakDots } from "./game";
 import { Pip, spring } from "./ui";
 import { coverCss } from "./Customize";
@@ -49,12 +50,12 @@ export default function Dock({ rail }: { rail: boolean }) {
   );
 
   const t = today();
-  const doneToday = s.game.xp.filter((e) => e.at.slice(0, 10) === t).slice(-6).reverse();
+  const doneToday = s.game.xp.filter((e) => dayOf(e.at) === t).slice(-6).reverse();
   const unlocked = ACHIEVEMENTS.filter((a) => s.game.unlocked[a.id]).sort((a, b) => (s.game.unlocked[b.id] > s.game.unlocked[a.id] ? 1 : -1));
   const questsLeft = s.tasks.filter((x) => isFocus(x, t)).length;
   const companion = mood ?? (p.streak.atRisk ? "sleepy" : "idle");
   const status = p.streak.atRisk
-    ? `Streak at risk — ${Math.max(0, 3 - s.tasks.filter((x) => x.completedAt?.slice(0, 10) === t && isFocus({ ...x, status: "next" }, t)).length)} focus tasks to save it`
+    ? `Streak at risk — ${Math.max(0, 3 - s.tasks.filter((x) => dayOf(x.completedAt) === t && isFocus({ ...x, status: "next" }, t)).length)} focus tasks to save it`
     : questsLeft === 0
       ? "All quests clear. Go touch grass."
       : `${questsLeft} quest${questsLeft === 1 ? "" : "s"} left${p.streak.todayCounted ? ", streak safe" : ""}`;
@@ -180,7 +181,8 @@ export default function Dock({ rail }: { rail: boolean }) {
         <Pip state={companion} size={56} key={companion} />
         <div className="col" style={{ gap: 2 }}>
           <span className="headline">Pip</span>
-          <span className="callout muted">{status}</span>
+          <span className="callout">{pipLine()}</span>
+          <span className="caption faint">{status}</span>
         </div>
       </section>
     </div>

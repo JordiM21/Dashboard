@@ -13,7 +13,20 @@ export function localIso(d: Date = new Date()): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`;
 }
 export const nowIso = () => localIso();
-export const today = () => localDateIso();
+/**
+ * The hub's day starts at 04:00, not midnight: planning at 01:30 still belongs
+ * to the night before, so "tomorrow" is the day you wake up to.
+ */
+export const DAY_START_HOUR = 4;
+export const today = () => localDateIso(new Date(Date.now() - DAY_START_HOUR * 3600e3));
+/** The hub day a local timestamp (from nowIso) belongs to. */
+export function dayOf(ts: string | null | undefined): string {
+  if (!ts) return "";
+  const d = ts.slice(0, 10);
+  return Number(ts.slice(11, 13)) < DAY_START_HOUR ? addDays(d, -1) : d;
+}
+/** From 17:00 until the day rolls over, planning targets tomorrow. */
+export const isEvening = (d: Date = new Date()) => d.getHours() >= 17 || d.getHours() < DAY_START_HOUR;
 
 /** Monday of the week containing iso. */
 export function weekStart(iso: string = today()): string {
@@ -71,5 +84,5 @@ export const toMinutes = (t: string) => {
 
 export function greeting(d: Date = new Date()): string {
   const h = d.getHours();
-  return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  return h < DAY_START_HOUR ? "Good evening" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
 }

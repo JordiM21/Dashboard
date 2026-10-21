@@ -58,7 +58,7 @@ export default function Goals() {
           <div>
             <h1 className="display-xl">Goals</h1>
             <p className="callout muted" style={{ maxWidth: 720 }}>
-              A <b>goal</b> is a result you can measure, with a target and a deadline (“$1,500 MRR by June”). The work to get there lives in <b>projects</b> and tasks. Progress comes from Stripe, tasks and collections.
+              Numbers to hit by a date. Projects get you there.
             </p>
           </div>
           <span className="spacer" />
