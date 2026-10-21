@@ -10,9 +10,16 @@ const mapSecrets = (i: Integration, fn: (v: string) => string): Integration => (
   secrets: Object.fromEntries(Object.entries(i.secrets).map(([k, v]) => [k, fn(v)])),
 });
 
+// A secret sealed with an older HUB_MASTER_KEY can't be opened: drop it so the form asks for it again.
+const tryDecrypt = (v: string) => {
+  try { return decrypt(v); } catch { return ""; }
+};
+
 export async function getIntegration(id: string) {
   const raw = await redis().get<Integration>(`int:${id}`);
-  return raw ? mapSecrets(raw, decrypt) : null;
+  if (!raw) return null;
+  const i = mapSecrets(raw, tryDecrypt);
+  return { ...i, secrets: Object.fromEntries(Object.entries(i.secrets).filter(([, v]) => v)) };
 }
 
 export async function getBySecret(secret: string) {
