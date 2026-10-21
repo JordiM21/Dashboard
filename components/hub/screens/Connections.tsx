@@ -17,7 +17,7 @@ import { toast } from "@/lib/hub/fx";
 import { Toolbar } from "../Shell";
 import { Empty, Fade, Segmented, Sheet } from "../ui";
 
-type FlowMeta = { type: string; label: string; description: string; fields: Field[]; defaults: Record<string, unknown>; actions: { job: string; label: string }[] };
+type FlowMeta = { type: string; label: string; description: string; needs: string[]; steps: string[]; fields: Field[]; defaults: Record<string, unknown>; actions: { job: string; label: string }[] };
 type Conn = { id: string; name: string; type: string; enabled: boolean; config: Record<string, unknown>; secrets: Record<string, string>; last: RunLog | null };
 type Detail = Conn & { inboundUrl: string; logs: RunLog[] };
 
@@ -203,6 +203,12 @@ function DetailSheet({ id, flows, onClose, onChanged }: { id: string | null; flo
             <Switch on={d.enabled} label={d.enabled ? "Pause" : "Resume"} onChange={() => api(`/api/connections/${d.id}`, { method: "PATCH", body: JSON.stringify({ enabled: !d.enabled }) }).then(refresh, (e: Error) => toast(e.message, { tone: "danger" }))} />
           </div>
           <p className="callout muted">{flow.description}</p>
+          <details className="tile">
+            <summary className="callout" style={{ cursor: "pointer" }}>
+              How to set it up
+            </summary>
+            <Steps flow={flow} />
+          </details>
           <ConnectionForm key={d.id} flow={flow} existing={d} onSaved={refresh} />
           <div className="label">Recent activity</div>
           <LogRows logs={d.logs} />
@@ -223,25 +229,51 @@ function NewSheet({ open, flows, onClose, onCreated }: { open: boolean; flows: F
       <h2 className="title">Add integration</h2>
       {!flow ? (
         <>
-          <p className="callout muted">Choose what to connect.</p>
+          <p className="callout muted">Pick what should happen. Each one gives you a private address that the other app sends its data to, and you get a Telegram message.</p>
           <div className="grid-cards" style={{ paddingTop: 0 }}>
             {flows.map((f) => (
               <button key={f.type} className="tile col" style={{ gap: 6, textAlign: "left", alignItems: "flex-start", cursor: "pointer" }} onClick={() => setType(f.type)}>
                 <span className="headline">{f.label}</span>
                 <span className="caption muted">{f.description}</span>
+                <span className="caption" style={{ marginTop: 4 }}>You’ll need</span>
+                <ul className="caption muted" style={{ margin: 0, paddingLeft: 16 }}>
+                  {f.needs.map((n) => <li key={n}>{n}</li>)}
+                </ul>
               </button>
             ))}
+          </div>
+          <div className="tile col" style={{ gap: 6 }}>
+            <span className="headline">Something else?</span>
+            <span className="caption muted">
+              If the other app can send a webhook (look for “Webhooks”, “Notifications” or “Send to URL” in its settings), use <b>Any app → Telegram</b>: it works with Zapier, Make, Stripe, Calendly, Tally, Typeform and most tools.
+              If you need the hub to read from or write to another app (for example, create a Google Calendar event or reply on WhatsApp), that’s a new preset: ask Claude in this project to “add a connection flow for &lt;app&gt;”. It’s one file in lib/connections/flows and appears here automatically.
+            </span>
           </div>
         </>
       ) : (
         <>
+          <button type="button" className="btn btn-sm" style={{ alignSelf: "flex-start" }} onClick={() => setType("")}>
+            ← All types
+          </button>
           <p className="callout muted">
             {flow.label}. {flow.description}
           </p>
+          <div className="tile">
+            <span className="callout">How to set it up</span>
+            <Steps flow={flow} />
+          </div>
           <ConnectionForm key={flow.type} flow={flow} onCreated={onCreated} />
         </>
       )}
     </Sheet>
+  );
+}
+
+function Steps({ flow }: { flow: FlowMeta }) {
+  return (
+    <ol className="callout muted col" style={{ gap: 6, margin: "10px 0 0", paddingLeft: 20 }}>
+      {flow.steps.map((s) => <li key={s}>{s}</li>)}
+    </ol>
   );
 }
 
@@ -378,12 +410,12 @@ function ConnectionForm({ flow, existing, onSaved, onCreated }: { flow: FlowMeta
       )}
 
       {existing && (
-        <details className="tile">
+        <details className="tile" open={!existing.logs.length}>
           <summary className="callout" style={{ cursor: "pointer" }}>
-            Advanced · inbound address
+            Inbound address
           </summary>
           <div className="col" style={{ gap: 10, marginTop: 12 }}>
-            <span className="caption muted">Paste this address into the sending tool (Kommo: Settings › Integrations › Web hooks, event “Lead status changed”). Treat it like a password.</span>
+            <span className="caption muted">Paste this address into the app that sends the data (see “How to set it up” above). Treat it like a password: anyone with it can send you messages.</span>
             <input className="input mono" readOnly value={existing.inboundUrl} onFocus={(e) => e.currentTarget.select()} />
             <div className="row">
               <button type="button" className="btn btn-sm" onClick={() => navigator.clipboard.writeText(existing.inboundUrl).then(() => toast("Address copied"))}>

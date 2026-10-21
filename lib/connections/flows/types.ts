@@ -19,6 +19,8 @@ export type Flow = {
   hook: string; // inbound URL segment: /api/hooks/<hook>/<secret>
   label: string;
   description: string; // one plain-language sentence for non-technical users
+  needs: string[]; // what to have at hand before starting, shown on the picker
+  steps: string[]; // numbered setup guide, shown while creating and in the integration
   configSchema: z.ZodType;
   secretsSchema: z.ZodType;
   fields: Field[];

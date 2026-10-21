@@ -1,4 +1,11 @@
 // Telegram Bot API over JSON POST (token stays out of query strings; plain text, no parse_mode).
+
+/** First setup steps shared by every "… → Telegram" flow. */
+export const TELEGRAM_STEPS = [
+  "Telegram bot: open @BotFather → /mybots to reuse your bot (or /newbot for a new one) → API Token. Then open your bot and press Start so it's allowed to message you.",
+  "Chat ID: message @userinfobot and it replies with your number. For a group, add the bot to the group first; group IDs start with a minus sign.",
+];
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function call(token: string, method: string, body: object = {}) {

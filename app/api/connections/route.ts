@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   );
   return Response.json({
     integrations,
-    flows: flows.map(({ type, label, description, fields, defaults, actions }) => ({ type, label, description, fields, defaults, actions: actions ?? [] })),
+    flows: flows.map(({ type, label, description, needs, steps, fields, defaults, actions }) => ({ type, label, description, needs, steps, fields, defaults, actions: actions ?? [] })),
   });
 }
 

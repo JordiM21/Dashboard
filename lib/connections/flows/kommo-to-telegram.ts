@@ -2,7 +2,7 @@ import { z } from "zod";
 import { claimDedupe } from "../db";
 import { delayJob } from "../jobs";
 import { checkToken, getContact, getEvents, getEventsFor, getLead, getUsers } from "../providers/kommo";
-import { getMe, sendMessage } from "../providers/telegram";
+import { getMe, sendMessage, TELEGRAM_STEPS } from "../providers/telegram";
 import { compute, format, handoffTimes, isHumanReply, type LeadInfo } from "../summary";
 import { DEFAULT_TEMPLATE, render, SAMPLE } from "../template";
 import type { Integration, RunResult } from "../types";
@@ -184,6 +184,15 @@ export const flow: Flow = {
   hook: "kommo",
   label: "Kommo → Telegram alerts",
   description: "When a lead moves to Human Handoff in Kommo, you get a Telegram message. A summary arrives every night.",
+  needs: ["A Telegram bot and your chat ID", "Kommo admin access (to create a private integration and a web hook)"],
+  steps: [
+    ...TELEGRAM_STEPS,
+    "Kommo token: Settings › Integrations › Create integration (private) › Keys and scopes › long-lived token.",
+    "Fill in the account name and both tokens, then press Create integration.",
+    "Open it, press Detect stages, pick Human Handoff and Save.",
+    "Expand “Inbound address”, copy it, and paste it in Kommo: Settings › Integrations › Web hooks, event “Lead status changed”.",
+    "Press “Send a test alert”, then move a test lead to Human Handoff to check the real thing.",
+  ],
   configSchema,
   secretsSchema,
   defaults: { messageTemplate: DEFAULT_TEMPLATE, telegramChatIds: ["8692793778"], reminderMinutes: "0", summaryHour: "0", timezone: "Europe/Madrid" },

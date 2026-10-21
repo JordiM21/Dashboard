@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { sendMessage, getMe } from "../providers/telegram";
+import { sendMessage, getMe, TELEGRAM_STEPS } from "../providers/telegram";
 import { render, SAMPLE } from "../template";
 import type { Integration, RunResult } from "../types";
 import type { Flow } from "./types";
@@ -52,6 +52,13 @@ export const flow: Flow = {
   hook: "tuition",
   label: "Student tuition reminders",
   description: "Your dashboard app sends student, amount and due date; you get a Telegram message.",
+  needs: ["A Telegram bot and your chat ID", "Access to the dashboard's Vercel settings"],
+  steps: [
+    ...TELEGRAM_STEPS,
+    "Press Create integration, open it, expand “Inbound address” and copy the address.",
+    "Paste it as LET_HUB_TUITION_WEBHOOK_URL in Vercel (dashboard project › Settings › Environment Variables) and in functions/.env, then redeploy both.",
+    "Press “Send a test alert” to check the message. Real reminders arrive when a payment is due or recorded.",
+  ],
   configSchema,
   secretsSchema,
   defaults: { messageTemplate: DEFAULT_TEMPLATE, telegramChatIds: ["8692793778"] },

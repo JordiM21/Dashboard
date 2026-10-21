@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getMe, sendMessage } from "../providers/telegram";
+import { getMe, sendMessage, TELEGRAM_STEPS } from "../providers/telegram";
 import { checkToken, upsertWebLead } from "../providers/kommo";
 import { rateLimited } from "../db";
 import type { Integration, RunResult } from "../types";
@@ -103,6 +103,15 @@ export const flow: Flow = {
   hook: "form",
   label: "Website form to Telegram (+ Kommo)",
   description: "Your website's form posts straight from the visitor's browser; you get a Telegram message with whatever fields it sent, and optionally the lead is created in Kommo.",
+  needs: ["A Telegram bot and your chat ID", "Access to the website's code", "Optional: a Kommo token that can create leads"],
+  steps: [
+    ...TELEGRAM_STEPS,
+    "Allowed website addresses: your site exactly as it appears in the browser, e.g. https://letjunior.com, https://www.letjunior.com.",
+    "Press Create integration, open it, expand “Inbound address” and copy the address.",
+    "In the website's form script, send the fields as JSON: fetch(address, { method: \"POST\", body: JSON.stringify({ Nombre, Telefono, … }) }). Add _form for a heading, and a hidden _hp field as a spam trap (cupo.js already does this).",
+    "Optional, Kommo: fill in the account name and token, press Detect stages and pick where new leads land. Leads need a phone number to be created.",
+    "Submit the real form once and check Telegram and Activity.",
+  ],
   configSchema,
   secretsSchema,
   defaults: { telegramChatIds: ["8692793778"], allowedOrigins: [], kommoSubdomain: "", kommoStatusId: "", kommoTag: "web_quiz" },
