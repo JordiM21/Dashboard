@@ -3,7 +3,7 @@
 /** Task row (§7) with the signature completion moment (§9.1). */
 import { useRef, useState, type CSSProperties } from "react";
 import { motion, useMotionValue, useTransform } from "motion/react";
-import { DotsSixVertical, CalendarBlank, ArrowRight, Archive, Hourglass, ListChecks, Repeat, CheckCircle } from "@phosphor-icons/react";
+import { DotsSixVertical, CalendarBlank, Archive, Hourglass, ListChecks, Repeat, CheckCircle } from "@phosphor-icons/react";
 import { useHub } from "@/lib/hub/store";
 import * as A from "@/lib/hub/actions";
 import { taskXp } from "@/lib/hub/game";
@@ -42,6 +42,13 @@ export function useTaskMenu() {
       { sep: true, label: "" },
       { label: "Archive", danger: true, onClick: () => A.archive("tasks", t.id, "Task archived") },
     ]);
+}
+
+/** Stable per-project colour derived from its id, so projects are tellable apart without picking one. */
+export function projectColor(id: string): string {
+  let h = 0;
+  for (const c of id) h = (h * 31 + c.charCodeAt(0)) % 360;
+  return `hsl(${h} 65% 62%)`;
 }
 
 export default function TaskRow({ t, selected, showProject = true, draggable, compact }: { t: Task; selected?: boolean; showProject?: boolean; draggable?: boolean; compact?: boolean }) {
@@ -120,7 +127,7 @@ export default function TaskRow({ t, selected, showProject = true, draggable, co
       {t.recurrence && <Repeat size={14} className="faint" aria-label="Repeats" />}
       {project && (
         <span className="caption muted truncate" style={{ maxWidth: 160 }}>
-          <ArrowRight size={11} /> {project.title}
+          <span className="dot" style={{ "--c": projectColor(project.id), marginRight: 4 } as CSSProperties} /> {project.title}
         </span>
       )}
       {date && (

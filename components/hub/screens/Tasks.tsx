@@ -12,9 +12,9 @@ import * as A from "@/lib/hub/actions";
 import { taskXp } from "@/lib/hub/game";
 import { projectProgress } from "@/lib/hub/metrics";
 import { addDays, dayName, dayOf, formatDateDMY, monthName, relDay, today, weekStart } from "@/lib/hub/util";
-import type { Task, TaskStatus } from "@/lib/hub/types";
+import type { Project, Task, TaskStatus } from "@/lib/hub/types";
 import { Toolbar, useArea, useShell } from "../Shell";
-import TaskRow, { rowMotion, useTaskMenu } from "../TaskRow";
+import TaskRow, { projectColor, rowMotion, useTaskMenu } from "../TaskRow";
 import { AreaDot, Empty, Fade, IconByName, Progress, Segmented, useDrop, useDropdown, useLongPress, useCoarse } from "../ui";
 import { coverCss } from "../Customize";
 
@@ -53,8 +53,22 @@ export default function Tasks() {
   const s = useHub();
   const view = s.ui.taskView;
   const [f, setF] = useFilters(view);
-  const { match } = useArea();
+  const { match, area } = useArea();
   const drop = useDropdown();
+  // Each area remembers its own view (LET on List, Relationship on Week…); All areas keeps opening on Projects.
+  useEffect(() => {
+    if (area === "all") return;
+    try {
+      const v = localStorage.getItem(`hub:taskView:${area}`) as View | null;
+      if (v) A.setUi({ taskView: v });
+    } catch {}
+  }, [area]);
+  const setView = (v: View) => {
+    A.setUi({ taskView: v });
+    try {
+      if (area !== "all") localStorage.setItem(`hub:taskView:${area}`, v);
+    } catch {}
+  };
 
   const tasks = useMemo(
     () =>
@@ -80,7 +94,7 @@ export default function Tasks() {
           label="View"
           size="sm"
           value={view}
-          onChange={(v) => A.setUi({ taskView: v })}
+          onChange={setView}
           options={[
             { value: "projects", label: "Projects" },
             { value: "list", label: "List" },
@@ -124,7 +138,7 @@ export default function Tasks() {
             )}
             <span className="spacer" />
             {view === "list" && (
-              <Segmented label="Group by" size="sm" value={s.ui.listGroup} onChange={(v) => A.setUi({ listGroup: v })} options={[{ value: "area", label: "Area" }, { value: "project", label: "Project" }, { value: "date", label: "Date" }]} />
+              <Segmented label="Group by" size="sm" value={s.ui.listGroup} onChange={(v) => A.setUi({ listGroup: v })} options={[{ value: "area", label: "Area" }, { value: "project", label: "Project" }, { value: "priority", label: "Priority" }, { value: "date", label: "Date" }]} />
             )}
           </div>
         )}
@@ -154,9 +168,82 @@ function dateBucket(t: Task): [number, string] {
   return [5, "Later"];
 }
 
+const PRIORITY_LABEL = { 1: "P1 · Must do", 2: "P2 · Should do", 3: "P3 · Could do" } as const;
+
+/** Collapsed list groups, remembered on this device. */
+function useCollapsed(): [Set<string>, (key: string) => void] {
+  const [c, setC] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    try {
+      setC(new Set(JSON.parse(localStorage.getItem("hub:collapsed:list") ?? "[]")));
+    } catch {}
+  }, []);
+  return [
+    c,
+    (key) =>
+      setC((cur) => {
+        const next = new Set(cur);
+        next.has(key) ? next.delete(key) : next.add(key);
+        try {
+          localStorage.setItem("hub:collapsed:list", JSON.stringify([...next]));
+        } catch {}
+        return next;
+      }),
+  ];
+}
+
+function GroupHead({ label, count, open, onToggle, sub }: { label: ReactNode; count: number; open: boolean; onToggle: () => void; sub?: boolean }) {
+  return (
+    <div className="list-group-head" data-sub={sub}>
+      <button className="icon-btn" style={{ width: 22, height: 22 }} aria-expanded={open} aria-label={open ? "Collapse group" : "Expand group"} onClick={onToggle}>
+        <CaretDown size={12} style={{ rotate: open ? "0deg" : "-90deg", transition: "rotate var(--fast)" }} />
+      </button>
+      <span className={`${sub ? "callout" : "headline"} row`} style={{ gap: 8 }}>
+        {label}
+      </span>
+      <span className="caption faint">{count}</span>
+    </div>
+  );
+}
+
+function projectBuckets(items: Task[], projects: Project[]) {
+  const m = new Map<string, { key: string; label: ReactNode; items: Task[] }>();
+  for (const t of items) {
+    const p = projects.find((x) => x.id === t.projectId);
+    const key = p?.id ?? "none";
+    if (!m.has(key))
+      m.set(key, {
+        key,
+        label: p ? (
+          <>
+            <span className="dot" style={{ "--c": projectColor(p.id) } as CSSProperties} /> <Link href={`/tasks/p/${p.id}`}>{p.title}</Link>
+          </>
+        ) : (
+          <span className="muted">No project</span>
+        ),
+        items: [],
+      });
+    m.get(key)!.items.push(t);
+  }
+  return [...m.values()].sort((a, b) => (a.key === "none" ? 1 : b.key === "none" ? -1 : b.items.length - a.items.length));
+}
+
+function Rows({ items, showProject }: { items: Task[]; showProject: boolean }) {
+  return (
+    <AnimatePresence initial={false}>
+      {items.map((t) => (
+        <motion.div key={t.id} {...rowMotion}>
+          <TaskRow t={t} showProject={showProject} />
+        </motion.div>
+      ))}
+    </AnimatePresence>
+  );
+}
+
 function ListView({ tasks }: { tasks: Task[] }) {
   const s = useHub();
   const by = s.ui.listGroup;
+  const [collapsed, toggle] = useCollapsed();
   const groups = useMemo(() => {
     const m = new Map<string, { key: string; label: ReactNode; order: number; items: Task[] }>();
     for (const t of tasks) {
@@ -174,7 +261,17 @@ function ListView({ tasks }: { tasks: Task[] }) {
         const p = s.projects.find((x) => x.id === t.projectId);
         key = t.projectId ?? "none";
         order = p ? 0 : 1;
-        label = p ? <Link href={`/tasks/p/${p.id}`}>{p.title}</Link> : "No project";
+        label = p ? (
+          <>
+            <span className="dot" style={{ "--c": projectColor(p.id) } as CSSProperties} /> <Link href={`/tasks/p/${p.id}`}>{p.title}</Link>
+          </>
+        ) : (
+          "No project"
+        );
+      } else if (by === "priority") {
+        key = "p" + t.priority;
+        order = t.priority;
+        label = PRIORITY_LABEL[t.priority];
       } else {
         const [o, l] = dateBucket(t);
         key = l;
@@ -190,23 +287,32 @@ function ListView({ tasks }: { tasks: Task[] }) {
   if (!tasks.length) return <Empty text="No tasks match these filters." />;
   return (
     <div className="card" style={{ padding: "16px 12px" }}>
-      {groups.map((g) => (
-        <section key={g.key} className="list-group">
-          <div className="list-group-head">
-            <span className="headline row" style={{ gap: 8 }}>
-              {g.label}
-            </span>
-            <span className="caption faint">{g.items.length}</span>
-          </div>
-          <AnimatePresence initial={false}>
-            {g.items.map((t) => (
-              <motion.div key={t.id} {...rowMotion}>
-                <TaskRow t={t} showProject={by !== "project"} />
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </section>
-      ))}
+      {groups.map((g) => {
+        const gk = `${by}:${g.key}`;
+        const open = !collapsed.has(gk);
+        // Inside an area, split by project so a long area list reads as a few small piles.
+        const subs = by === "area" ? projectBuckets(g.items, s.projects) : null;
+        return (
+          <section key={g.key} className="list-group">
+            <GroupHead label={g.label} count={g.items.length} open={open} onToggle={() => toggle(gk)} />
+            {open &&
+              (subs && subs.length > 1 ? (
+                subs.map((sb) => {
+                  const sk = `${gk}:${sb.key}`;
+                  const subOpen = !collapsed.has(sk);
+                  return (
+                    <div key={sb.key} className="list-sub">
+                      <GroupHead sub label={sb.label} count={sb.items.length} open={subOpen} onToggle={() => toggle(sk)} />
+                      {subOpen && <Rows items={sb.items} showProject={false} />}
+                    </div>
+                  );
+                })
+              ) : (
+                <Rows items={g.items} showProject={by !== "project"} />
+              ))}
+          </section>
+        );
+      })}
     </div>
   );
 }
@@ -298,7 +404,7 @@ function BoardView({ tasks }: { tasks: Task[] }) {
 
 /* ---------------------------------------------------------------- week */
 
-function DayCol({ date, tasks }: { date: string; tasks: Task[] }) {
+export function DayCol({ date, tasks }: { date: string; tasks: Task[] }) {
   const s = useHub();
   const { inspect } = useShell();
   const menu = useTaskMenu();

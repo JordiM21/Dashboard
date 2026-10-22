@@ -5,17 +5,18 @@ import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { CheckCircle, UsersThree, Warning, CurrencyDollar, Tray, Kanban, Hourglass, CalendarHeart, CalendarCheck, Lightning, Sparkle, Skull } from "@phosphor-icons/react";
+import { CheckCircle, Target, UsersThree, Warning, CurrencyDollar, Tray, Kanban, Hourglass, CalendarHeart, CalendarCheck, Lightning, Sparkle, Skull } from "@phosphor-icons/react";
 import { useHub } from "@/lib/hub/store";
 import { useLive } from "@/lib/hub/live";
 import * as A from "@/lib/hub/actions";
-import { isFocus, taskXp, XP } from "@/lib/hub/game";
-import { classesOn, dueSoon, goalProgress, members, receivables, weekDamage, type ClassOccurrence } from "@/lib/hub/metrics";
+import { isFocus, levelFromXp, taskXp, xpByArea, XP } from "@/lib/hub/game";
+import { classesOn, dueSoon, goalProgress, members, projectProgress, receivables, weekDamage, type ClassOccurrence } from "@/lib/hub/metrics";
 import { addDays, dayOf, daysBetween, greeting, isEvening, money, relDay, today, toMinutes, hhmm, formatDateDMY } from "@/lib/hub/util";
 import { Toolbar, useArea, useShell } from "../Shell";
 import TaskRow, { rowMotion } from "../TaskRow";
 import { BossHp, PhaseBanner } from "../game";
-import { Fade, Money, Progress, AreaChip } from "../ui";
+import { AreaDot, Fade, Money, Progress } from "../ui";
+import { DayCol } from "./Tasks";
 
 export default function Today() {
   const s = useHub();
@@ -23,7 +24,9 @@ export default function Today() {
   const { match, area } = useArea();
   const t0 = today();
   const mrrGoal = s.goals.find((g) => g.metric === "mrr" && g.pinned && !g.archivedAt) ?? s.goals.find((g) => g.metric === "mrr" && !g.archivedAt);
-  const boss = mrrGoal ? goalProgress(mrrGoal, s, live) : null;
+  // The MRR boss belongs to its area; any other area gets its own card instead of LET's bar.
+  const boss = mrrGoal && match(mrrGoal.areaId) ? goalProgress(mrrGoal, s, live) : null;
+  const areaObj = area === "all" ? undefined : s.areas.find((a) => a.id === area);
   const game = s.settings.game !== "off";
 
   const focusOpen = useMemo(
@@ -42,6 +45,7 @@ export default function Today() {
             <h1 className="display-xl">
               {greeting()}, {s.settings.ownerName}
             </h1>
+            {!boss && areaObj && <AreaLine areaId={areaObj.id} />}
             {boss && (
               <p className="callout muted">
                 {boss.defeated ? (
@@ -60,13 +64,13 @@ export default function Today() {
 
         <div className="bento">
           <div className="span-8">
-            <NextUp focus={focusOpen} tint={area === "all" ? undefined : s.areas.find((a) => a.id === area)?.color} />
+            <NextUp focus={focusOpen} tint={areaObj?.color} />
           </div>
-          <div className="span-4">{mrrGoal && boss && <BossCard title={mrrGoal.title} p={boss} damage={weekDamage(live, s)} />}</div>
+          <div className="span-4">{mrrGoal && boss ? <BossCard title={mrrGoal.title} p={boss} damage={weekDamage(live, s)} /> : areaObj && <AreaCard areaId={areaObj.id} />}</div>
           <Quests focus={focusOpen} />
           <Alerts />
           <div className="span-12">
-            <Schedule />
+            <ThisWeek />
           </div>
         </div>
       </Fade>
@@ -212,7 +216,7 @@ function Quests({ focus }: { focus: ReturnType<typeof useHub>["tasks"] }) {
   const total = focus.length + doneToday.length;
   const xpLeft = focus.reduce((a, t) => a + taskXp(t, new Date(), 0), 0);
   const review = s.reviews.at(-1);
-  const weekly = (review?.priorities ?? []).map((id) => s.tasks.find((t) => t.id === id)).filter(Boolean) as typeof s.tasks;
+  const weekly = (review?.priorities ?? []).map((id) => s.tasks.find((t) => t.id === id)).filter((t) => t && match(t.areaId)) as typeof s.tasks;
   const game = s.settings.game !== "off";
   const planned = !!s.game.dayPlans[t0];
   const evening = isEvening();
@@ -365,14 +369,102 @@ function Alerts() {
   );
 }
 
-/* ---------------------------------------------------------------- schedule */
+/* ---------------------------------------------------------------- area */
 
-function Schedule() {
+const openTasks = (s: ReturnType<typeof useHub>, match: (id: string) => boolean) =>
+  s.tasks.filter((t) => !t.archivedAt && !["done", "dropped", "inbox"].includes(t.status) && match(t.areaId));
+
+/** Header line for an area without the MRR boss: what's coming up there. */
+function AreaLine({ areaId }: { areaId: string }) {
+  const s = useHub();
+  const t0 = today();
+  const end = addDays(t0, 6);
+  const open = openTasks(s, (id) => id === areaId);
+  const week = open.filter((t) => (t.scheduled ?? t.due ?? "9") <= end).length;
+  const overdue = open.filter((t) => t.due && t.due < t0).length;
+  return (
+    <p className="callout muted">
+      <b style={{ color: "var(--text-1)" }}>{week}</b> planned in the next 7 days · {open.length} open{overdue ? ` · ${overdue} overdue` : ""}
+    </p>
+  );
+}
+
+/** Side card for a single area: its goal (or a nudge to set one) and its active projects. */
+function AreaCard({ areaId }: { areaId: string }) {
+  const s = useHub();
+  const live = useLive();
+  const { inspect } = useShell();
+  const a = s.areas.find((x) => x.id === areaId);
+  const game = s.settings.game !== "off";
+  const lvl = levelFromXp(xpByArea(s.game.xp)[areaId] ?? 0);
+  const goals = s.goals.filter((g) => g.areaId === areaId && !g.archivedAt && g.horizon !== "someday");
+  const goal = goals.find((g) => g.pinned) ?? goals[0];
+  const p = goal ? goalProgress(goal, s, live) : null;
+  const projects = s.projects.filter((x) => x.areaId === areaId && x.status === "active" && !x.archivedAt).slice(0, 3);
+  const fmt = (n: number) => (goal?.unit === "$" ? `$${money(n)}` : money(n));
+  return (
+    <section className="card col" style={{ height: "100%", gap: 12 }} aria-label={`${a?.name} overview`}>
+      <div className="row">
+        <AreaDot area={a} />
+        <span className="label">{a?.name}</span>
+        <span className="spacer" />
+        {game && <span className="lvl-chip">Lv {lvl.level}</span>}
+      </div>
+      {goal && p ? (
+        <button className="col" style={{ textAlign: "left", gap: 8 }} onClick={() => inspect({ kind: "goal", id: goal.id })}>
+          <span className="headline">{goal.title}</span>
+          <div className="kpi-row">
+            <span className="display-m">{fmt(p.value)}</span>
+            <span className="callout muted">
+              / {fmt(p.target)} {goal.unit !== "$" ? goal.unit : ""}
+            </span>
+          </div>
+          <Progress value={p.pct} label="Goal progress" />
+          {p.pace && <span className="caption muted">{p.pace}</span>}
+        </button>
+      ) : (
+        <div className="col" style={{ gap: 8 }}>
+          <span className="headline">No goal here yet</span>
+          <span className="caption muted">Give {a?.name} something to aim at and it shows up here.</span>
+          <button className="btn btn-sm" style={{ alignSelf: "flex-start" }} onClick={() => inspect({ kind: "goal", id: A.addGoal({ title: "New goal", areaId, horizon: "quarter" }).id })}>
+            <Target size={14} /> Set a goal
+          </button>
+        </div>
+      )}
+      {projects.length > 0 && (
+        <>
+          <hr className="divider" style={{ margin: "2px 0" }} />
+          <span className="label">Active projects</span>
+          {projects.map((pr) => {
+            const pp = projectProgress(pr.id, s.tasks);
+            return (
+              <Link key={pr.id} href={`/tasks/p/${pr.id}`} className="col" style={{ gap: 4 }}>
+                <span className="row callout" style={{ gap: 6 }}>
+                  <span className="truncate grow">{pr.title}</span>
+                  <span className="caption faint">
+                    {pp.done}/{pp.total}
+                  </span>
+                </span>
+                <Progress value={pp.pct} thin label={`${pr.title} progress`} />
+              </Link>
+            );
+          })}
+        </>
+      )}
+    </section>
+  );
+}
+
+/* ---------------------------------------------------------------- next 7 days */
+
+/** Next 7 days of tasks for the selected area (drag to reschedule), with today's classes on top when LET is in view. */
+function ThisWeek() {
   const s = useHub();
   const live = useLive();
   const router = useRouter();
+  const { match } = useArea();
   const t0 = today();
-  const classes = classesOn(t0, live, s);
+  const classes = match("let") ? classesOn(t0, live, s) : [];
   const [nowMin, setNowMin] = useState(() => new Date().getHours() * 60 + new Date().getMinutes());
   useEffect(() => {
     const i = setInterval(() => setNowMin(new Date().getHours() * 60 + new Date().getMinutes()), 60000);
@@ -384,26 +476,55 @@ function Schedule() {
   const pos = (m: number) => `${((m - startH * 60) / span) * 100}%`;
   const let_ = s.areas.find((a) => a.id === "let")?.color;
 
+  const open = openTasks(s, match);
+  const days = Array.from({ length: 7 }, (_, i) => addDays(t0, i));
+  const on = (d: string) =>
+    open.filter((t) => {
+      const when = t.scheduled ?? t.due;
+      if (when && when < t0) return d === t0; // overdue rolls into today, same as the Week view
+      return when === d;
+    });
+  const planned = open.filter((t) => (t.scheduled ?? t.due ?? "9") <= days[6]).length;
+  const unscheduled = open.filter((t) => !t.scheduled && !t.due).length;
+  const openWeek = () => {
+    A.setUi({ taskView: "week" });
+    router.push("/tasks");
+  };
+
   return (
-    <section className="card" aria-label="Schedule">
+    <section className="card" aria-label="Next 7 days">
       <div className="card-head">
-        <h3 className="headline">Schedule</h3>
+        <h3 className="headline">Next 7 days</h3>
         <span className="callout muted">
-          {classes.length} class{classes.length === 1 ? "" : "es"} · {Math.round(classes.reduce((a, c) => a + c.slot.minutes, 0) / 6) / 10}h teaching
+          {planned} task{planned === 1 ? "" : "s"}
+          {classes.length > 0 && ` · ${classes.length} class${classes.length === 1 ? "" : "es"} today`}
         </span>
-      </div>
-      <div className="timeline">
-        {Array.from({ length: endH - startH }, (_, i) => (
-          <span key={i} className="tl-hour" style={{ left: pos((startH + i) * 60) }}>
-            {startH + i}
-          </span>
-        ))}
-        {classes.map((c: ClassOccurrence) => (
-          <button key={c.group.id + c.startMin} className="tl-event" style={{ left: pos(c.startMin), width: `calc(${(c.slot.minutes / span) * 100}% - 2px)`, "--c": let_, height: 38 } as CSSProperties} onClick={() => router.push(`/academy?tab=groups&group=${c.group.id}`)} title="Open group">
-            <b>{c.group.name}</b> <span className="muted">{c.slot.start}</span>
+        <span className="spacer" />
+        {unscheduled > 0 && (
+          <button className="btn btn-sm" onClick={openWeek}>
+            {unscheduled} unscheduled · plan the week
           </button>
+        )}
+      </div>
+      {classes.length > 0 && (
+        <div className="timeline" style={{ marginBottom: 12 }}>
+          {Array.from({ length: endH - startH }, (_, i) => (
+            <span key={i} className="tl-hour" style={{ left: pos((startH + i) * 60) }}>
+              {startH + i}
+            </span>
+          ))}
+          {classes.map((c: ClassOccurrence) => (
+            <button key={c.group.id + c.startMin} className="tl-event" style={{ left: pos(c.startMin), width: `calc(${(c.slot.minutes / span) * 100}% - 2px)`, "--c": let_, height: 38 } as CSSProperties} onClick={() => router.push(`/academy?tab=groups&group=${c.group.id}`)} title="Open group">
+              <b>{c.group.name}</b> <span className="muted">{c.slot.start}</span>
+            </button>
+          ))}
+          {nowMin >= startH * 60 && nowMin <= endH * 60 && <span className="tl-now" style={{ left: pos(nowMin) }} aria-label="Now" />}
+        </div>
+      )}
+      <div className="week week-compact">
+        {days.map((d) => (
+          <DayCol key={d} date={d} tasks={on(d)} />
         ))}
-        {nowMin >= startH * 60 && nowMin <= endH * 60 && <span className="tl-now" style={{ left: pos(nowMin) }} aria-label="Now" />}
       </div>
     </section>
   );

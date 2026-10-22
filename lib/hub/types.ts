@@ -287,7 +287,7 @@ export interface HubState {
   ui: {
     area: ID | "all";
     taskView: "projects" | "list" | "board" | "week";
-    listGroup: "area" | "project" | "date";
+    listGroup: "area" | "project" | "priority" | "date";
     finScope: "business" | "personal" | "all";
   };
 }

@@ -542,3 +542,11 @@ img { display: block; max-width: 100%; }
 .switch > span { display: block; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: var(--e1); transition: transform 0.18s cubic-bezier(0.32, 0.72, 0, 1); }
 .switch[aria-checked="true"] { background: var(--success); }
 .switch[aria-checked="true"] > span { transform: translateX(16px); }
+
+/* Today: the 7-day strip reuses the Week view columns, shorter */
+.week-compact .week-col { min-height: 120px; }
+.week-compact .week-head .big { font-size: 22px; line-height: 24px; }
+
+/* Tasks list: project piles inside an area */
+.list-sub { margin: 4px 0 8px 14px; }
+.list-group-head[data-sub="true"] { padding: 4px 10px 2px 0; }
