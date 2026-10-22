@@ -37,7 +37,7 @@ export function CollectionView({ c, onBack }: { c: Collection; onBack: () => voi
         <button className="icon-btn" aria-label="Back to library" onClick={onBack}>
           <ArrowLeft size={18} />
         </button>
-        <IconPicker icon={c.icon} color={s.areas.find((a) => a.id === c.areaId)?.color} size={44} onIcon={(icon) => A.updateCollection(c.id, { icon })} />
+        <IconPicker icon={c.icon} color={c.color ?? s.areas.find((a) => a.id === c.areaId)?.color} size={44} onIcon={(icon) => A.updateCollection(c.id, { icon })} onColor={(color) => A.updateCollection(c.id, { color })} />
         <input className="input-bare display-xl inline-edit" style={{ width: `${Math.max(4, c.name.length + 1)}ch` }} value={c.name} onChange={(e) => A.updateCollection(c.id, { name: e.target.value })} aria-label="Collection name" />
         <span className="caption muted">{items.length} items</span>
         <button className="btn btn-sm btn-ghost" onClick={() => setEditing(true)}>

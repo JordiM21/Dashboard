@@ -13,7 +13,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   const body = await req.json();
-  const ok = await updateFolder(params.id, { name: body.name, parentId: body.parentId });
+  const ok = await updateFolder(params.id, { name: body.name, parentId: body.parentId, icon: body.icon, color: body.color, areaId: body.areaId });
   if (!ok) return NextResponse.json({ error: "not_found_or_invalid_move" }, { status: 400 });
   return NextResponse.json({ ok: true });
 }

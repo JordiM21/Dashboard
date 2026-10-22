@@ -129,6 +129,7 @@ export interface Note extends Base {
   groupId?: ID | null;
   link?: string;
   pinned: boolean;
+  tags?: string[];
 }
 
 export type FieldType = "text" | "number" | "select" | "multiselect" | "date" | "checkbox" | "url" | "image";
@@ -146,6 +147,7 @@ export interface Collection extends Base {
   description?: string;
   areaId: ID;
   icon: string;
+  color?: string; // falls back to the area colour
   fields: FieldDef[];
   view: "list" | "grid" | "board";
   boardField?: string; // a select field key
@@ -160,6 +162,7 @@ export interface Item extends Base {
   image?: string;
   link?: string;
   description?: string;
+  tags?: string[];
   doneAt: string | null;
 }
 
@@ -255,6 +258,8 @@ export interface Settings {
   volume: number; // 0–1
   navKeys: "arrows" | "wasd"; // WASD also moves the selector when chosen; arrows always do
   keys: Record<string, string>; // action id -> combo, overrides lib/hub/keys.ts defaults
+  librarySort?: "manual" | "name" | "updated" | "count";
+  libraryOrder?: string[]; // Library card keys ("area:let", "col:…", "res:…") in manual order
 }
 
 export interface HubState {

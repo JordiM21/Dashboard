@@ -1,12 +1,14 @@
 "use client";
 
 /** Customization primitives: icon picker, colour swatches, cover picker, all in one small popover. */
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { ImageSquare, UploadSimple, Trash, Link as LinkIcon } from "@phosphor-icons/react";
+import { ImageSquare, UploadSimple, Trash, Link as LinkIcon, X } from "@phosphor-icons/react";
 import { resizeImageFile } from "@/lib/imageResize";
 import { toast } from "@/lib/hub/fx";
+import { useHub } from "@/lib/hub/store";
+import { useLive } from "@/lib/hub/live";
 import { ICONS, IconByName, Layer } from "./ui";
 
 export const SWATCHES = ["#FF6B4A", "#FFB020", "#30C48D", "#2FC9A0", "#14B8C4", "#3AA0FF", "#5E5CE6", "#8F7CFF", "#B26BFF", "#E86FD8", "#FF5C9A", "#8C9AA8"];
@@ -135,6 +137,60 @@ export function IconPicker({ icon, color, onIcon, onColor, size = 40, label = "C
         </div>
       </Popover>
     </>
+  );
+}
+
+/* ---------------------------------------------------------------- tags */
+
+/** Every tag in use on notes, collection items and files, A–Z. */
+export function useAllTags(): string[] {
+  const s = useHub();
+  const live = useLive();
+  return useMemo(
+    () => [...new Set([...s.notes, ...s.items].filter((x) => !x.archivedAt).flatMap((x) => x.tags ?? []).concat(live.files.flatMap((f) => f.tags)))].sort((a, b) => a.localeCompare(b)),
+    [s.notes, s.items, live.files]
+  );
+}
+
+/** Chips plus a free-text box: Enter or comma adds, × or Backspace on an empty box removes. Existing tags come up as suggestions. */
+export function TagInput({ value, onChange, suggest = [] }: { value: string[]; onChange: (v: string[]) => void; suggest?: string[] }) {
+  const [t, setT] = useState("");
+  const id = useRef(`tags-${Math.random().toString(36).slice(2)}`).current;
+  const add = (raw = t) => {
+    const vs = raw.split(",").map((x) => x.trim()).filter((x) => x && !value.includes(x));
+    if (vs.length) onChange([...value, ...new Set(vs)]);
+    setT("");
+  };
+  return (
+    <div className="row" style={{ flexWrap: "wrap", gap: 4 }}>
+      {value.map((v) => (
+        <span key={v} className="chip">
+          {v}
+          <button className="input-bare" style={{ display: "inline-flex", cursor: "pointer", color: "var(--text-3)" }} aria-label={`Remove tag ${v}`} onClick={() => onChange(value.filter((x) => x !== v))}>
+            <X size={10} />
+          </button>
+        </span>
+      ))}
+      <input
+        className="input-bare callout"
+        style={{ minWidth: 90, flex: 1 }}
+        list={id}
+        placeholder={value.length ? "Add tag…" : "Add tags…"}
+        value={t}
+        onChange={(e) => (e.target.value.includes(",") ? add(e.target.value) : setT(e.target.value))}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.preventDefault(), add());
+          if (e.key === "Backspace" && !t && value.length) onChange(value.slice(0, -1));
+        }}
+        onBlur={() => add()}
+        aria-label="Tags"
+      />
+      <datalist id={id}>
+        {suggest.filter((x) => !value.includes(x)).map((x) => (
+          <option key={x} value={x} />
+        ))}
+      </datalist>
+    </div>
   );
 }
 

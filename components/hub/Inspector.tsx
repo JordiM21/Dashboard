@@ -16,7 +16,7 @@ import { studentPaymentStatus, PAYMENT_STATUS_LABEL } from "@/lib/studentStatus"
 import { formatDateDMY, money, nowIso, relDay, uid, today, hhmm } from "@/lib/hub/util";
 import type { Collection, FieldDef, Goal, Item, Note, Task, TaskStatus } from "@/lib/hub/types";
 import { Avatar, Check, Progress, Segmented, spring, useSheetDrag } from "./ui";
-import { CoverPicker, IconPicker } from "./Customize";
+import { CoverPicker, IconPicker, TagInput, useAllTags } from "./Customize";
 import type { Rec } from "./Shell";
 
 /** Desktop: slides in over the Dock. Phone: a full-height bottom sheet you can pull down to close. */
@@ -396,6 +396,7 @@ function NotePanel({ id, onClose }: { id: string; onClose: () => void }) {
   const s = useHub();
   const n = s.notes.find((x) => x.id === id);
   const [edit, setEdit] = useState(() => !n?.body);
+  const tags = useAllTags();
   if (!n) return <Gone onClose={onClose} />;
   const up = (p: Partial<Note>) => A.updateNote(n.id, p);
   return (
@@ -447,6 +448,8 @@ function NotePanel({ id, onClose }: { id: string; onClose: () => void }) {
               </a>
             )}
           </div>
+          <span>Tags</span>
+          <TagInput value={n.tags ?? []} onChange={(tags) => up({ tags })} suggest={tags} />
         </div>
         {edit ? (
           <textarea className="textarea" style={{ minHeight: 320, fontFamily: "var(--font-mono)", fontSize: 13 }} value={n.body} onChange={(e) => up({ body: e.target.value })} placeholder="Markdown…" autoFocus />
@@ -500,6 +503,7 @@ function ItemPanel({ id, onClose }: { id: string; onClose: () => void }) {
   const s = useHub();
   const it = s.items.find((x) => x.id === id);
   const c = s.collections.find((x) => x.id === it?.collectionId) as Collection | undefined;
+  const tags = useAllTags();
   if (!it || !c) return <Gone onClose={onClose} />;
   const up = (p: Partial<Item>) => A.updateItem(it.id, p);
   return (
@@ -522,6 +526,8 @@ function ItemPanel({ id, onClose }: { id: string; onClose: () => void }) {
           ))}
           <span>Link</span>
           <input className="input" value={it.link ?? ""} onChange={(e) => up({ link: e.target.value })} placeholder="https://…" />
+          <span>Tags</span>
+          <TagInput value={it.tags ?? []} onChange={(tags) => up({ tags })} suggest={tags} />
         </div>
         {!c.doneField && (
           <button className="btn" onClick={() => up({ doneAt: it.doneAt ? null : nowIso() })}>

@@ -291,6 +291,9 @@ export interface ResourceFolder {
   name: string;
   parentId: string | null;
   createdAt: string;
+  icon?: string; // Phosphor icon name (components/hub/ui.tsx ICONS)
+  color?: string;
+  areaId?: string | null; // null / missing = shown under every area
 }
 
 export interface ResourceFile {

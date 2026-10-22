@@ -55,7 +55,7 @@ export async function createFolder(name: string, parentId: string | null): Promi
 /** Returns false if the folder doesn't exist, or if moving it into `parentId` would create a cycle. */
 export async function updateFolder(
   id: string,
-  updates: { name?: string; parentId?: string | null }
+  updates: Partial<Pick<ResourceFolder, "name" | "parentId" | "icon" | "color" | "areaId">>
 ): Promise<boolean> {
   const db = getAdminDb();
   const ref = db.collection(FOLDERS).doc(id);
@@ -63,7 +63,7 @@ export async function updateFolder(
   if (!existing.exists) return false;
 
   const patch: Record<string, unknown> = {};
-  if (updates.name !== undefined) patch.name = updates.name;
+  for (const k of ["name", "icon", "color", "areaId"] as const) if (updates[k] !== undefined) patch[k] = updates[k];
 
   if (updates.parentId !== undefined) {
     const allFolders = (await db.collection(FOLDERS).get()).docs.map((d) => fromDoc<ResourceFolder>(d));
