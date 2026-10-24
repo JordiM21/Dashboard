@@ -4,6 +4,7 @@ import { Client, Receiver } from "@upstash/qstash";
 // Needed because Vercel Hobby cron only runs once a day, imprecisely. Env: QSTASH_TOKEN,
 // QSTASH_CURRENT_SIGNING_KEY, QSTASH_NEXT_SIGNING_KEY (+ QSTASH_URL if your console shows one).
 const client = () => new Client({ token: process.env.QSTASH_TOKEN ?? "" });
+export { client as qstash };
 
 const jobUrl = (integrationId: string) => {
   const host = process.env.VERCEL_PROJECT_PRODUCTION_URL;

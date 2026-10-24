@@ -59,7 +59,7 @@ export function updateTask(id: string, patch: Partial<Task>): void {
   checkInboxZero();
 }
 
-function nextOccurrence(r: Recurrence, from: string): string {
+export function nextOccurrence(r: Recurrence, from: string): string {
   if (r.kind === "daily") return addDays(from, 1);
   if (r.kind === "monthly") return addMonths(from, 1);
   if (r.kind === "after") return addDays(today(), r.n ?? 1);

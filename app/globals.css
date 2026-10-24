@@ -550,3 +550,20 @@ img { display: block; max-width: 100%; }
 /* Tasks list: project piles inside an area */
 .list-sub { margin: 4px 0 8px 14px; }
 .list-group-head[data-sub="true"] { padding: 4px 10px 2px 0; }
+
+/* brain */
+.brain-split { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 24px; align-items: start; }
+.brain-nav { position: sticky; top: 72px; max-height: calc(100vh - 96px); overflow-y: auto; }
+.brain-head { position: sticky; top: 0; z-index: 2; background: var(--bg-surface); padding-bottom: 4px; }
+.brain-head .seg { align-self: flex-start; }
+.brain-row mark { background: var(--accent-soft); color: var(--text-1); border-radius: 3px; padding: 0 2px; }
+.brain-row { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 30px; padding: 4px 8px; border-radius: var(--r-ctl); font-size: 13px; color: var(--text-1); text-align: left; cursor: pointer; }
+.brain-row:hover { background: var(--bg-sunken); }
+.brain-row[aria-current="true"] { background: var(--accent-soft); color: var(--accent); }
+.brain-dir > summary { list-style: none; font-weight: 500; }
+.brain-dir > summary::-webkit-details-marker { display: none; }
+.brain-back { display: none; }
+.prose table { display: block; overflow-x: auto; border-collapse: collapse; font-size: 13px; margin: 0 0 1em; }
+.prose th, .prose td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; vertical-align: top; }
+.prose th { background: var(--bg-sunken); font-weight: 600; }
+.prose li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.2em; }

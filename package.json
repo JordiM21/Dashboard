@@ -13,6 +13,9 @@
     "seed:test-students": "tsx scripts/seedTestStudents.ts",
     "audit:firestore": "tsx scripts/auditFirestore.ts",
     "check:reminders": "tsx scripts/checkPaymentReminders.ts",
+    "brain": "tsx scripts/exportBrain.ts",
+    "brain:watch": "tsx scripts/exportBrain.ts --watch",
+    "brain:do": "tsx scripts/brainDo.ts",
     "dev:phone": "next dev --turbo -H 0.0.0.0 -p 3001"
   },
   "dependencies": {

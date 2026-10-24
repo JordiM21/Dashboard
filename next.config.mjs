@@ -16,7 +16,6 @@ const nextConfig = {
       { source: "/overview", destination: "/today", permanent: false },
       { source: "/students", destination: "/academy", permanent: false },
       { source: "/teaching", destination: "/academy?tab=curriculum", permanent: false },
-      { source: "/social", destination: "/today", permanent: false },
     ];
   },
   experimental: {

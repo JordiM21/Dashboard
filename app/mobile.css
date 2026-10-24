@@ -145,3 +145,10 @@ button, a, [role="checkbox"], summary, .task-row { touch-action: manipulation; }
   .boot { display: block; }
   .boot .sidebar, .boot .right { display: none; }
 }
+
+@media (max-width: 767px) {
+  .brain-split { grid-template-columns: 1fr; }
+  .brain-nav { position: static; max-height: none; }
+  .brain-split[data-open="true"] > .brain-nav, .brain-split[data-open="false"] > .brain-view { display: none; }
+  .brain-back { display: inline-flex; margin-bottom: 8px; }
+}
