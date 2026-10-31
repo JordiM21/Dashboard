@@ -18,6 +18,7 @@ import type { Collection, FieldDef, Goal, Item, Note, Task, TaskStatus } from "@
 import { Avatar, Check, Progress, Segmented, spring, useSheetDrag } from "./ui";
 import { CoverPicker, IconPicker, TagInput, useAllTags } from "./Customize";
 import type { Rec } from "./Shell";
+import { StudentLink } from "./screens/Finance";
 
 /** Desktop: slides in over the Dock. Phone: a full-height bottom sheet you can pull down to close. */
 export default function Inspector({ rec, onClose, mobile }: { rec: Rec; onClose: () => void; mobile?: boolean }) {
@@ -744,7 +745,6 @@ function TxPanel({ id, onClose }: { id: string; onClose: () => void }) {
         </div>
       </>
     );
-  const st = live.students.find((x) => x.id === t!.studentId);
   return (
     <>
       <Head kind="Transaction" onClose={onClose} />
@@ -774,7 +774,9 @@ function TxPanel({ id, onClose }: { id: string; onClose: () => void }) {
           <span>Payer</span>
           <span className="truncate">{t!.payerEmail ?? "—"}</span>
           <span>Student</span>
-          <span>{st ? st.name : <span className="faint">Not linked</span>}</span>
+          <span>
+            <StudentLink txId={t!.id} studentId={t!.studentId} />
+          </span>
         </div>
         <p className="caption faint">Stripe records are read-only here. They update automatically from the webhook.</p>
       </div>

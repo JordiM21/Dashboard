@@ -8,6 +8,8 @@ import { useLive } from "@/lib/hub/live";
 import * as A from "@/lib/hub/actions";
 import { adSpend, costPerStudent, ledger, monthNet, mrr, newPaying, receivables, type LedgerRow } from "@/lib/hub/metrics";
 import { formatDateDMY, money, monthKey, monthName, prevMonth, today } from "@/lib/hub/util";
+import { authFetch } from "@/lib/firebase/authFetch";
+import { toast } from "@/lib/hub/fx";
 import { Toolbar, useShell } from "../Shell";
 import { PillBars } from "./Goals";
 import { Empty, Fade, Kpi, Money, Segmented, Sheet, useDropdown, Check } from "../ui";
@@ -17,7 +19,7 @@ export default function Finance() {
   const live = useLive();
   const { inspect, mobile } = useShell();
   const drop = useDropdown();
-  const scope = s.ui.finScope;
+  const scope = "business"; // Personal/Combined hidden until a personal account is wired in
   const all = useMemo(() => ledger(live, s), [live, s]);
   const cur = monthKey();
   const [month, setMonth] = useState<string>("");
@@ -35,14 +37,14 @@ export default function Finance() {
   const spend = adSpend(live, s, cur);
   const months = Array.from({ length: 6 }, (_, i) => prevMonth(cur, 5 - i));
 
-  const rows = all.filter((r) => (scope === "all" || r.scope === scope) && (!month || r.date.startsWith(month)) && (type === "all" || (type === "in" ? r.amount > 0 : r.amount < 0)) && (!student || r.studentId === student));
+  const rows = all.filter((r) => r.scope === scope &&(!month || r.date.startsWith(month)) && (type === "all" || (type === "in" ? r.amount > 0 : r.amount < 0)) && (!student || r.studentId === student));
   const selected = rows.find((r) => r.id === sel) ?? rows[0];
   const activeFilters = (month ? 1 : 0) + (type !== "all" ? 1 : 0) + (student ? 1 : 0);
 
   const cats = useMemo(() => {
     const out = new Map<string, { now: number; last: number }>();
     for (const r of all) {
-      if (r.amount >= 0 || (scope !== "all" && r.scope !== scope)) continue;
+      if (r.amount >= 0 || r.scope !== scope) continue;
       const k = r.date.startsWith(cur) ? "now" : r.date.startsWith(prevMonth(cur)) ? "last" : null;
       if (!k) continue;
       const c = out.get(r.category) ?? { now: 0, last: 0 };
@@ -57,7 +59,6 @@ export default function Finance() {
   return (
     <>
       <Toolbar areas={false} title="Finance">
-        <Segmented label="Scope" size="sm" value={scope} onChange={(v) => A.setUi({ finScope: v })} options={[{ value: "business", label: "Business" }, { value: "personal", label: "Personal" }, { value: "all", label: "Combined" }]} />
         <button className="btn" onClick={() => setAdding(true)}>
           <Plus size={14} /> Expense
         </button>
@@ -191,13 +192,13 @@ export default function Finance() {
           <section className="card span-12" aria-label="Net by month">
             <div className="card-head">
               <span className="headline">Net by month</span>
-              <span className="caption muted">last 6 months · {scope === "all" ? "combined" : scope}</span>
+              <span className="caption muted">last 6 months</span>
             </div>
             <PillBars data={months.map((mm) => ({ label: monthName(mm), value: Math.max(0, monthNet(all, mm, scope).net) }))} fmt={(n) => `$${money(n)}`} />
           </section>
         </div>
       </Fade>
-      <AddExpense open={adding} onClose={() => setAdding(false)} defaultScope={scope === "personal" ? "personal" : "business"} />
+      <AddExpense open={adding} onClose={() => setAdding(false)} />
     </>
   );
 }
@@ -220,8 +221,6 @@ function Detail({ r }: { r: LedgerRow }) {
         <span>{r.category}</span>
         <span>Source</span>
         <span style={{ textTransform: "capitalize" }}>{r.source}</span>
-        <span>Scope</span>
-        <span>{r.scope === "business" ? "Business" : "Personal"}</span>
         {t?.originalCurrency && (
           <>
             <span>Charged</span>
@@ -235,7 +234,14 @@ function Detail({ r }: { r: LedgerRow }) {
             <span>Payer</span>
             <span>{t.payerEmail ?? "—"}</span>
             <span>Student</span>
-            <span>{st ? <button style={{ color: "var(--accent)" }} onClick={() => inspect({ kind: "student", id: st.id })}>{st.name}</button> : <span className="faint">Not linked</span>}</span>
+            <span className="row" style={{ gap: 8 }}>
+              <StudentLink txId={t.id} studentId={t.studentId} />
+              {st && (
+                <button className="caption" style={{ color: "var(--accent)" }} onClick={() => inspect({ kind: "student", id: st.id })}>
+                  Open
+                </button>
+              )}
+            </span>
           </>
         )}
       </div>
@@ -244,8 +250,32 @@ function Detail({ r }: { r: LedgerRow }) {
   );
 }
 
-function AddExpense({ open, onClose, defaultScope }: { open: boolean; onClose: () => void; defaultScope: "business" | "personal" }) {
-  const [f, setF] = useState({ description: "", amount: "", category: "Software", date: today(), scope: defaultScope, recurring: false });
+/** Links a payment to a student by hand; the API also moves that student's due date one month on a first link. */
+export function StudentLink({ txId, studentId }: { txId: string; studentId?: string | null }) {
+  const live = useLive();
+  const [busy, setBusy] = useState(false);
+  const set = async (id: string) => {
+    setBusy(true);
+    const r = await authFetch(`/api/finance/${txId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentId: id }) }).catch(() => null);
+    setBusy(false);
+    if (!r?.ok) toast("Couldn't link the student", { tone: "danger" });
+  };
+  return (
+    <select className="input" style={{ height: 30, padding: "0 8px", width: "auto" }} value={studentId ?? ""} disabled={busy} onChange={(e) => set(e.target.value)} aria-label="Linked student">
+      <option value="">Not linked</option>
+      {[...live.students]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((x) => (
+          <option key={x.id} value={x.id}>
+            {x.name}
+          </option>
+        ))}
+    </select>
+  );
+}
+
+function AddExpense({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [f, setF] = useState({ description: "", amount: "", category: "Software", date: today(), scope: "business" as const, recurring: false });
   return (
     <Sheet open={open} onClose={onClose} label="Add expense">
       <h2 className="title">Add expense</h2>
@@ -260,7 +290,6 @@ function AddExpense({ open, onClose, defaultScope }: { open: boolean; onClose: (
           onClose();
         }}
       >
-        <Segmented label="Scope" size="sm" value={f.scope} onChange={(v) => setF({ ...f, scope: v })} options={[{ value: "business", label: "Business" }, { value: "personal", label: "Personal" }]} />
         <label className="field">
           <span>Description</span>
           <input className="input" autoFocus value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} />

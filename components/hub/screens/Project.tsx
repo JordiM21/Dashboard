@@ -12,7 +12,7 @@ import { projectProgress } from "@/lib/hub/metrics";
 import { formatDateDMY, uid, today } from "@/lib/hub/util";
 import type { Milestone, Project as P } from "@/lib/hub/types";
 import { Toolbar, useShell } from "../Shell";
-import TaskRow, { rowMotion } from "../TaskRow";
+import TaskRow, { projectColor, rowMotion } from "../TaskRow";
 import { Check, Fade, Segmented, useDropdown, Empty } from "../ui";
 import { CoverPicker, IconPicker } from "../Customize";
 
@@ -76,7 +76,7 @@ export default function Project() {
           </button>
         </div>
         <div className="row" style={{ gap: 14 }}>
-          <IconPicker icon={p.icon ?? "Kanban"} color={area?.color} size={48} onIcon={(icon) => up({ icon })} />
+          <IconPicker icon={p.icon ?? "Kanban"} color={projectColor(p)} size={48} onIcon={(icon) => up({ icon })} onColor={(color) => up({ color })} label="Icon and colour" />
           <input className="input-bare display-xl inline-edit" value={p.title} onChange={(e) => up({ title: e.target.value })} aria-label="Project title" />
         </div>
         <textarea

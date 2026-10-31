@@ -17,6 +17,7 @@ import { sfx } from "@/lib/hub/sound";
 import { toast } from "@/lib/hub/fx";
 import { CoverPicker, IconPicker, SWATCHES, coverCss } from "./Customize";
 import { useArea } from "./Shell";
+import { taskColor } from "./TaskRow";
 
 export function PlanDaySheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const s = useHub();
@@ -49,14 +50,13 @@ export function PlanDaySheet({ open, onClose }: { open: boolean; onClose: () => 
   const soonCount = pool.filter(soon).length;
   const chosen = picked.map((id) => s.tasks.find((t) => t.id === id)).filter(Boolean) as typeof s.tasks;
   const est = chosen.reduce((a, t) => a + (t.estimate ?? 0), 0);
-  const area = (id: string) => s.areas.find((a) => a.id === id);
 
   const Row = ({ t, side }: { t: (typeof s.tasks)[number]; side: "pool" | "today" }) => (
     <button
       draggable
       onDragStart={(e) => e.dataTransfer.setData("text/plain", t.id)}
       className="ev-card row"
-      style={{ "--c": area(t.areaId)?.color, cursor: "grab" } as CSSProperties}
+      style={{ "--c": taskColor(s, t), cursor: "grab" } as CSSProperties}
       onClick={() => setPicked((p) => (side === "pool" ? [...p, t.id] : p.filter((x) => x !== t.id)))}
     >
       <span className="grow truncate">{t.title}</span>

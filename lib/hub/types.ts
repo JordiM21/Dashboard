@@ -77,6 +77,7 @@ export interface Milestone {
 export interface Project extends Base {
   title: string;
   icon?: string; // Phosphor icon name (components/hub/ui.tsx ICONS)
+  color?: string; // picked colour; unset → derived from the id (projectColor)
   cover?: string; // image URL or a resized data: URL
   description?: string;
 

@@ -16,7 +16,7 @@ import { useLive } from "@/lib/hub/live";
 import * as A from "@/lib/hub/actions";
 import { levelFromXp, xpByArea } from "@/lib/hub/game";
 import Dock, { usePlayer } from "./Dock";
-import { LevelRing, Flame } from "./game";
+import { LevelRing } from "./game";
 import { AreaDot, Sheet, spring } from "./ui";
 
 const TABS = [
@@ -87,17 +87,13 @@ export function Fab({ onClick, hidden }: { onClick: () => void; hidden: boolean 
   );
 }
 
-/** Level + streak, always visible on phones (Design Guide §1: the player is always present). */
+/** Level, always visible on phones (Design Guide §1: the player is always present). */
 export function PlayerChip({ onClick }: { onClick: () => void }) {
   const p = usePlayer();
   return (
-    <button className="player-chip" onClick={onClick} aria-label={`Level ${p.level}, ${p.streak.current}-day streak`}>
+    <button className="player-chip" onClick={onClick} aria-label={`Level ${p.level}`}>
       <span id="dock-xp" style={{ display: "contents" }}>
         <LevelRing pct={p.pct} level={p.level} size={30} stroke={3} />
-      </span>
-      <span className="row" style={{ gap: 2 }}>
-        <Flame size={16} live={p.streak.current >= 3} />
-        <b style={{ color: "var(--ember)", fontSize: 13 }}>{p.streak.current}</b>
       </span>
     </button>
   );

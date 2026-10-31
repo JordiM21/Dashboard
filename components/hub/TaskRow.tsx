@@ -8,7 +8,7 @@ import { useHub } from "@/lib/hub/store";
 import * as A from "@/lib/hub/actions";
 import { taskXp } from "@/lib/hub/game";
 import { addDays, relDay, today, weekStart } from "@/lib/hub/util";
-import type { Task } from "@/lib/hub/types";
+import type { Area, Project, Task } from "@/lib/hub/types";
 import { AreaDot, Check, useCoarse, useLongPress, useMenu } from "./ui";
 import { sfx } from "@/lib/hub/sound";
 import { toast } from "@/lib/hub/fx";
@@ -44,11 +44,18 @@ export function useTaskMenu() {
     ]);
 }
 
-/** Stable per-project colour derived from its id, so projects are tellable apart without picking one. */
-export function projectColor(id: string): string {
+/** A project's colour: the one picked, else a stable one derived from its id. */
+export function projectColor(p: Pick<Project, "id" | "color">): string {
+  if (p.color) return p.color;
   let h = 0;
-  for (const c of id) h = (h * 31 + c.charCodeAt(0)) % 360;
+  for (const c of p.id) h = (h * 31 + c.charCodeAt(0)) % 360;
   return `hsl(${h} 65% 62%)`;
+}
+
+/** A task's colour everywhere it's drawn: its project's, else its area's. */
+export function taskColor(s: { projects: Project[]; areas: Area[] }, t: Task): string | undefined {
+  const p = t.projectId ? s.projects.find((x) => x.id === t.projectId) : undefined;
+  return p ? projectColor(p) : s.areas.find((a) => a.id === t.areaId)?.color;
 }
 
 export default function TaskRow({ t, selected, showProject = true, draggable, compact }: { t: Task; selected?: boolean; showProject?: boolean; draggable?: boolean; compact?: boolean }) {
@@ -92,7 +99,7 @@ export default function TaskRow({ t, selected, showProject = true, draggable, co
       {...longPress}
       draggable={draggable}
       onDragStart={(e) => e.dataTransfer.setData("text/plain", t.id)}
-      style={compact ? { minHeight: 36 } : undefined}
+      style={{ "--tc": taskColor(s, t), ...(compact ? { minHeight: 36 } : {}) } as CSSProperties}
     >
       {draggable && (
         <span className="grip" aria-hidden>
@@ -127,7 +134,7 @@ export default function TaskRow({ t, selected, showProject = true, draggable, co
       {t.recurrence && <Repeat size={14} className="faint" aria-label="Repeats" />}
       {project && (
         <span className="caption muted truncate" style={{ maxWidth: 160 }}>
-          <span className="dot" style={{ "--c": projectColor(project.id), marginRight: 4 } as CSSProperties} /> {project.title}
+          <span className="dot" style={{ "--c": projectColor(project), marginRight: 4 } as CSSProperties} /> {project.title}
         </span>
       )}
       {date && (

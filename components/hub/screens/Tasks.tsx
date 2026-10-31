@@ -14,7 +14,7 @@ import { projectProgress } from "@/lib/hub/metrics";
 import { addDays, dayName, dayOf, formatDateDMY, monthName, relDay, today, weekStart } from "@/lib/hub/util";
 import type { Project, Task, TaskStatus } from "@/lib/hub/types";
 import { Toolbar, useArea, useShell } from "../Shell";
-import TaskRow, { projectColor, rowMotion, useTaskMenu } from "../TaskRow";
+import TaskRow, { projectColor, rowMotion, taskColor, useTaskMenu } from "../TaskRow";
 import { AreaDot, Empty, Fade, IconByName, Progress, Segmented, useDrop, useDropdown, useLongPress, useCoarse } from "../ui";
 import { coverCss } from "../Customize";
 
@@ -216,7 +216,7 @@ function projectBuckets(items: Task[], projects: Project[]) {
         key,
         label: p ? (
           <>
-            <span className="dot" style={{ "--c": projectColor(p.id) } as CSSProperties} /> <Link href={`/tasks/p/${p.id}`}>{p.title}</Link>
+            <span className="dot" style={{ "--c": projectColor(p) } as CSSProperties} /> <Link href={`/tasks/p/${p.id}`}>{p.title}</Link>
           </>
         ) : (
           <span className="muted">No project</span>
@@ -263,7 +263,7 @@ function ListView({ tasks }: { tasks: Task[] }) {
         order = p ? 0 : 1;
         label = p ? (
           <>
-            <span className="dot" style={{ "--c": projectColor(p.id) } as CSSProperties} /> <Link href={`/tasks/p/${p.id}`}>{p.title}</Link>
+            <span className="dot" style={{ "--c": projectColor(p) } as CSSProperties} /> <Link href={`/tasks/p/${p.id}`}>{p.title}</Link>
           </>
         ) : (
           "No project"
@@ -337,7 +337,6 @@ function TaskCard({ t, style }: { t: Task; style?: CSSProperties }) {
     menu(pt, pressed.current);
   });
   const press = (t: Task) => ({ ...lp, onPointerDown: (e: React.PointerEvent) => ((pressed.current = t), lp.onPointerDown(e)) });
-  const a = s.areas.find((x) => x.id === t.areaId);
   const p = s.projects.find((x) => x.id === t.projectId);
   return (
     <motion.button
@@ -350,7 +349,7 @@ function TaskCard({ t, style }: { t: Task; style?: CSSProperties }) {
       onClick={() => inspect({ kind: "task", id: t.id })}
       onContextMenu={(e) => menu(e, t)}
       {...press(t)}
-      style={{ "--c": a?.color, ...style } as CSSProperties}
+      style={{ "--c": taskColor(s, t), ...style } as CSSProperties}
     >
       <span style={{ fontWeight: 500, ...(t.status === "done" ? { color: "var(--text-3)", textDecoration: "line-through" } : {}) }}>{t.title}</span>
       <span className="row" style={{ flexWrap: "wrap", gap: 6 }}>
@@ -435,7 +434,6 @@ export function DayCol({ date, tasks }: { date: string; tasks: Task[] }) {
       </div>
       <AnimatePresence initial={false}>
         {tasks.map((t) => {
-          const a = s.areas.find((x) => x.id === t.areaId);
           return (
             <motion.button
               key={t.id}
@@ -449,7 +447,7 @@ export function DayCol({ date, tasks }: { date: string; tasks: Task[] }) {
               onClick={() => inspect({ kind: "task", id: t.id })}
               onContextMenu={(e) => menu(e, t)}
       {...press(t)}
-              style={{ "--c": a?.color } as CSSProperties}
+              style={{ "--c": taskColor(s, t) } as CSSProperties}
             >
               <div style={{ fontWeight: 500 }}>{t.title}</div>
               <div className="row caption muted" style={{ marginTop: 4, gap: 6 }}>
@@ -547,7 +545,7 @@ function ProjectsView() {
             const pr = projectProgress(p.id, s.tasks);
             const a = s.areas.find((x) => x.id === p.areaId);
             return (
-              <Link key={p.id} href={`/tasks/p/${p.id}`} className="folder" style={{ "--c": a?.color, minHeight: 190 } as CSSProperties}>
+              <Link key={p.id} href={`/tasks/p/${p.id}`} className="folder" style={{ "--c": projectColor(p), minHeight: 190 } as CSSProperties}>
                 {p.cover && <div className="card-cover" style={{ background: coverCss(p.cover) }} />}
                 <div className="row">
                   <span className="folder-icon">

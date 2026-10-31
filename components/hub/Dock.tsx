@@ -1,26 +1,81 @@
 "use client";
 
-/** Player Dock (§3): level + XP, streak week, done-today feed, achievements, companion. */
-import { useEffect, useMemo, useState } from "react";
+/** Player Dock (§3): level + XP, done-today feed, up-next list, achievements, companion. */
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
-import { SidebarSimple, Snowflake } from "@phosphor-icons/react";
+import { SidebarSimple } from "@phosphor-icons/react";
 import { useHub } from "@/lib/hub/store";
-import { ACHIEVEMENTS, levelFromXp, streak, totalXp, isFocus } from "@/lib/hub/game";
+import { ACHIEVEMENTS, levelFromXp, totalXp, isFocus } from "@/lib/hub/game";
 import { onFx } from "@/lib/hub/fx";
 import * as A from "@/lib/hub/actions";
-import { dayOf, hhmm, today } from "@/lib/hub/util";
+import { addDays, dayOf, hhmm, relDay, today } from "@/lib/hub/util";
+import type { Task } from "@/lib/hub/types";
 import { pipLine } from "@/lib/hub/pip";
-import { Badge, Flame, LevelRing, StreakDots } from "./game";
+import { Badge, LevelRing } from "./game";
 import { Pip, spring } from "./ui";
 import { coverCss } from "./Customize";
+import { useShell } from "./Shell";
+import { taskColor } from "./TaskRow";
 
 export function usePlayer() {
   const s = useHub();
   return useMemo(() => {
     const total = totalXp(s.game.xp);
-    return { total, ...levelFromXp(total), streak: streak(s) };
-  }, [s]);
+    return { total, ...levelFromXp(total) };
+  }, [s.game.xp]);
+}
+
+/** Everything still open, in the order it's coming up: today (incl. overdue), tomorrow, the next 7 days, then the undated pile. */
+function UpNext() {
+  const s = useHub();
+  const { inspect } = useShell();
+  const t = today();
+  const groups = useMemo(() => {
+    const out: { key: string; label: string; tone: string; tasks: (Task & { when?: string })[] }[] = [
+      { key: "today", label: "Today", tone: "var(--accent)", tasks: [] },
+      { key: "tmr", label: "Tomorrow", tone: "var(--text-1)", tasks: [] },
+      { key: "week", label: "Next 7 days", tone: "var(--text-2)", tasks: [] },
+      { key: "inbox", label: "Inbox & unscheduled", tone: "var(--warning-ink)", tasks: [] },
+    ];
+    const tmr = addDays(t, 1);
+    const wk = addDays(t, 7);
+    for (const x of s.tasks) {
+      if (x.archivedAt || x.status === "done" || x.status === "dropped") continue;
+      const when = [x.scheduled, x.due].filter((d): d is string => !!d).sort()[0];
+      const g = x.status === "inbox" || !when ? 3 : when <= t ? 0 : when === tmr ? 1 : when <= wk ? 2 : -1;
+      if (g >= 0) out[g].tasks.push({ ...x, when });
+    }
+    for (const g of out) g.tasks.sort((a, b) => (a.when ?? "9").localeCompare(b.when ?? "9") || a.priority - b.priority);
+    return out.filter((g) => g.tasks.length);
+  }, [s.tasks, t]);
+
+  return (
+    <section className="card up-next" aria-label="Up next">
+      <div className="label" style={{ marginBottom: 4 }}>
+        Up next
+      </div>
+      {groups.length === 0 && <p className="callout faint" style={{ margin: 0 }}>Nothing planned. Enjoy it.</p>}
+      {groups.map((g) => (
+        <div key={g.key} className="col" style={{ gap: 2 }}>
+          <div className="row caption up-next-head" style={{ color: g.tone }}>
+            <b>{g.label}</b>
+            <span className="faint">{g.tasks.length}</span>
+          </div>
+          {g.tasks.map((x) => (
+            <button key={x.id} className="up-next-row callout" style={{ "--tc": taskColor(s, x) } as CSSProperties} onClick={() => inspect({ kind: "task", id: x.id })}>
+              <span className="truncate grow">{x.title}</span>
+              {g.key === "week" || (g.key === "today" && x.when! < t) ? (
+                <span className="caption" style={{ color: x.when! < t ? "var(--danger-ink)" : "var(--text-3)" }}>
+                  {relDay(x.when)}
+                </span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+      ))}
+    </section>
+  );
 }
 
 export default function Dock({ rail }: { rail: boolean }) {
@@ -53,12 +108,8 @@ export default function Dock({ rail }: { rail: boolean }) {
   const doneToday = s.game.xp.filter((e) => dayOf(e.at) === t).slice(-6).reverse();
   const unlocked = ACHIEVEMENTS.filter((a) => s.game.unlocked[a.id]).sort((a, b) => (s.game.unlocked[b.id] > s.game.unlocked[a.id] ? 1 : -1));
   const questsLeft = s.tasks.filter((x) => isFocus(x, t)).length;
-  const companion = mood ?? (p.streak.atRisk ? "sleepy" : "idle");
-  const status = p.streak.atRisk
-    ? `Streak at risk — ${Math.max(0, 3 - s.tasks.filter((x) => dayOf(x.completedAt) === t && isFocus({ ...x, status: "next" }, t)).length)} focus tasks to save it`
-    : questsLeft === 0
-      ? "All quests clear. Go touch grass."
-      : `${questsLeft} quest${questsLeft === 1 ? "" : "s"} left${p.streak.todayCounted ? ", streak safe" : ""}`;
+  const companion = mood ?? "idle";
+  const status = questsLeft === 0 ? "All quests clear. Go touch grass." : `${questsLeft} quest${questsLeft === 1 ? "" : "s"} left`;
 
   if (rail) {
     return (
@@ -66,12 +117,6 @@ export default function Dock({ rail }: { rail: boolean }) {
         <Link href="/character" title={`Level ${p.level}`}>
           <LevelRing pct={p.pct} level={p.level} size={48} stroke={4} glow={glow} />
         </Link>
-        <div className="col" style={{ alignItems: "center", gap: 0 }} title={`${p.streak.current}-day streak`}>
-          <Flame size={22} live={p.streak.current >= 3} />
-          <span className="headline" style={{ color: "var(--ember)" }}>
-            {p.streak.current}
-          </span>
-        </div>
         <span id="dock-xp" style={{ width: 1, height: 1 }} />
         <span className="spacer" />
         <button className="icon-btn" title="Expand dock (Ctrl .)" aria-label="Expand dock" onClick={() => A.setSettings({ dock: "open" })}>
@@ -114,27 +159,7 @@ export default function Dock({ rail }: { rail: boolean }) {
         )}
       </AnimatePresence>
 
-      <section className="card" style={{ padding: 16 }} aria-label="Streak">
-        <div className="row" style={{ marginBottom: 12 }}>
-          <Flame live={p.streak.current >= 3} />
-          <span className="streak-num">{p.streak.current}</span>
-          <span className="callout muted">day streak</span>
-          <span className="spacer" />
-          {p.streak.atRisk ? (
-            <span className="chip warning">At risk</span>
-          ) : p.streak.freezes > 0 ? (
-            <span className="chip" title="Streak freezes banked">
-              <Snowflake size={12} /> {p.streak.freezes}
-            </span>
-          ) : null}
-        </div>
-        <StreakDots week={p.streak.week} />
-        <p className="caption muted" style={{ margin: "10px 0 0" }}>
-          Plan the day and finish 3 focus tasks. Best: {p.streak.longest}
-        </p>
-      </section>
-
-      <section aria-label="Done today">
+      <section className="card" style={{ padding: 14 }} aria-label="Done today">
         <div className="label" style={{ marginBottom: 8 }}>
           Done today
         </div>
@@ -158,6 +183,8 @@ export default function Dock({ rail }: { rail: boolean }) {
           </div>
         )}
       </section>
+
+      <UpNext />
 
       <section aria-label="Achievements">
         <div className="row" style={{ marginBottom: 8 }}>
