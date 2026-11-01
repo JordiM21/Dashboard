@@ -9,12 +9,13 @@
  *
  * Folder: BRAIN_DIR, default ../Brain next to this repo — outside git, since
  * it holds student and payment data. Only areas/, business/,
- * journal/activity/, NOW.md and CLAUDE.md are owned (wiped and rewritten);
+ * journal/activity/, messages/, NOW.md, MESSAGES.md and CLAUDE.md are owned (wiped and rewritten);
  * PROFILE.md, inbox/ and the rest of journal/ are Jordi's and Claude's.
  */
 import { loadEnvConfig } from "@next/env";
 loadEnvConfig(process.cwd());
 
+import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -26,6 +27,7 @@ import type { LiveData } from "../lib/hub/live";
 import type { Area, Collection, Goal, HubState, Item, LocalExpense, Note, Project, Task } from "../lib/hub/types";
 import type { CurriculumLevelDoc, FinanceEntry, GroupDoc, RecurringTransaction, ResourceFile, ResourceFolder, Student } from "../lib/types";
 import type { SocialPost } from "../lib/social/rules";
+import { byTime, MESSAGES, unprocessed, waitingOnJordi, type BrainMessage } from "../lib/hub/brainMessages";
 
 // metrics.ts pulls in the browser Firebase client, which reads NEXT_PUBLIC_* at import time — so it
 // must load after loadEnvConfig, and static imports are hoisted above it.
@@ -34,12 +36,18 @@ let price: Metrics["price"], projectProgress: Metrics["projectProgress"], receiv
 type Metrics = typeof import("../lib/hub/metrics");
 
 const DIR = path.resolve(process.env.BRAIN_DIR || path.join(process.cwd(), "..", "Brain"));
-const OWNED = ["areas", "business", "journal/activity", "NOW.md", "CLAUDE.md"];
+const OWNED = ["areas", "business", "journal/activity", "messages", "NOW.md", "MESSAGES.md", "CLAUDE.md"];
+const OUTBOX = path.join(DIR, "outbox");
 const ACTIVITY_DAYS = 60;
 
 const REPO = process.cwd();
-const RUN = `Run \`npm run brain\` in ${REPO} first.`;
-const PUBLISH = `Finally run \`npm run brain\` again so the dashboard's Brain page shows the new file. Use DD-MM-YYYY for dates in the text.`;
+// Claude's sessions can't reach Firestore (their sandbox network blocks it), so they never run npm here:
+// the watcher keeps the Brain fresh and executes Claude's changes from outbox/ (see processOutbox).
+const RUN = `The Brain watcher keeps these files fresh; if NOW.md's \`generated\` time is more than 2 hours old, say the watcher may be off.`;
+const PUBLISH = `The watcher publishes the new file to the dashboard's Brain page by itself. Use DD-MM-YYYY for dates in the text.`;
+/** The conversation step every scheduled task runs. Keep the tasks' SKILL.md files in sync with it. */
+const CONVERSE = (source: string) =>
+  `Then talk to Jordi through the Brain page: read MESSAGES.md and follow its "Each run" steps, sending the message ops through outbox/ with \`"source": "${source}"\` on new messages.`;
 /**
  * The Claude scheduled tasks that write journal/. `hours` is the longest gap between runs before the
  * Brain page calls a task late. Prompts are pasted into CLAUDE.md and the desktop app's task list.
@@ -47,25 +55,25 @@ const PUBLISH = `Finally run \`npm run brain\` again so the dashboard's Brain pa
 const TASKS = [
   {
     id: "daily-close", name: "Daily close", when: "every day 23:30", cron: "30 23 * * *", folder: "journal/daily", hours: 26,
-    prompt: `${RUN} Read CLAUDE.md, PROFILE.md, NOW.md and journal/activity/<today>.md. Write journal/daily/<today>.md (today = the date in NOW.md's front-matter) with these sections: Done (grouped by area), Progressed, Stuck or slipped (overdue, waiting), Money (payments in or out today), Notes worth remembering, Tomorrow's top 3 (from NOW.md, explaining why each one). Keep it under 300 words. ${PUBLISH}`,
+    prompt: `${RUN} Read CLAUDE.md, PROFILE.md, NOW.md and journal/activity/<today>.md. Write journal/daily/<today>.md (today = the date in NOW.md's front-matter) with these sections: Done (grouped by area), Progressed, Stuck or slipped (overdue, waiting), Money (payments in or out today), Notes worth remembering, Tomorrow's top 3 (from NOW.md, explaining why each one). Keep it under 300 words. ${PUBLISH} ${CONVERSE("Daily close")}`,
   },
   {
     id: "morning-brief", name: "Morning brief", when: "every day 08:00", cron: "0 8 * * *", folder: "journal/briefs", hours: 26,
-    prompt: `${RUN} Read CLAUDE.md, PROFILE.md, NOW.md and the latest file in journal/daily/. Write journal/briefs/<today>.md with: the plan for today (max 5 items, most important first), overdue items to decide on (do, reschedule or drop), students to chase for payment, classes today, and one focus suggestion tied to a pinned goal. Under 200 words. ${PUBLISH}`,
+    prompt: `${RUN} Read CLAUDE.md, PROFILE.md, NOW.md and the latest file in journal/daily/. Write journal/briefs/<today>.md with: the plan for today (max 5 items, most important first), overdue items to decide on (do, reschedule or drop), students to chase for payment, classes today, and one focus suggestion tied to a pinned goal. Under 200 words. ${PUBLISH} ${CONVERSE("Morning brief")}`,
   },
   {
     id: "weekly-review", name: "Weekly review", when: "Sundays 19:00", cron: "0 19 * * 0", folder: "journal/weekly", hours: 24 * 7 + 2,
-    prompt: `${RUN} Read CLAUDE.md, PROFILE.md, this week's journal/daily files (fall back to journal/activity), every area's _overview.md and business/students.md. Write journal/weekly/<YYYY>-W<ww>.md with: Wins, Goals that moved and goals that stalled (with numbers), Time balance across areas (judged from activity), Patterns (what keeps slipping, and why), Business (MRR, new or lost students, who owes), and the 3 priorities for next week. ${PUBLISH}`,
+    prompt: `${RUN} Read CLAUDE.md, PROFILE.md, this week's journal/daily files (fall back to journal/activity), every area's _overview.md and business/students.md. Write journal/weekly/<YYYY>-W<ww>.md with: Wins, Goals that moved and goals that stalled (with numbers), Time balance across areas (judged from activity), Patterns (what keeps slipping, and why), Business (MRR, new or lost students, who owes), and the 3 priorities for next week. ${PUBLISH} ${CONVERSE("Weekly review")}`,
   },
   {
     id: "monthly-report", name: "Monthly report", when: "1st of the month 09:00", cron: "0 9 1 * *", folder: "journal/monthly", hours: 24 * 32,
-    prompt: `${RUN} Read CLAUDE.md, PROFILE.md, business/payments/<last month>.md, business/students.md, business/recurring.md, last month's weekly reviews and the LET Junior _overview.md. Write journal/monthly/<YYYY-MM>.md (last month) with: revenue vs expenses vs the month before, MRR and paying students, new, churned and late students, ad spend and cost per student if visible, goal progress, and 3 concrete actions for this month. ${PUBLISH}`,
+    prompt: `${RUN} Read CLAUDE.md, PROFILE.md, business/payments/<last month>.md, business/students.md, business/recurring.md, last month's weekly reviews and the LET Junior _overview.md. Write journal/monthly/<YYYY-MM>.md (last month) with: revenue vs expenses vs the month before, MRR and paying students, new, churned and late students, ad spend and cost per student if visible, goal progress, and 3 concrete actions for this month. ${PUBLISH} ${CONVERSE("Monthly report")}`,
   },
 ];
 
 const COLLECTIONS = [
   "hub_areas", "hub_tasks", "hub_projects", "hub_goals", "hub_notes", "hub_collections", "hub_items", "hub_expenses", "hub_state",
-  "students", "transactions", "recurringTransactions", "groups", "curriculum", "resourceFolders", "resourceFiles", "hub_social_posts",
+  "students", "transactions", "recurringTransactions", "groups", "curriculum", "resourceFolders", "resourceFiles", "hub_social_posts", MESSAGES,
 ] as const;
 type Raw = Record<(typeof COLLECTIONS)[number], Record<string, unknown>[]>;
 
@@ -139,6 +147,7 @@ interface Snapshot {
   areaName: (id: string) => string;
   areaDir: Map<string, string>;
   social: SocialPost[];
+  messages: BrainMessage[];
 }
 
 /** Older docs (webhook-created students, Stripe transactions) hold Firestore Timestamps where the app expects ISO strings. */
@@ -171,6 +180,7 @@ async function load(): Promise<Snapshot> {
     areaName: (id) => st.areas.find((a) => a.id === id)?.name ?? id,
     areaDir: new Map(areas.map((a) => [a.id, slug(a.name)])),
     social: raw.hub_social_posts as unknown as SocialPost[],
+    messages: (raw[MESSAGES] as unknown as BrainMessage[]).sort(byTime),
   };
 }
 
@@ -325,6 +335,7 @@ function exportBusiness(s: Snapshot) {
     const paid = tx.filter((t) => t.amount > 0);
     const tasks = live(st.tasks).filter((t) => t.studentId === stu.id);
     const notes = live(st.notes).filter((n) => n.studentId === stu.id);
+    const talk = s.messages.filter((m) => m.student === stu.id);
     const f = studentFile.get(stu.id)!;
     roster.push([`[${stu.name}](students/${f}.md)`, life, stu.status, g?.name ?? stu.classGroup ?? "", meta?.level ?? "", money(price(stu)), pay, d(stu.nextPayment), paid[0] ? d(paid[0].date) : ""]);
     write(
@@ -348,6 +359,7 @@ function exportBusiness(s: Snapshot) {
             meta?.returningOffer ? ["Returning offer", meta.returningOffer] : null,
           ].filter((r) => r && r[1] != null && r[1] !== "") as unknown[][]),
           stu.notes?.trim() && `## Things to remember\n${stu.notes.trim()}`,
+          talk.length && `## What Jordi told Claude\n${talk.map(messageLine).join("\n")}`,
           `## Payments\n${table(["Date", "Description", "Amount", "Source"], tx.map((t) => [d(t.date), t.description, money(t.amount), t.source ?? "manual"]))}`,
           tasks.length && `## Tasks\n${tasks.map((t) => taskLine(t, s, true)).join("\n")}`,
           notes.length && `## Notes\n${notes.map((n) => `### ${n.title} (${d(n.updatedAt)})\n${n.body}`).join("\n\n")}`,
@@ -513,6 +525,49 @@ function exportActivity(s: Snapshot) {
   }
 }
 
+// ---------------------------------------------------------------- messages
+
+const stamp = (iso: string) => `${formatDateDMY(iso.slice(0, 10))} ${iso.slice(11, 16)}`;
+const oneLine = (t: string) => t.trim().replace(/\s*\r?\n\s*/g, " / ");
+
+function messageLine(m: BrainMessage): string {
+  const who = m.from === "claude" ? "Claude" : "Jordi";
+  return [`- ${stamp(m.at)} **${who}**${m.about ? ` (${m.about})` : ""}: ${oneLine(m.text)}`, m.learned && `  - Learned: ${m.learned}`, m.closedAt && "  - Question closed"].filter(Boolean).join("\n");
+}
+
+function exportMessages(s: Snapshot) {
+  const { messages: ms } = s;
+  const asked = new Map(ms.map((m) => [m.id, m]));
+  const inbox = unprocessed(ms);
+  const waiting = waitingOnJordi(ms);
+  const known = ms.filter((m) => m.learned);
+  write(
+    "MESSAGES.md",
+    fm({ type: "messages", to_process: inbox.length, waiting_on_jordi: waiting.length, learned: known.length }) +
+      [
+        `# Messages with Jordi`,
+        `Jordi reads and answers these on the dashboard's Brain page. Jordi shouldn't have to say anything twice: treat "What Claude has learned" as true until a newer message says otherwise, and use it when planning, prioritising and writing tasks. Full conversation: [messages/history.md](messages/history.md).`,
+        `## Each run
+1. **Process every reply below.** Act on it, then send \`message.file\` with its id. Add \`learned\` when it holds something worth keeping: one plain line, with names and dates (DD-MM-YYYY), in Jordi's sense of it. Omit it for a plain "ok". If the answer needs a follow-up from you, send \`message.say\` with \`replyTo\`.
+2. **Act on a written yes.** If Jordi agreed in a message to a change you proposed, apply exactly that change with brain:do. Propose anything else as a question first.
+3. **Close what went stale.** \`message.close\` any question the data has since answered (e.g. the student paid).
+4. **Ask what you need to decide better.** At most 3 new questions per run, and none if 5 or more are already waiting. Send them with \`message.ask\`. A good question:
+   - comes from the current priority (pinned goals in NOW.md, what's overdue, who owes, who didn't enroll, a task that slipped);
+   - changes what you would plan or recommend once answered, so ask for the why and the how, not for trivia;
+   - can't be found in the Brain and isn't listed under "Waiting on Jordi" or "What Claude has learned";
+   - names the person, amount and date, and is answerable in a sentence. Examples: "Did you send the follow-up to the parents who haven't paid?", "Why hasn't Jeanpaul's mother paid yet? What did she say?", "Why didn't Ethan enroll? Did you ask his parent?"
+   Set \`about\` to a short topic, \`student\` when it concerns one student, and \`options\` (up to 4 short answers) when it's a quick choice. Skip the run's questions entirely if nothing passes these tests.`,
+        `## Replies to process\n${inbox.map((m) => {
+          const q = m.replyTo ? asked.get(m.replyTo) : null;
+          return `- id \`${m.id}\` · ${stamp(m.at)}${m.about ? ` · ${m.about}` : ""}${q ? `\n  - You asked: ${oneLine(q.text)}` : ""}\n  - Jordi: ${oneLine(m.text)}`;
+        }).join("\n") || "_None._"}`,
+        `## Waiting on Jordi (don't ask again)\n${waiting.map((m) => `- id \`${m.id}\` · ${stamp(m.at)}${m.about ? ` · ${m.about}` : ""}: ${oneLine(m.text)}`).join("\n") || "_None._"}`,
+        `## What Claude has learned\n${known.map((m) => `- ${formatDateDMY(m.at.slice(0, 10))}${m.about ? ` · ${m.about}` : ""}: ${m.learned}`).join("\n") || "_Nothing yet._"}`,
+      ].join("\n\n")
+  );
+  write("messages/history.md", fm({ type: "message-history", messages: ms.length }) + `# Conversation with Jordi\n\n${ms.map(messageLine).join("\n") || "_Nothing yet._"}`);
+}
+
 // ---------------------------------------------------------------- router
 
 function exportRouter(s: Snapshot) {
@@ -525,13 +580,15 @@ This folder mirrors Jordi's dashboard (LET Junior, an online English academy for
 
 **Rules**
 - Don't read everything. Use the routing table and open only the files a question needs. Grep the YAML front-matter (\`status:\`, \`area:\`, \`type:\`, \`lifecycle:\`) to filter without opening files.
-- Generated files (\`areas/\`, \`business/\`, \`journal/activity/\`, \`NOW.md\`, this file) are overwritten on every export. Never edit them: to change data (tasks, notes, collection items, goal values, student notes) use \`brain:do\`, described below. Write files only where the "Writable" list allows.
+- **Read \`MESSAGES.md\` before planning or advising.** It holds what Jordi has already told you in writing; never ask for it again.
+- Generated files (\`areas/\`, \`business/\`, \`journal/activity/\`, \`messages/\`, \`NOW.md\`, \`MESSAGES.md\`, this file) are overwritten on every export. Never edit them: to change data (tasks, notes, collection items, goal values, student notes) use \`brain:do\`, described below. Write files only where the "Writable" list allows.
 - Before answering anything time-sensitive, run \`npm run brain\` in the repo folder above so the mirror is fresh.
 - Dates shown to Jordi are DD-MM-YYYY. File names and front-matter use YYYY-MM-DD. "Today" rolls over at Jordi's night-owl hour, not at midnight.
 - \`PROFILE.md\` says who Jordi is and what Jordi is optimising for. Read it before giving advice.
 
 ## Where things are
 - \`NOW.md\` — today: overdue, planned, doing, due this week, waiting, pinned goals, students owing, upcoming payments and posts. **Start here for "what should I do".**
+- \`MESSAGES.md\` — the written conversation with Jordi: replies to process, questions waiting, what you've learned, and how to ask. \`messages/history.md\` — all of it. A student's file repeats the exchanges about them.
 - \`areas/<area>/_overview.md\` — the area's goals, projects, notes and collections, with links. Areas:
 ${areaList}
 - \`areas/<area>/goals/\`, \`projects/\` (each project lists its tasks), \`tasks.md\` (tasks outside projects), \`notes/\`, \`collections/\` (lists like wishlist, books, places)
@@ -559,37 +616,44 @@ ${areaList}
 
 ## Writable
 - \`journal/daily|briefs|weekly|monthly/\` — scheduled-task output only, one file per period, never overwrite another day's file
+- \`outbox/\` — Claude's change requests (below)
+- \`PROFILE.md\` — co-maintained: Claude updates it when Jordi states a lasting fact, decision or preference, or asks; follow the rules at its top and add a Changelog line
 - \`inbox/\` — only Jordi adds files here
 
-## Changing dashboard data (brain:do)
-When Jordi asks you to create, update or complete something, write it to the dashboard's database with \`brain:do\`. The change appears in the dashboard immediately and in these files a few seconds later. Never edit the generated Markdown for this; it would be overwritten.
+## Changing dashboard data (outbox → brain:do)
+Claude's sandbox can't reach Firestore, so Claude never runs \`npm\` here. Instead the Brain watcher on Jordi's PC (\`npm run brain:watch\`) picks up JSON files Claude drops in \`outbox/\`, runs them through \`brain:do\` with full network access, and writes the result back. Never edit the generated Markdown to change data; it would be overwritten.
 
-- **When to ask first:** if Jordi asked for the exact change ("add a task to call Jeanpaul tomorrow"), apply it. If you're proposing changes yourself, or the request is vague, run with \`--dry\` first, show Jordi the planned lines, and apply only after a yes. Scheduled tasks never use brain:do.
-- **How:** from the Brain folder, pipe JSON into the command in the dashboard repo. One op or an array; a batch applies fully or not at all:
-\`\`\`bash
-cd "${REPO}" && npm run brain:do --silent -- --dry <<'EOF'
-[
-  { "op": "task.add", "title": "Chase Jeanpaul for October tuition", "area": "LET Junior", "due": "2026-10-25", "priority": 1 },
-  { "op": "student.note", "student": "Jeanpaul", "text": "Reminded about October payment on WhatsApp" }
-]
-EOF
-\`\`\`
-  Drop \`--dry\` to apply. Each line of output says what changed; on any error nothing is written, and the error says why (e.g. an ambiguous name, with the candidates and their ids).
-- **References:** \`area\`, \`project\`, \`task\`, \`note\`, \`collection\`, \`item\`, \`goal\` and \`student\` take an id (from a file's front-matter), an exact name, or a fragment matching exactly one record. Dates are \`YYYY-MM-DD\`; "today" is the \`today\` in NOW.md.
+**Protocol**
+1. Write the ops (one op or an array) to \`outbox/<YYYY-MM-DD-HHmm>-<slug>.dry.json\` to preview, or \`outbox/<…>-<slug>.json\` to apply. Write to a \`.tmp\` name and rename it into place so the watcher never reads half a file.
+2. Wait (poll every few seconds, up to ~60 s) for \`outbox/results/<same name>.txt\`. First line is \`OK\` or \`FAILED\`, then brain:do's output. The request file moves to \`outbox/done/\`.
+3. A batch applies fully or not at all; on FAILED nothing was written and the output says why (e.g. an ambiguous name with candidate ids). Fix and resend.
+4. After an apply, the Markdown refreshes a few seconds later. \`outbox/refresh.json\` (any content) forces a re-export.
+5. No result after 60 s means the watcher is off: tell Jordi to start it (\`Brain Watcher\` shortcut, or \`npm run brain:watch\` in ${REPO}).
+
+- **When to ask first:** if Jordi asked for the exact change, or gave a standing go-ahead in this conversation, apply it. If you're proposing changes yourself, send a \`.dry.json\` first, show Jordi the planned lines, and apply after a yes. Scheduled tasks send only \`message.*\` ops, plus exactly the change Jordi agreed to in writing in MESSAGES.md.
+- **References:** \`area\`, \`project\`, \`task\`, \`note\`, \`collection\`, \`item\`, \`goal\` and \`student\` take an id (from a file's front-matter), an exact name, or a fragment matching exactly one record. Later ops in a batch see earlier ones (add a project, then add tasks to it by title). Dates are \`YYYY-MM-DD\`; "today" is the \`today\` in NOW.md.
 
 | op | Required | Optional |
 |---|---|---|
 | \`task.add\` | \`title\` | \`area\` (default LET Junior, or the project's area), \`project\`, \`status\` (inbox/next/doing/waiting/dropped), \`priority\` (1 high … 3 low, default 2), \`due\`, \`scheduled\` (the day it's planned for), \`estimate\` (minutes), \`notes\`, \`checklist\` (list of strings), \`waitingOn\` |
 | \`task.update\` | \`task\` | any task.add field (\`null\` clears \`due\`/\`scheduled\`/\`project\`), \`appendNotes\` (adds to existing notes). Don't set status done here |
 | \`task.done\` | \`task\` | — (a recurring task gets its next occurrence, as in the app) |
+| \`project.add\` | \`title\` | \`area\`, \`status\` (planned/active/paused/done/dropped, default active), \`start\`, \`target\`, \`outcome\`, \`description\`, \`track\` (delivery/growth), \`milestones\` (list of {title, date}) |
+| \`project.update\` | \`project\` | any project.add field (\`null\` clears \`start\`/\`target\`; \`milestones\` replaces the list) |
+| \`goal.add\` | \`title\`, \`target\` | \`area\`, \`metric\` (mrr/students/revenue/tasks/manual, default manual), \`horizon\` (week/quarter/year/someday), \`start\`, \`unit\`, \`deadline\`, \`pinned\`, \`description\`, \`project\` (for metric tasks) |
+| \`goal.update\` | \`goal\` | any goal.add field (\`null\` clears \`deadline\`), \`archived\` (true hides it, false restores) |
+| \`goal.log\` | \`goal\`, \`value\` | \`date\` (default today; replaces that day's value). Manual goals only; MRR/students/revenue/tasks goals update themselves |
 | \`note.add\` | \`title\`, \`body\` (Markdown) | \`area\`, \`project\`, \`type\` (doc/plan/meeting/reference), \`tags\`, \`pinned\`, \`link\` |
 | \`note.append\` | \`note\`, \`text\` | — |
 | \`item.add\` | \`collection\`, \`title\` | \`values\` (keyed by the collection's field keys; see its table columns), \`tags\`, \`link\`, \`description\` |
 | \`item.update\` | \`item\` | \`collection\` (to narrow the search), \`title\`, \`values\` (merged), \`tags\`, \`link\`, \`description\` |
-| \`goal.log\` | \`goal\`, \`value\` | \`date\` (default today; replaces that day's value). Manual goals only; MRR/students/revenue/tasks goals update themselves |
 | \`student.note\` | \`student\`, \`text\` | — (adds a dated line to the student's "Things to remember") |
+| \`message.ask\` | \`text\` | \`about\` (short topic), \`student\`, \`options\` (up to 4 one-tap answers), \`source\` (the task's name). Puts a question on Jordi's Brain page |
+| \`message.say\` | \`text\` | \`about\`, \`student\`, \`replyTo\` (message id), \`source\`. An update or answer that needs no reply |
+| \`message.file\` | \`message\` (id of Jordi's message) | \`learned\` (the lasting fact, one line). Marks it read; Jordi sees the receipt and what you saved |
+| \`message.close\` | \`message\` (id of your question) | — (withdraws a question that no longer applies) |
 
-Not possible here: deleting anything, payments and money, student status, due dates or groups, projects and goals themselves, and XP. Tell Jordi to do those in the dashboard.
+Not possible here: hard deletes (use status dropped, or \`archived\` on goals), payments and money, student status, payment due dates or groups, and XP. Tell Jordi to do those in the dashboard.
 
 ## Scheduled task prompts
 Each one runs with this folder as the working folder. The dashboard's Brain page reads this same list.
@@ -631,6 +695,7 @@ async function exportOnce() {
   exportBusiness(s);
   exportNow(s);
   exportActivity(s);
+  exportMessages(s);
   exportRouter(s);
   const synced = await publish(Date.now() - started);
   console.log(`[brain] exported to ${DIR} in ${Date.now() - started} ms (${synced} files changed in the dashboard copy)`);
@@ -715,7 +780,45 @@ async function watch() {
     fs.mkdirSync(path.join(DIR, sub), { recursive: true });
     fs.watch(path.join(DIR, sub), { recursive: true }, (_, f) => Date.now() > quietUntil && !/^activity/.test(String(f ?? "")) && schedule());
   }
+  // Claude's change requests.
+  for (const sub of ["", "results", "done"]) fs.mkdirSync(path.join(OUTBOX, sub), { recursive: true });
+  let outboxBusy: Promise<void> = Promise.resolve();
+  const kick = () => (outboxBusy = outboxBusy.then(() => processOutbox(schedule)).catch((e) => console.error("[brain] outbox failed", e)));
+  fs.watch(OUTBOX, () => kick());
+  setInterval(kick, 10_000); // fs.watch can miss events (sleep, network drives); polling is the safety net
+  kick();
   console.log(`[brain] watching ${COLLECTIONS.length} collections + journal/ and inbox/ → ${DIR}`);
+  console.log(`[brain] executing Claude's requests from ${OUTBOX}`);
+}
+
+/** Runs each outbox/*.json through brain:do (".dry.json" previews), writes outbox/results/<name>.txt, moves the request to outbox/done/. */
+async function processOutbox(refresh: () => void) {
+  const files = fs.readdirSync(OUTBOX).filter((f) => f.endsWith(".json")).sort();
+  for (const f of files) {
+    const src = path.join(OUTBOX, f);
+    const base = f.replace(/\.json$/, "");
+    if (f === "refresh.json") {
+      refresh();
+      fs.writeFileSync(path.join(OUTBOX, "results", "refresh.txt"), `OK\n${new Date().toISOString()} re-export scheduled\n`);
+      fs.rmSync(src, { force: true });
+      continue;
+    }
+    const dry = f.endsWith(".dry.json");
+    const work = path.join(OUTBOX, "done", f);
+    fs.renameSync(src, work); // claim it first so a second pass can't run it twice
+    const args = [path.join(REPO, "node_modules", "tsx", "dist", "cli.mjs"), path.join(REPO, "scripts", "brainDo.ts"), "--file", work, ...(dry ? ["--dry"] : [])];
+    const { code, out } = await new Promise<{ code: number; out: string }>((resolve) => {
+      const p = spawn(process.execPath, args, { cwd: REPO, env: process.env });
+      let out = "";
+      p.stdout.on("data", (d) => (out += d));
+      p.stderr.on("data", (d) => (out += d));
+      p.on("close", (code) => resolve({ code: code ?? 1, out }));
+      p.on("error", (e) => resolve({ code: 1, out: String(e) }));
+    });
+    const result = `${code === 0 ? "OK" : "FAILED"}\n${new Date().toISOString()} ${dry ? "dry run" : "applied"}: ${f}\n\n${out.trim()}\n`;
+    fs.writeFileSync(path.join(OUTBOX, "results", `${base}.txt`), result);
+    console.log(`[brain] outbox ${f} → ${code === 0 ? "OK" : "FAILED"}`);
+  }
 }
 
 export { exportOnce };

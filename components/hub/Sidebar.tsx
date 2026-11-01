@@ -14,6 +14,7 @@ import { useLive } from "@/lib/hub/live";
 import { levelFromXp, xpByArea, isFocus } from "@/lib/hub/game";
 import * as A from "@/lib/hub/actions";
 import { today } from "@/lib/hub/util";
+import { useOpenQuestions } from "./BrainMessages";
 import { useShell, type Rec } from "./Shell";
 import { spring } from "./ui";
 
@@ -42,7 +43,7 @@ export default function Sidebar({ rail }: { rail: boolean }) {
   const t = today();
   const inbox = s.tasks.filter((x) => x.status === "inbox" && !x.archivedAt).length;
   const focus = s.tasks.filter((x) => isFocus(x, t)).length;
-  const counts: Record<string, number> = { "/inbox": inbox, "/tasks": focus };
+  const counts: Record<string, number> = { "/inbox": inbox, "/tasks": focus, "/brain": useOpenQuestions() };
   const areaXp = xpByArea(s.game.xp);
   const favs: { label: string; icon: Icon; rec?: Rec; href?: string }[] = [
     ...s.notes.filter((n) => n.pinned && !n.archivedAt).slice(0, 3).map((n) => ({ label: n.title, icon: PushPin, rec: { kind: "note" as const, id: n.id } })),

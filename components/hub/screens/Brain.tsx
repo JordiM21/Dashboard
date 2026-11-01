@@ -3,7 +3,8 @@
 /**
  * Brain: the dashboard's window onto the Markdown folder Claude reads. scripts/exportBrain.ts writes
  * the folder on Jordi's PC and copies it to Firestore (`hub_brain_files`, `hub_brain/status`), since
- * this page runs on Vercel and can't see the PC. Read-only: records are edited on their own screens.
+ * this page runs on Vercel and can't see the PC. Records are edited on their own screens; the only
+ * thing written from here is the conversation with Claude (BrainMessages).
  */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { collection, doc, onSnapshot } from "firebase/firestore";
@@ -14,6 +15,7 @@ import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/firebase/AuthContext";
 import { ago } from "@/lib/connections/ago";
 import { formatDateDMY } from "@/lib/hub/util";
+import BrainMessages from "../BrainMessages";
 import { Toolbar } from "../Shell";
 import { Empty, Fade, Segmented } from "../ui";
 
@@ -86,6 +88,8 @@ export default function Brain() {
   return (
     <Shell>
       <div className="bento">
+        <BrainMessages />
+
         <section className="card span-12">
           <div className="card-head">
             <span className="headline">Sync</span>

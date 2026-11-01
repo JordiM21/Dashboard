@@ -151,4 +151,7 @@ button, a, [role="checkbox"], summary, .task-row { touch-action: manipulation; }
   .brain-nav { position: static; max-height: none; }
   .brain-split[data-open="true"] > .brain-nav, .brain-split[data-open="false"] > .brain-view { display: none; }
   .brain-back { display: inline-flex; margin-bottom: 8px; }
+  .msgs-head, .msgs-scroll, .msgs-composer { padding-left: 12px; padding-right: 12px; }
+  .msg { max-width: 90%; }
+  .msgs-field textarea { font-size: 16px; }
 }

@@ -15,6 +15,7 @@ import { useHub } from "@/lib/hub/store";
 import { useLive } from "@/lib/hub/live";
 import * as A from "@/lib/hub/actions";
 import { levelFromXp, xpByArea } from "@/lib/hub/game";
+import { useOpenQuestions } from "./BrainMessages";
 import Dock, { usePlayer } from "./Dock";
 import { LevelRing } from "./game";
 import { AreaDot, Sheet, spring } from "./ui";
@@ -40,6 +41,7 @@ export function TabBar({ onMore, moreOpen }: { onMore: () => void; moreOpen: boo
   const path = usePathname() ?? "";
   const s = useHub();
   const inbox = s.tasks.filter((t) => t.status === "inbox" && !t.archivedAt).length;
+  const questions = useOpenQuestions();
   const onTab = TABS.some((t) => path.startsWith(t.href));
   const items = [...TABS.map((t) => ({ ...t, active: !moreOpen && path.startsWith(t.href) })), { href: "", label: "More", icon: DotsThreeCircle, active: moreOpen || !onTab }];
   return (
@@ -52,6 +54,7 @@ export function TabBar({ onMore, moreOpen }: { onMore: () => void; moreOpen: boo
             <span className="tab-icon">
               <I size={24} weight={t.active ? "fill" : "regular"} />
               {t.href === "/inbox" && inbox > 0 && <span className="tab-badge">{inbox}</span>}
+              {t.label === "More" && questions > 0 && <span className="tab-badge">{questions}</span>}
             </span>
             <span className="tab-label">{t.label}</span>
           </>
@@ -115,6 +118,7 @@ export function MoreSheet({ open, onClose, onSearch, onSettings }: { open: boole
   const router = useRouter();
   const path = usePathname() ?? "";
   const areaXp = xpByArea(s.game.xp);
+  const questions = useOpenQuestions();
   const areas = s.areas.filter((a) => a.active && !a.archivedAt).sort((a, b) => a.sort - b.sort);
   const go = (href: string) => {
     onClose();
@@ -135,7 +139,7 @@ export function MoreSheet({ open, onClose, onSearch, onSettings }: { open: boole
           return (
             <button key={m.href} className="more-tile" aria-current={on ? "page" : undefined} onClick={() => go(m.href)} data-sound="nav">
               <I size={26} weight={on ? "fill" : "duotone"} />
-              <span>{m.label}</span>
+              <span>{m.label}{m.href === "/brain" && questions > 0 ? ` (${questions})` : ""}</span>
             </button>
           );
         })}

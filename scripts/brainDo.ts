@@ -24,11 +24,16 @@ import { z } from "zod";
 import { getAdminDb } from "../lib/firebase/admin";
 import { makeTask } from "../lib/hub/seed";
 import { formatDateDMY, nowIso, today, uid } from "../lib/hub/util";
+import { MESSAGES, type BrainMessage } from "../lib/hub/brainMessages";
 import type { Area, Collection, Goal, Item, Note, Project, Task } from "../lib/hub/types";
 
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "use YYYY-MM-DD");
 const status = z.enum(["inbox", "next", "doing", "waiting", "done", "dropped"]);
 const priority = z.union([z.literal(1), z.literal(2), z.literal(3)]);
+const projectStatus = z.enum(["planned", "active", "paused", "done", "dropped"]);
+const goalMetric = z.enum(["mrr", "students", "revenue", "tasks", "manual"]);
+const horizon = z.enum(["week", "quarter", "year", "someday"]);
+const milestone = z.strictObject({ title: z.string().min(1), date: date.nullish(), done: z.boolean().optional() });
 
 const Op = z.discriminatedUnion("op", [
   z.strictObject({
@@ -55,8 +60,38 @@ const Op = z.discriminatedUnion("op", [
     op: z.literal("item.update"), item: z.string(), collection: z.string().optional(), title: z.string().min(1).optional(),
     values: z.record(z.string(), z.unknown()).optional(), tags: z.array(z.string()).optional(), link: z.string().optional(), description: z.string().optional(),
   }),
+  z.strictObject({
+    op: z.literal("project.add"), title: z.string().min(1), area: z.string().optional(), status: projectStatus.optional(),
+    start: date.nullish(), target: date.nullish(), outcome: z.string().optional(), description: z.string().optional(),
+    track: z.enum(["delivery", "growth"]).optional(), milestones: z.array(milestone).optional(),
+  }),
+  z.strictObject({
+    op: z.literal("project.update"), project: z.string(), title: z.string().min(1).optional(), area: z.string().optional(), status: projectStatus.optional(),
+    start: date.nullish(), target: date.nullish(), outcome: z.string().optional(), description: z.string().optional(),
+    track: z.enum(["delivery", "growth"]).optional(), milestones: z.array(milestone).optional(),
+  }),
+  z.strictObject({
+    op: z.literal("goal.add"), title: z.string().min(1), target: z.number(), area: z.string().optional(), metric: goalMetric.optional(),
+    horizon: horizon.optional(), start: z.number().optional(), unit: z.string().optional(), deadline: date.nullish(), pinned: z.boolean().optional(),
+    description: z.string().optional(), project: z.string().optional(),
+  }),
+  z.strictObject({
+    op: z.literal("goal.update"), goal: z.string(), title: z.string().min(1).optional(), target: z.number().optional(), area: z.string().optional(),
+    metric: goalMetric.optional(), horizon: horizon.optional(), start: z.number().optional(), unit: z.string().optional(), deadline: date.nullish(),
+    pinned: z.boolean().optional(), description: z.string().optional(), project: z.string().nullish(), archived: z.boolean().optional(),
+  }),
   z.strictObject({ op: z.literal("goal.log"), goal: z.string(), value: z.number(), date: date.optional() }),
   z.strictObject({ op: z.literal("student.note"), student: z.string(), text: z.string().min(1) }),
+  z.strictObject({
+    op: z.literal("message.ask"), text: z.string().min(1), about: z.string().optional(), student: z.string().optional(),
+    options: z.array(z.string().min(1)).max(4).optional(), source: z.string().optional(),
+  }),
+  z.strictObject({
+    op: z.literal("message.say"), text: z.string().min(1), about: z.string().optional(), student: z.string().optional(),
+    replyTo: z.string().optional(), source: z.string().optional(),
+  }),
+  z.strictObject({ op: z.literal("message.file"), message: z.string(), learned: z.string().min(1).optional() }),
+  z.strictObject({ op: z.literal("message.close"), message: z.string() }),
 ]);
 type Op = z.infer<typeof Op>;
 
@@ -94,10 +129,13 @@ async function main() {
 
   const db = getAdminDb();
   const load = async <T,>(c: string) => (await db.collection(c).get()).docs.map((d) => ({ ...d.data(), id: d.id }) as T);
-  const [areas, tasks, projects, notes, collections, items, goals, students] = await Promise.all([
+  const [areas, tasks, projects, notes, collections, items, goals, students, messages] = await Promise.all([
     load<Area>("hub_areas"), load<Task>("hub_tasks"), load<Project>("hub_projects"), load<Note>("hub_notes"),
     load<Collection>("hub_collections"), load<Item>("hub_items"), load<Goal>("hub_goals"), load<{ id: string; name: string; notes?: string | null }>("students"),
+    load<BrainMessage>(MESSAGES),
   ]);
+  const message = (ref: string) => find("message", messages, ref, (m) => m.text);
+  const studentId = (ref?: string) => (ref ? find("student", students, ref, (x) => x.name).id : undefined);
   // metrics/actions pull in the browser Firebase client, which needs the env loaded first.
   const { isItemDone, nextOccurrence } = await import("../lib/hub/actions");
 
@@ -206,6 +244,51 @@ async function main() {
         said.push(`Updated "${i.title}" in ${col?.name ?? "?"}`);
         break;
       }
+      case "project.add": {
+        const { op: _, area: a, milestones, ...rest } = op;
+        const pr: Project = {
+          id: uid(), createdAt: now, updatedAt: now, archivedAt: null, status: "active", start: today(), target: null, outcome: "", ...rest,
+          areaId: area(a) ?? "let", milestones: (milestones ?? []).map((m) => ({ id: uid(), title: m.title, date: m.date ?? null, done: m.done ?? false })),
+        };
+        put(projects, "hub_projects", pr);
+        said.push(`Created project "${pr.title}" in ${areaName(pr.areaId)} [${pr.status}]${pr.target ? `, target ${formatDateDMY(pr.target)}` : ""} (${pr.id})`);
+        break;
+      }
+      case "project.update": {
+        const pr = project(op.project);
+        const { op: _, project: __, area: a, milestones, ...rest } = op;
+        const patch: Partial<Project> = Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined));
+        if (a) patch.areaId = area(a);
+        if (milestones) patch.milestones = milestones.map((m) => ({ id: pr.milestones.find((x) => x.title === m.title)?.id ?? uid(), title: m.title, date: m.date ?? null, done: m.done ?? false }));
+        put(projects, "hub_projects", { ...pr, ...patch, updatedAt: now });
+        said.push(`Updated project "${pr.title}": ${Object.keys(patch).join(", ")}`);
+        break;
+      }
+      case "goal.add": {
+        const { op: _, area: a, project: p, ...rest } = op;
+        const g: Goal = {
+          id: uid(), createdAt: now, updatedAt: now, archivedAt: null, horizon: "quarter", metric: "manual", start: 0, unit: "", deadline: null, pinned: false, log: [],
+          ...Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined)), title: op.title, target: op.target,
+          areaId: area(a) ?? "let", ...(p ? { projectId: project(p).id } : {}),
+        };
+        put(goals, "hub_goals", g);
+        said.push(`Created goal "${g.title}" (${g.metric}, target ${g.target}${g.unit ? ` ${g.unit}` : ""}${g.deadline ? ` by ${formatDateDMY(g.deadline)}` : ""}${g.pinned ? ", pinned" : ""}) (${g.id})`);
+        break;
+      }
+      case "goal.update": {
+        // Archived goals stay findable here so they can be restored.
+        const all = goals.map((x) => ({ ...x, archivedAt: null }));
+        const found = find("goal", all, op.goal, (x) => x.title);
+        const g = goals.find((x) => x.id === found.id)!;
+        const { op: _, goal: __, area: a, project: p, archived, ...rest } = op;
+        const patch: Partial<Goal> = Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined));
+        if (a) patch.areaId = area(a);
+        if (p !== undefined) patch.projectId = p === null ? null : project(p).id;
+        if (archived !== undefined) patch.archivedAt = archived ? now : null;
+        put(goals, "hub_goals", { ...g, ...patch, updatedAt: now });
+        said.push(`Updated goal "${g.title}": ${[...Object.keys(patch)].join(", ")}`);
+        break;
+      }
       case "goal.log": {
         const g = find("goal", goals, op.goal, (x) => x.title);
         if (g.metric !== "manual") throw new Error(`Goal "${g.title}" is measured automatically (${g.metric}); only manual goals take logged values.`);
@@ -220,6 +303,27 @@ async function main() {
         s.notes = notes;
         writes.push(["students", s.id, { notes, updatedAt: FieldValue.serverTimestamp() }]);
         said.push(`Added a note to student ${s.name}`);
+        break;
+      }
+      case "message.ask":
+      case "message.say": {
+        const { op: kind, student, ...rest } = op;
+        const m: BrainMessage = { id: uid(), from: "claude", at: now, ...rest, ...(kind === "message.ask" ? { ask: true } : {}), ...(student ? { student: studentId(student) } : {}) };
+        put(messages, MESSAGES, m);
+        said.push(`${kind === "message.ask" ? "Asked" : "Told"} Jordi: "${m.text.slice(0, 80)}" (${m.id})`);
+        break;
+      }
+      case "message.file": {
+        const m = message(op.message);
+        if (m.from !== "jordi") throw new Error(`Message ${m.id} is Claude's; only Jordi's messages get filed. Use message.close to withdraw a question.`);
+        put(messages, MESSAGES, { ...m, readAt: now, ...(op.learned ? { learned: op.learned } : {}) });
+        said.push(`Filed Jordi's message "${m.text.slice(0, 60)}"${op.learned ? ` → learned: ${op.learned}` : ""}`);
+        break;
+      }
+      case "message.close": {
+        const m = message(op.message);
+        put(messages, MESSAGES, { ...m, closedAt: now });
+        said.push(`Closed question "${m.text.slice(0, 60)}"`);
         break;
       }
     }
