@@ -22,7 +22,7 @@ import type { GroupStatus } from "@/lib/hub/types";
 import type { CurriculumLevelDoc, GroupDoc } from "@/lib/types";
 import { Toolbar, useShell } from "../Shell";
 import { StudentBody } from "../Inspector";
-import { Avatar, Fade, Kpi, Progress, Segmented, Empty, spring, useDropdown } from "../ui";
+import { Select, Avatar, Fade, Kpi, Progress, Segmented, Empty, spring, useDropdown } from "../ui";
 
 type Tab = "students" | "groups" | "curriculum";
 
@@ -96,7 +96,7 @@ function Academy() {
               </div>
             </div>
             <p className="caption muted" style={{ margin: "14px 0 0" }}>
-              Fill the {free} free seats before opening a new group. Scaling ads past {need} enrolments needs {Math.max(0, hoursAtTarget() - Math.round(nowH))} more teaching hours a week. Kommo lead counts arrive in Phase 3.
+              {free} seats left to fill. Scaling ads past {need} enrolments needs {Math.max(0, hoursAtTarget() - Math.round(nowH))} more teaching hours a week. Kommo lead counts arrive in Phase 3.
             </p>
           </div>
         </section>
@@ -199,11 +199,11 @@ function GroupCard({ g, selected, onOpen }: { g: GroupDoc; selected: boolean; on
         <button className="headline grow" style={{ textAlign: "left" }} onClick={onOpen}>
           {g.name}
         </button>
-        <select className="select" style={{ width: 100 }} aria-label={`${g.name} status`} value={groupStatus(s, g.id)} onChange={(e) => A.setGroupMeta(g.id, { status: e.target.value as GroupStatus })}>
+        <Select className="select" style={{ width: 124 }} aria-label={`${g.name} status`} value={groupStatus(s, g.id)} onChange={(e) => A.setGroupMeta(g.id, { status: e.target.value as GroupStatus })}>
           <option value="filling">Filling</option>
           <option value="running">Running</option>
           <option value="closed">Closed</option>
-        </select>
+        </Select>
       </div>
       <button className="row callout" style={{ textAlign: "left", gap: 6, color: when ? undefined : "var(--warning-ink)" }} aria-expanded={editing} onClick={() => setEditing(!editing)}>
         <Clock size={14} className="faint" />
@@ -223,27 +223,27 @@ function GroupCard({ g, selected, onOpen }: { g: GroupDoc; selected: boolean; on
             })}
           </div>
           <div className="row">
-            <input className="input" type="time" style={{ width: 110 }} aria-label="Start time" disabled={!slots.length} value={first.start} onChange={(e) => e.target.value && A.setGroupMeta(g.id, { slots: slots.map((x) => ({ ...x, start: e.target.value })) })} />
+            <input className="input" type="time" style={{ width: 130 }} aria-label="Start time" disabled={!slots.length} value={first.start} onChange={(e) => e.target.value && A.setGroupMeta(g.id, { slots: slots.map((x) => ({ ...x, start: e.target.value })) })} />
             <input className="input" type="number" min={15} step={15} style={{ width: 80 }} aria-label="Minutes" disabled={!slots.length} value={first.minutes} onChange={(e) => A.setGroupMeta(g.id, { slots: slots.map((x) => ({ ...x, minutes: Number(e.target.value) || 60 })) })} />
             <span className="caption muted">min</span>
           </div>
         </div>
       )}
       <div className="row">
-        <select className="select grow" style={{ minWidth: 0 }} aria-label={`${g.name} level`} value={meta.level ?? ""} onChange={(e) => A.setGroupMeta(g.id, { level: e.target.value })}>
+        <Select className="select grow" style={{ minWidth: 0 }} aria-label={`${g.name} level`} value={meta.level ?? ""} onChange={(e) => A.setGroupMeta(g.id, { level: e.target.value })}>
           <option value="">Any level</option>
           {LEVELS.map((x) => (
             <option key={x}>{x}</option>
           ))}
-        </select>
-        <select className="select grow" style={{ minWidth: 0 }} aria-label={`${g.name} age band`} value={meta.ageBand ?? ""} onChange={(e) => A.setGroupMeta(g.id, { ageBand: e.target.value })}>
+        </Select>
+        <Select className="select grow" style={{ minWidth: 0 }} aria-label={`${g.name} age band`} value={meta.ageBand ?? ""} onChange={(e) => A.setGroupMeta(g.id, { ageBand: e.target.value })}>
           <option value="">Any age</option>
           {AGE_BANDS.map((x) => (
             <option key={x} value={x}>
               Age {x}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
       <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
         {mem.map((x) => (
@@ -373,14 +373,14 @@ function Groups({ groupId }: { groupId?: string }) {
         <div className="headline">Schedule</div>
         {slots.map((sl, i) => (
           <div key={i} className="row">
-            <select className="select" style={{ width: 90 }} value={sl.day} onChange={(e) => A.setGroupMeta(g.id, { slots: slots.map((x, j) => (j === i ? { ...x, day: Number(e.target.value) } : x)) })}>
+            <Select className="select" style={{ width: 90 }} value={sl.day} onChange={(e) => A.setGroupMeta(g.id, { slots: slots.map((x, j) => (j === i ? { ...x, day: Number(e.target.value) } : x)) })}>
               {DAYS.map((d, n) => (
                 <option key={d} value={n}>
                   {d}
                 </option>
               ))}
-            </select>
-            <input className="input" type="time" style={{ width: 110 }} value={sl.start} onChange={(e) => A.setGroupMeta(g.id, { slots: slots.map((x, j) => (j === i ? { ...x, start: e.target.value } : x)) })} />
+            </Select>
+            <input className="input" type="time" style={{ width: 130 }} value={sl.start} onChange={(e) => A.setGroupMeta(g.id, { slots: slots.map((x, j) => (j === i ? { ...x, start: e.target.value } : x)) })} />
             <input className="input" type="number" style={{ width: 80 }} value={sl.minutes} onChange={(e) => A.setGroupMeta(g.id, { slots: slots.map((x, j) => (j === i ? { ...x, minutes: Number(e.target.value) } : x)) })} aria-label="Minutes" />
             <span className="caption muted">min</span>
             <button className="icon-btn" aria-label="Remove slot" onClick={() => A.setGroupMeta(g.id, { slots: slots.filter((_, j) => j !== i) })}>

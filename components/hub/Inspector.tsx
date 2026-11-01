@@ -15,7 +15,7 @@ import { lifecycle, members, price, tenureMonths, goalProgress } from "@/lib/hub
 import { studentPaymentStatus, PAYMENT_STATUS_LABEL } from "@/lib/studentStatus";
 import { formatDateDMY, money, nowIso, relDay, uid, today, hhmm } from "@/lib/hub/util";
 import type { Collection, FieldDef, Goal, Item, Note, Task, TaskStatus } from "@/lib/hub/types";
-import { Avatar, Check, Progress, Segmented, spring, useSheetDrag } from "./ui";
+import { Select, Avatar, Check, Progress, Segmented, spring, useSheetDrag } from "./ui";
 import { CoverPicker, IconPicker, TagInput, useAllTags } from "./Customize";
 import type { Rec } from "./Shell";
 import { StudentLink } from "./screens/Finance";
@@ -119,22 +119,22 @@ function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
         )}
         <div className="prop-grid">
           <span>Area</span>
-          <select className="select" value={t.areaId} onChange={(e) => up({ areaId: e.target.value })}>
+          <Select className="select" value={t.areaId} onChange={(e) => up({ areaId: e.target.value })}>
             {s.areas.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
               </option>
             ))}
-          </select>
+          </Select>
           <span>Project</span>
-          <select className="select" value={t.projectId ?? ""} onChange={(e) => up({ projectId: e.target.value || null })}>
+          <Select className="select" value={t.projectId ?? ""} onChange={(e) => up({ projectId: e.target.value || null })}>
             <option value="">None</option>
             {s.projects.filter((p) => !p.archivedAt).map((p) => (
               <option key={p.id} value={p.id}>
                 {p.title}
               </option>
             ))}
-          </select>
+          </Select>
           <span>Priority</span>
           <Segmented label="Priority" size="sm" value={String(t.priority)} onChange={(v) => up({ priority: Number(v) as 1 | 2 | 3 })} options={[{ value: "1", label: "P1" }, { value: "2", label: "P2" }, { value: "3", label: "P3" }]} />
           <span>Scheduled</span>
@@ -147,7 +147,7 @@ function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
             <span className="callout muted">minutes</span>
           </div>
           <span>Repeats</span>
-          <select
+          <Select
             className="select"
             value={t.recurrence ? (t.recurrence.kind === "after" ? `after:${t.recurrence.n}` : t.recurrence.kind) : ""}
             onChange={(e) => {
@@ -161,7 +161,7 @@ function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
             <option value="monthly">Monthly</option>
             <option value="after:3">3 days after completion</option>
             <option value="after:7">7 days after completion</option>
-          </select>
+          </Select>
           {t.recurrence?.kind === "weekly" && (
             <>
               <span>On</span>
@@ -178,23 +178,23 @@ function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
             </>
           )}
           <span>Student</span>
-          <select className="select" value={t.studentId ?? ""} onChange={(e) => up({ studentId: e.target.value || null })}>
+          <Select className="select" value={t.studentId ?? ""} onChange={(e) => up({ studentId: e.target.value || null })}>
             <option value="">None</option>
             {live.students.map((x) => (
               <option key={x.id} value={x.id}>
                 {x.name}
               </option>
             ))}
-          </select>
+          </Select>
           <span>Group</span>
-          <select className="select" value={t.groupId ?? ""} onChange={(e) => up({ groupId: e.target.value || null })}>
+          <Select className="select" value={t.groupId ?? ""} onChange={(e) => up({ groupId: e.target.value || null })}>
             <option value="">None</option>
             {live.groups.map((g) => (
               <option key={g.id} value={g.id}>
                 {g.name}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
 
         <section>
@@ -303,13 +303,13 @@ export function StudentBody({ id }: { id: string }) {
         </div>
         <div className="prop-grid">
           <span>Lifecycle</span>
-          <select className="select" value={lc} onChange={(e) => A.setStudentMeta(id, { lifecycle: e.target.value as any, churnedAt: ["churned", "alumni"].includes(e.target.value) ? today() : null })}>
+          <Select className="select" value={lc} onChange={(e) => A.setStudentMeta(id, { lifecycle: e.target.value as any, churnedAt: ["churned", "alumni"].includes(e.target.value) ? today() : null })}>
             {["lead", "trial", "active", "paused", "alumni", "churned"].map((x) => (
               <option key={x} value={x}>
                 {x[0].toUpperCase() + x.slice(1)}
               </option>
             ))}
-          </select>
+          </Select>
           <span>Price paid</span>
           <span>
             ${price(st)}/mo {price(st) < 50 && <span className="chip accent">Discount</span>}
@@ -424,22 +424,22 @@ function NotePanel({ id, onClose }: { id: string; onClose: () => void }) {
           <span>Type</span>
           <Segmented label="Type" size="sm" value={n.type} onChange={(v) => up({ type: v })} options={[{ value: "doc", label: "Doc" }, { value: "plan", label: "Plan" }, { value: "meeting", label: "Meeting" }, { value: "reference", label: "Ref" }]} />
           <span>Area</span>
-          <select className="select" value={n.areaId} onChange={(e) => up({ areaId: e.target.value })}>
+          <Select className="select" value={n.areaId} onChange={(e) => up({ areaId: e.target.value })}>
             {s.areas.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
               </option>
             ))}
-          </select>
+          </Select>
           <span>Project</span>
-          <select className="select" value={n.projectId ?? ""} onChange={(e) => up({ projectId: e.target.value || null })}>
+          <Select className="select" value={n.projectId ?? ""} onChange={(e) => up({ projectId: e.target.value || null })}>
             <option value="">None</option>
             {s.projects.filter((p) => !p.archivedAt).map((p) => (
               <option key={p.id} value={p.id}>
                 {p.title}
               </option>
             ))}
-          </select>
+          </Select>
           <span>Link</span>
           <div className="row">
             <input className="input" value={n.link ?? ""} onChange={(e) => up({ link: e.target.value })} placeholder="obsidian://… or https://…" />
@@ -476,12 +476,12 @@ export function FieldInput({ f, value, onChange }: { f: FieldDef; value: unknown
       return <Check square checked={!!value} label={f.label} onChange={() => onChange(!value)} />;
     case "select":
       return (
-        <select className="select" value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value)}>
+        <Select className="select" value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value)}>
           <option value="">—</option>
           {f.options?.map((o) => (
             <option key={o}>{o}</option>
           ))}
-        </select>
+        </Select>
       );
     case "multiselect": {
       const arr = (value as string[]) ?? [];
@@ -600,13 +600,13 @@ function GoalPanel({ id, onClose }: { id: string; onClose: () => void }) {
         )}
         <div className="prop-grid">
           <span>Area</span>
-          <select className="select" value={g.areaId} onChange={(e) => up({ areaId: e.target.value })}>
+          <Select className="select" value={g.areaId} onChange={(e) => up({ areaId: e.target.value })}>
             {s.areas.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
               </option>
             ))}
-          </select>
+          </Select>
           <span>Horizon</span>
           <Segmented label="Horizon" size="sm" value={g.horizon} onChange={(v) => up({ horizon: v })} options={[{ value: "week", label: "Week" }, { value: "quarter", label: "Quarter" }, { value: "year", label: "Year" }, { value: "someday", label: "Someday" }]} />
           {someday ? (
@@ -616,48 +616,48 @@ function GoalPanel({ id, onClose }: { id: string; onClose: () => void }) {
               <span>Budget</span>
               <input className="input" type="number" value={g.budget ?? ""} onChange={(e) => up({ budget: e.target.value ? Number(e.target.value) : null })} />
               <span>Status</span>
-              <select className="select" value={g.planStatus ?? "idea"} onChange={(e) => up({ planStatus: e.target.value as Goal["planStatus"] })}>
+              <Select className="select" value={g.planStatus ?? "idea"} onChange={(e) => up({ planStatus: e.target.value as Goal["planStatus"] })}>
                 <option value="idea">Idea</option>
                 <option value="saving">Saving</option>
                 <option value="booked">Booked</option>
                 <option value="done">Done</option>
-              </select>
+              </Select>
             </>
           ) : (
             <>
               <span>Source</span>
-              <select className="select" value={g.metric} onChange={(e) => up({ metric: e.target.value as Goal["metric"] })}>
+              <Select className="select" value={g.metric} onChange={(e) => up({ metric: e.target.value as Goal["metric"] })}>
                 <option value="mrr">Stripe · MRR</option>
                 <option value="students">Stripe · paying students</option>
                 <option value="revenue">Stripe · revenue this month</option>
                 <option value="tasks">Tasks done in a project</option>
                 <option value="collection">Collection items done</option>
                 <option value="manual">Manual entry</option>
-              </select>
+              </Select>
               {g.metric === "tasks" && (
                 <>
                   <span>Project</span>
-                  <select className="select" value={g.projectId ?? ""} onChange={(e) => up({ projectId: e.target.value || null })}>
+                  <Select className="select" value={g.projectId ?? ""} onChange={(e) => up({ projectId: e.target.value || null })}>
                     <option value="">—</option>
                     {s.projects.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.title}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </>
               )}
               {g.metric === "collection" && (
                 <>
                   <span>Collection</span>
-                  <select className="select" value={g.collectionId ?? ""} onChange={(e) => up({ collectionId: e.target.value || null })}>
+                  <Select className="select" value={g.collectionId ?? ""} onChange={(e) => up({ collectionId: e.target.value || null })}>
                     <option value="">—</option>
                     {s.collections.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </>
               )}
               {g.metric !== "tasks" && (

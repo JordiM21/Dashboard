@@ -15,7 +15,7 @@ import type { Field } from "@/lib/connections/flows/types";
 import type { RunLog } from "@/lib/connections/types";
 import { toast } from "@/lib/hub/fx";
 import { Toolbar } from "../Shell";
-import { Empty, Fade, Segmented, Sheet } from "../ui";
+import { Select, Empty, Fade, Segmented, Sheet } from "../ui";
 
 type FlowMeta = { type: string; label: string; description: string; needs: string[]; steps: string[]; fields: Field[]; defaults: Record<string, unknown>; actions: { job: string; label: string }[] };
 type Conn = { id: string; name: string; type: string; enabled: boolean; config: Record<string, unknown>; secrets: Record<string, string>; last: RunLog | null };
@@ -363,14 +363,14 @@ function ConnectionForm({ flow, existing, onSaved, onCreated }: { flow: FlowMeta
               <pre className="tile mono" style={{ whiteSpace: "pre-wrap", margin: 0 }}>{render(values[f.key], SAMPLE)}</pre>
             </>
           ) : f.detect && stages.length ? (
-            <select id={`f-${f.key}`} className="select" value={values[f.key]} onChange={(e) => set(f.key, e.target.value)}>
+            <Select id={`f-${f.key}`} className="select" value={values[f.key]} onChange={(e) => set(f.key, e.target.value)}>
               <option value="">Choose a stage…</option>
               {stages.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.label}
                 </option>
               ))}
-            </select>
+            </Select>
           ) : (
             <input id={`f-${f.key}`} className="input" value={values[f.key]} onChange={(e) => set(f.key, e.target.value)} />
           )}

@@ -12,7 +12,7 @@ import { authFetch } from "@/lib/firebase/authFetch";
 import { toast } from "@/lib/hub/fx";
 import { Toolbar, useShell } from "../Shell";
 import { PillBars } from "./Goals";
-import { Empty, Fade, Kpi, Money, Segmented, Sheet, useDropdown, Check } from "../ui";
+import { Select, Empty, Fade, Kpi, Money, Segmented, Sheet, useDropdown, Check } from "../ui";
 
 export default function Finance() {
   const s = useHub();
@@ -261,7 +261,7 @@ export function StudentLink({ txId, studentId }: { txId: string; studentId?: str
     if (!r?.ok) toast("Couldn't link the student", { tone: "danger" });
   };
   return (
-    <select className="input" style={{ height: 30, padding: "0 8px", width: "auto" }} value={studentId ?? ""} disabled={busy} onChange={(e) => set(e.target.value)} aria-label="Linked student">
+    <Select className="select" style={{ height: 30, width: "auto" }} value={studentId ?? ""} disabled={busy} onChange={(e) => set(e.target.value)} aria-label="Linked student">
       <option value="">Not linked</option>
       {[...live.students]
         .sort((a, b) => a.name.localeCompare(b.name))
@@ -270,7 +270,7 @@ export function StudentLink({ txId, studentId }: { txId: string; studentId?: str
             {x.name}
           </option>
         ))}
-    </select>
+    </Select>
   );
 }
 

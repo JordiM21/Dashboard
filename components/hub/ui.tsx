@@ -1,10 +1,10 @@
 "use client";
 
 /** Work-layer primitives (Design Guide §7). */
-import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Children, createContext, isValidElement, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type ComponentProps, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import { AnimatePresence, motion, useDragControls } from "motion/react";
 import {
-  BookOpen, Books, CalendarHeart, Check as CheckIcon, Folder, GameController, Gift, GraduationCap, Heart, House, MapPin, Target, User, Star, Briefcase, Airplane, Barbell, MusicNotes, Camera, Code, Plant, PawPrint,
+  BookOpen, Books, CalendarHeart, CaretDown, Check as CheckIcon, Folder, GameController, Gift, GraduationCap, Heart, House, MapPin, Target, User, Star, Briefcase, Airplane, Barbell, MusicNotes, Camera, Code, Plant, PawPrint,
   Lightning, Rocket, Trophy, Coffee, Brain, Palette, Leaf, Sun, Moon, Car, Bicycle, ShoppingCart, Wallet, PiggyBank, ChartLine, Megaphone, ChatCircle, Envelope, Calendar, Clock, FilmSlate, Television, Headphones, Book, Pencil, Lightbulb, Flag, Sparkle, Globe, Mountains, Tree, Dog, Cat, Cake, Basketball, SoccerBall, Sword, Shield, Crown, Diamond, Key, Wrench, Hammer, PaintBrush, Flask, Atom, Laptop, DeviceMobile, Users, Baby, Bed, ForkKnife, Kanban, Note,
   type Icon as PhIcon,
 } from "@phosphor-icons/react";
@@ -200,6 +200,7 @@ export interface MenuItem {
   sep?: boolean;
   danger?: boolean;
   hint?: string;
+  checked?: boolean;
 }
 
 const MenuCtx = createContext<(e: { clientX: number; clientY: number; preventDefault: () => void }, items: MenuItem[]) => void>(() => {});
@@ -215,7 +216,7 @@ export function MenuProvider({ children }: { children: ReactNode }) {
     window.addEventListener("pointerdown", close);
     window.addEventListener("keydown", key);
     window.addEventListener("blur", close);
-    ref.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    (ref.current?.querySelector<HTMLButtonElement>("[data-checked]") ?? ref.current?.querySelector<HTMLButtonElement>("button"))?.focus();
     return () => {
       window.removeEventListener("pointerdown", close);
       window.removeEventListener("keydown", key);
@@ -265,6 +266,7 @@ export function MenuProvider({ children }: { children: ReactNode }) {
                     key={i}
                     role="menuitem"
                     className={`menu-item ${it.danger ? "btn-danger" : ""}`}
+                    data-checked={it.checked || undefined}
                     onClick={() => {
                       setMenu(null);
                       it.onClick?.();
@@ -273,6 +275,7 @@ export function MenuProvider({ children }: { children: ReactNode }) {
                     {it.icon}
                     <span className="grow">{it.label}</span>
                     {it.hint && <span className="faint caption">{it.hint}</span>}
+                    {it.checked && <CheckIcon size={14} />}
                   </button>
                 )
               )}
@@ -292,6 +295,24 @@ export function useDropdown() {
     e.stopPropagation();
     open({ clientX: r.left, clientY: r.bottom + 6, preventDefault: () => {} }, items);
   };
+}
+
+/** Drop-in for <select>: same <option> children and onChange shape, but opens our own menu instead of the browser's list. */
+export function Select({ value, onChange, children, ...rest }: Omit<ComponentProps<"button">, "value" | "onChange"> & { value?: string | number | null; onChange: (e: { target: { value: string } }) => void }) {
+  const drop = useDropdown();
+  const current = String(value ?? "");
+  const options = Children.toArray(children)
+    .filter((o): o is ReactElement => isValidElement(o))
+    .map((o) => {
+      const label = Children.toArray(o.props.children).join("");
+      return { value: String(o.props.value ?? label), label };
+    });
+  return (
+    <button type="button" aria-haspopup="menu" {...rest} onClick={(e) => drop(e, options.map((o) => ({ label: o.label, checked: o.value === current, onClick: () => o.value !== current && onChange({ target: { value: o.value } }) })))}>
+      <span className="grow truncate">{options.find((o) => o.value === current)?.label}</span>
+      <CaretDown size={12} style={{ flex: "none" }} />
+    </button>
+  );
 }
 
 /* ---------------------------------------------------------------- sheet */

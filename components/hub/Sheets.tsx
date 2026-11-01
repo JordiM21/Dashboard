@@ -10,7 +10,7 @@ import * as A from "@/lib/hub/actions";
 import { isFocus, XP } from "@/lib/hub/game";
 import { demoSeed } from "@/lib/hub/seed";
 import { addDays, isEvening, relDay, today, weekStart } from "@/lib/hub/util";
-import { Segmented, Sheet } from "./ui";
+import { Select, Segmented, Sheet } from "./ui";
 import { CaretDown, CaretUp, Plus } from "@phosphor-icons/react";
 import { bindings, comboOf, KEY_ACTIONS, prettyCombo } from "@/lib/hub/keys";
 import { sfx } from "@/lib/hub/sound";
@@ -161,13 +161,13 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
               <span>Game layer</span>
               <Segmented label="Game layer" size="sm" value={s.settings.game} onChange={(v) => A.setSettings({ game: v })} options={[{ value: "full", label: "Full" }, { value: "subtle", label: "Subtle" }, { value: "off", label: "Off" }]} />
               <span>Rest day</span>
-              <select className="select" style={{ width: 200 }} value={s.settings.restDay} onChange={(e) => A.setSettings({ restDay: Number(e.target.value) })}>
+              <Select className="select" style={{ width: 200 }} value={s.settings.restDay} onChange={(e) => A.setSettings({ restDay: Number(e.target.value) })}>
                 {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((d, i) => (
                   <option key={d} value={i}>
                     {d}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
             <p className="caption muted" style={{ margin: 0 }}>
               Subtle drops confetti and bursts. Off hides the Dock and every reward — the app still works the same.

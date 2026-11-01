@@ -13,7 +13,7 @@ import { formatDateDMY, uid, today } from "@/lib/hub/util";
 import type { Milestone, Project as P } from "@/lib/hub/types";
 import { Toolbar, useShell } from "../Shell";
 import TaskRow, { projectColor, rowMotion } from "../TaskRow";
-import { Check, Fade, Segmented, useDropdown, Empty } from "../ui";
+import { Select, Check, Fade, Segmented, useDropdown, Empty } from "../ui";
 import { CoverPicker, IconPicker } from "../Customize";
 
 export default function Project() {
@@ -58,13 +58,13 @@ export default function Project() {
           {!p.cover && <CoverPicker value={undefined} onChange={(cover) => up({ cover })} />}
           <span className="chip chip-area" style={{ "--c": area?.color } as CSSProperties}>
             <span className="dot" style={{ "--c": area?.color } as CSSProperties} />
-            <select className="input-bare caption" value={p.areaId} onChange={(e) => up({ areaId: e.target.value })} aria-label="Area">
+            <Select className="input-bare caption" style={{ width: "auto", gap: 4 }} value={p.areaId} onChange={(e) => up({ areaId: e.target.value })} aria-label="Area">
               {s.areas.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </span>
           <Segmented label="Project status" size="sm" value={p.status} onChange={(v) => up({ status: v })} options={(["planned", "active", "paused", "done", "dropped"] as const).map((v) => ({ value: v, label: v[0].toUpperCase() + v.slice(1) }))} />
           <span className="spacer" />

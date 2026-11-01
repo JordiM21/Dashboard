@@ -11,7 +11,7 @@ import { useHub } from "@/lib/hub/store";
 import * as A from "@/lib/hub/actions";
 import type { Collection, FieldDef, FieldType, Item } from "@/lib/hub/types";
 import { useShell } from "../Shell";
-import { Empty, IconByName, ICONS, Segmented, Sheet, Check } from "../ui";
+import { Select, Empty, IconByName, ICONS, Segmented, Sheet, Check } from "../ui";
 import { CoverPicker, IconPicker, coverCss } from "../Customize";
 
 export function CollectionView({ c, onBack }: { c: Collection; onBack: () => void }) {
@@ -206,13 +206,13 @@ export function NewCollection({ open, onClose, onCreated, edit }: { open: boolea
         </label>
         <label className="field">
           <span>Area</span>
-          <select className="select" value={areaId} onChange={(e) => setAreaId(e.target.value)}>
+          <Select className="select" value={areaId} onChange={(e) => setAreaId(e.target.value)}>
             {s.areas.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       </div>
       <div className="field">
@@ -230,11 +230,11 @@ export function NewCollection({ open, onClose, onCreated, edit }: { open: boolea
         {fields.map((f, i) => (
           <div key={i} className="row">
             <input className="input" placeholder="Field name" value={f.label} onChange={(e) => setFields(fields.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} />
-            <select className="select" style={{ width: 140 }} value={f.type} onChange={(e) => setFields(fields.map((x, j) => (j === i ? { ...x, type: e.target.value as FieldType } : x)))}>
+            <Select className="select" style={{ width: 140 }} value={f.type} onChange={(e) => setFields(fields.map((x, j) => (j === i ? { ...x, type: e.target.value as FieldType } : x)))}>
               {TYPES.map((t) => (
                 <option key={t}>{t}</option>
               ))}
-            </select>
+            </Select>
             {(f.type === "select" || f.type === "multiselect") && <input className="input" placeholder="Options, comma separated" value={f.opts ?? ""} onChange={(e) => setFields(fields.map((x, j) => (j === i ? { ...x, opts: e.target.value } : x)))} />}
             <button className="icon-btn" aria-label="Remove field" onClick={() => setFields(fields.filter((_, j) => j !== i))}>
               <X size={14} />
