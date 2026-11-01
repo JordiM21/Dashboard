@@ -1,29 +1,30 @@
 "use client";
 
 /**
- * Academy (§5.5): capacity strip is the focal point; students (payments,
- * parents), groups (members, schedule, seats) and the curriculum board.
+ * Academy (§5.5): the group board is the focal point; students (payments,
+ * parents), groups (members, schedule) and the curriculum board.
  * Groups and curriculum are deliberately separate: planning which lesson a
  * group does lives in the Keeds app.
  */
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { MagnifyingGlass, Plus, X, UsersThree, DotsThree, DotsSixVertical } from "@phosphor-icons/react";
+import { motion } from "motion/react";
+import { Clock, MagnifyingGlass, PencilSimple, Plus, X, UsersThree, DotsThree, DotsSixVertical } from "@phosphor-icons/react";
 import { useHub } from "@/lib/hub/store";
 import { useLive } from "@/lib/hub/live";
 import * as A from "@/lib/hub/actions";
-import { capacity, currentTeachingHours, freeSeats, hoursAtTarget, lifecycle, members, mrr, PRICE, studentsToTarget, tenureMonths, payingStudents, CAPACITY, type Lifecycle } from "@/lib/hub/metrics";
+import { capacity, currentTeachingHours, DAYS, freeSeats, groupStatus, hoursAtTarget, lifecycle, members, mrr, PRICE, scheduleLabel, seatsNeeded, studentsToTarget, tenureMonths, payingStudents, CAPACITY, type Lifecycle } from "@/lib/hub/metrics";
 import { studentPaymentStatus, PAYMENT_STATUS_LABEL } from "@/lib/studentStatus";
 import { monthKey } from "@/lib/hub/util";
 import { toast } from "@/lib/hub/fx";
 import { authFetch } from "@/lib/firebase/authFetch";
-import type { CurriculumLevelDoc } from "@/lib/types";
+import type { GroupStatus } from "@/lib/hub/types";
+import type { CurriculumLevelDoc, GroupDoc } from "@/lib/types";
 import { Toolbar, useShell } from "../Shell";
 import { StudentBody } from "../Inspector";
-import { Avatar, Fade, Kpi, Progress, Segmented, Empty, useDropdown } from "../ui";
+import { Avatar, Fade, Kpi, Progress, Segmented, Empty, spring, useDropdown } from "../ui";
 
 type Tab = "students" | "groups" | "curriculum";
-const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export default function AcademyPage() {
   return (
@@ -66,31 +67,7 @@ function Academy() {
             <span className="display-l">{free}</span>
             <span className="callout muted">free seats · ${free * PRICE} MRR waiting to be filled</span>
           </div>
-          <div className="grid-cards" style={{ gridTemplateColumns: `repeat(${Math.min(Math.max(live.groups.length, 1), 6)}, minmax(0, 1fr))`, paddingTop: 0 }}>
-            {live.groups.map((g) => {
-              const mem = members(g, live.students);
-              const cap = capacity(s, g.id);
-              const late = mem.filter((x) => studentPaymentStatus(x.nextPayment) === "late").length;
-              return (
-                <button key={g.id} className="card hoverable col" style={{ textAlign: "left", gap: 10, ...(groupId === g.id && tab === "groups" ? { boxShadow: "0 0 0 2px var(--accent)" } : {}) }} onClick={() => (setGroupId(g.id), router.replace(`/academy?tab=groups&group=${g.id}`, { scroll: false }))}>
-                  <div className="row">
-                    <span className="headline grow">{g.name}</span>
-                  </div>
-                  <div className="row" style={{ gap: 5 }} aria-label={`${mem.length} of ${cap} seats`}>
-                    {Array.from({ length: cap }, (_, i) => (
-                      <span key={i} className="seat" data-on={i < mem.length} />
-                    ))}
-                    <span className="caption muted" style={{ marginLeft: 4 }}>
-                      {mem.length}/{cap}
-                    </span>
-                  </div>
-                  <span className="callout muted truncate">
-                    ${mem.length * PRICE}/mo{late ? ` · ${late} late` : ""}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          <GroupBoard selected={tab === "groups" ? groupId : null} onOpen={(id) => (setGroupId(id), router.replace(`/academy?tab=groups&group=${id}`, { scroll: false }))} />
           <div className="card" style={{ marginTop: 16 }}>
             <div className="bento" style={{ gap: 24 }}>
               <div className="span-3">
@@ -108,7 +85,7 @@ function Academy() {
               <div className="span-3">
                 <Kpi label="Groups needed at target">
                   <span className="display-l">{Math.ceil(1500 / PRICE / CAPACITY)}</span>
-                  <span className="callout muted">have {live.groups.length}</span>
+                  <span className="callout muted">have {live.groups.filter((g) => groupStatus(s, g.id) !== "closed").length}</span>
                 </Kpi>
               </div>
               <div className="span-3">
@@ -131,6 +108,170 @@ function Academy() {
         </Fade>
       </Fade>
     </>
+  );
+}
+
+/* ---------------------------------------------------------------- group board */
+
+const LEVELS = ["Beginner", "Intermediate", "Advanced"];
+const AGE_BANDS = ["7-10", "11-14"];
+const WEEK = [1, 2, 3, 4, 5, 6, 0];
+
+async function setStudentGroup(id: string, classGroup: string): Promise<void> {
+  const r = await authFetch(`/api/students/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ classGroup }) }).catch(() => null);
+  if (!r?.ok) toast(r?.status === 401 ? "Sign in to change who’s in a group" : "That didn’t save. Try again.");
+}
+
+/**
+ * The source of truth for capacity: one card per group, ordered by time. An
+ * open slot is simply a group set to "filling", so there is no slot list to
+ * keep in sync, and seats are always counted from real members.
+ */
+function GroupBoard({ selected, onOpen }: { selected: string | null; onOpen: (id: string) => void }) {
+  const s = useHub();
+  const live = useLive();
+  const { inspect } = useShell();
+  const firstClass = (id: string) => s.groupMeta[id]?.slots?.[0]?.start ?? "99";
+  const shown = live.groups.filter((g) => groupStatus(s, g.id) !== "closed").sort((a, b) => firstClass(a.id).localeCompare(firstClass(b.id)) || a.name.localeCompare(b.name));
+  const closed = live.groups.filter((g) => groupStatus(s, g.id) === "closed");
+  const names = new Set(live.groups.map((g) => g.name.trim().toLowerCase()));
+  const noGroup = live.students.filter((x) => x.status === "active" && !names.has((x.classGroup ?? "").trim().toLowerCase()));
+
+  const addGroup = async () => {
+    const letter = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").find((l) => !names.has(`group ${l.toLowerCase()}`));
+    const r = await authFetch("/api/board/groups", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: `Group ${letter}` }) }).catch(() => null);
+    if (!r?.ok) return toast(r?.status === 401 ? "Sign in to add a group" : "That didn’t save. Try again.");
+    A.setGroupMeta((await r.json()).id, { status: "filling", capacity: CAPACITY });
+  };
+
+  return (
+    <>
+      <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fill, minmax(min(300px, 100%), 1fr))" }}>
+        {shown.map((g) => (
+          <GroupCard key={g.id} g={g} selected={selected === g.id} onOpen={() => onOpen(g.id)} />
+        ))}
+        <button className="card col" style={{ placeItems: "center", justifyContent: "center", minHeight: 120, borderStyle: "dashed", color: "var(--text-3)", boxShadow: "none" }} onClick={addGroup}>
+          <Plus size={18} /> New group
+        </button>
+      </div>
+      {noGroup.length + closed.length > 0 && (
+        <div className="row" style={{ marginTop: 12, flexWrap: "wrap" }}>
+          {noGroup.length > 0 && <span className="caption muted">Not in a group:</span>}
+          {noGroup.map((x) => (
+            <button key={x.id} className="chip" onClick={() => inspect({ kind: "student", id: x.id })}>
+              {x.name}
+            </button>
+          ))}
+          {closed.length > 0 && <span className="caption muted">Closed:</span>}
+          {closed.map((g) => (
+            <button key={g.id} className="chip" title="Set back to running" onClick={() => A.setGroupMeta(g.id, { status: "running" })}>
+              {g.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+function GroupCard({ g, selected, onOpen }: { g: GroupDoc; selected: boolean; onOpen: () => void }) {
+  const s = useHub();
+  const live = useLive();
+  const { inspect } = useShell();
+  const drop = useDropdown();
+  const meta = s.groupMeta[g.id] ?? {};
+  const slots = meta.slots ?? [];
+  const [editing, setEditing] = useState(!slots.length);
+  const mem = members(g, live.students);
+  const cap = capacity(s, g.id);
+  const open = cap - mem.length;
+  const when = scheduleLabel(slots);
+  const late = mem.filter((x) => studentPaymentStatus(x.nextPayment) === "late").length;
+  const first = slots[0] ?? { start: "22:00", minutes: 60 };
+  const seatTaker = (e: React.MouseEvent) => {
+    const others = live.students.filter((x) => x.status === "active" && !mem.includes(x)).sort((a, b) => Number(!!a.classGroup) - Number(!!b.classGroup) || a.name.localeCompare(b.name));
+    drop(e, others.length ? others.map((x) => ({ label: x.name, hint: x.classGroup || "No group", onClick: () => setStudentGroup(x.id, g.name) })) : [{ label: "No active students to add" }]);
+  };
+
+  return (
+    <article className="card col" style={{ gap: 12, ...(selected ? { boxShadow: "0 0 0 2px var(--accent)" } : {}) }}>
+      <div className="row">
+        <button className="headline grow" style={{ textAlign: "left" }} onClick={onOpen}>
+          {g.name}
+        </button>
+        <select className="select" style={{ width: 100 }} aria-label={`${g.name} status`} value={groupStatus(s, g.id)} onChange={(e) => A.setGroupMeta(g.id, { status: e.target.value as GroupStatus })}>
+          <option value="filling">Filling</option>
+          <option value="running">Running</option>
+          <option value="closed">Closed</option>
+        </select>
+      </div>
+      <button className="row callout" style={{ textAlign: "left", gap: 6, color: when ? undefined : "var(--warning-ink)" }} aria-expanded={editing} onClick={() => setEditing(!editing)}>
+        <Clock size={14} className="faint" />
+        <span className="grow">{when || "No time set"}</span>
+        <PencilSimple size={14} className="faint" />
+      </button>
+      {editing && (
+        <div className="col" style={{ gap: 8 }}>
+          <div className="row" style={{ gap: 4, flexWrap: "wrap" }} role="group" aria-label="Class days">
+            {WEEK.map((n) => {
+              const on = slots.some((x) => x.day === n);
+              return (
+                <button key={n} className={`chip ${on ? "accent" : ""}`} aria-pressed={on} onClick={() => A.setGroupMeta(g.id, { slots: on ? slots.filter((x) => x.day !== n) : [...slots, { day: n, start: first.start, minutes: first.minutes }] })}>
+                  {DAYS[n]}
+                </button>
+              );
+            })}
+          </div>
+          <div className="row">
+            <input className="input" type="time" style={{ width: 110 }} aria-label="Start time" disabled={!slots.length} value={first.start} onChange={(e) => e.target.value && A.setGroupMeta(g.id, { slots: slots.map((x) => ({ ...x, start: e.target.value })) })} />
+            <input className="input" type="number" min={15} step={15} style={{ width: 80 }} aria-label="Minutes" disabled={!slots.length} value={first.minutes} onChange={(e) => A.setGroupMeta(g.id, { slots: slots.map((x) => ({ ...x, minutes: Number(e.target.value) || 60 })) })} />
+            <span className="caption muted">min</span>
+          </div>
+        </div>
+      )}
+      <div className="row">
+        <select className="select grow" style={{ minWidth: 0 }} aria-label={`${g.name} level`} value={meta.level ?? ""} onChange={(e) => A.setGroupMeta(g.id, { level: e.target.value })}>
+          <option value="">Any level</option>
+          {LEVELS.map((x) => (
+            <option key={x}>{x}</option>
+          ))}
+        </select>
+        <select className="select grow" style={{ minWidth: 0 }} aria-label={`${g.name} age band`} value={meta.ageBand ?? ""} onChange={(e) => A.setGroupMeta(g.id, { ageBand: e.target.value })}>
+          <option value="">Any age</option>
+          {AGE_BANDS.map((x) => (
+            <option key={x} value={x}>
+              Age {x}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+        {mem.map((x) => (
+          <motion.button key={x.id} layout transition={spring.ui} initial={{ scale: 0.6 }} animate={{ scale: 1 }} title={x.name} aria-label={`${x.name}, seat options`} onClick={(e) => drop(e, [{ label: "Open student", onClick: () => inspect({ kind: "student", id: x.id }) }, { label: `Remove from ${g.name}`, danger: true, onClick: () => setStudentGroup(x.id, "") }])}>
+            <Avatar name={x.name} src={x.photoUrl} />
+          </motion.button>
+        ))}
+        {Array.from({ length: Math.max(0, open) }, (_, i) => (
+          <motion.button key={i} layout transition={spring.ui} className="seat-add" aria-label={`Add a student to ${g.name}`} onClick={seatTaker}>
+            <Plus size={14} />
+          </motion.button>
+        ))}
+        <span className="spacer" />
+        <label className="row caption muted" style={{ gap: 4 }}>
+          {mem.length} /
+          <input className="input" type="number" min={1} style={{ width: 56 }} aria-label={`${g.name} capacity`} value={cap} onChange={(e) => A.setGroupMeta(g.id, { capacity: Number(e.target.value) || CAPACITY })} />
+        </label>
+      </div>
+      <div className="row">
+        <span className="callout" style={{ fontWeight: 500, color: open > 0 ? "var(--warning-ink)" : "var(--success-ink)" }}>
+          {seatsNeeded(g, live.students, s)}
+        </span>
+        <span className="spacer" />
+        <span className="caption muted">
+          ${mem.length * PRICE}/mo{late ? ` · ${late} late` : ""}
+        </span>
+      </div>
+    </article>
   );
 }
 
@@ -250,10 +391,6 @@ function Groups({ groupId }: { groupId?: string }) {
         <button className="btn btn-sm" style={{ alignSelf: "flex-start" }} onClick={() => A.setGroupMeta(g.id, { slots: [...slots, { day: 1, start: "17:00", minutes: 60 }] })}>
           <Plus size={14} /> Add class slot
         </button>
-        <label className="row callout">
-          Capacity
-          <input className="input" type="number" min={1} style={{ width: 80 }} value={capacity(s, g.id)} onChange={(e) => A.setGroupMeta(g.id, { capacity: Number(e.target.value) || CAPACITY })} />
-        </label>
       </section>
     </div>
   );

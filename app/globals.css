@@ -491,8 +491,8 @@ img { display: block; max-width: 100%; }
 .pillbar:hover .bubble, .pillbar[data-hi="true"] .bubble { opacity: 1; transform: none; }
 .pillbar .lbl { font-size: 11px; color: var(--text-3); }
 
-.seat { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--line-strong); }
-.seat[data-on="true"] { background: var(--accent); border-color: var(--accent); }
+.seat-add { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; flex: none; border: 1.5px dashed var(--line-strong); color: var(--text-3); transition: color 0.15s, border-color 0.15s; }
+.seat-add:hover { color: var(--accent); border-color: var(--accent); }
 
 .skeleton { background: linear-gradient(90deg, var(--bg-sunken), var(--bg-raised), var(--bg-sunken)); background-size: 200% 100%; animation: sk 1.2s linear infinite; border-radius: var(--r-ctl); }
 @keyframes sk { to { background-position: -200% 0; } }

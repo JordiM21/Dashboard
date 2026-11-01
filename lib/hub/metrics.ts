@@ -6,7 +6,7 @@
 import type { FinanceEntry, GroupDoc, Student } from "@/lib/types";
 import { studentPaymentStatus } from "@/lib/studentStatus";
 import type { LiveData } from "./live";
-import type { ClassSlot, Goal, HubState, StudentMeta } from "./types";
+import type { ClassSlot, Goal, GroupStatus, HubState, StudentMeta } from "./types";
 import { isItemDone } from "./actions";
 import { daysBetween, dayOfWeek, monthKey, prevMonth, today, toMinutes, weekStart } from "./util";
 
@@ -44,15 +44,38 @@ export function members(g: GroupDoc, students: Student[]): Student[] {
 
 export const capacity = (st: HubState, gid: string) => st.groupMeta[gid]?.capacity ?? CAPACITY;
 
+export const groupStatus = (st: HubState, gid: string): GroupStatus => st.groupMeta[gid]?.status ?? "running";
+
 export function freeSeats(live: LiveData, st: HubState): number {
-  return live.groups.reduce((sum, g) => sum + Math.max(0, capacity(st, g.id) - members(g, live.students).length), 0);
+  return live.groups.filter((g) => groupStatus(st, g.id) !== "closed").reduce((sum, g) => sum + Math.max(0, capacity(st, g.id) - members(g, live.students).length), 0);
+}
+
+/** What a group is still missing, always from its real members: "Needs 1 Intermediate, age 11-14". */
+export function seatsNeeded(g: GroupDoc, students: Student[], st: HubState): string {
+  const open = capacity(st, g.id) - members(g, students).length;
+  if (open <= 0) return "Full";
+  const { level, ageBand } = st.groupMeta[g.id] ?? {};
+  return `Needs ${open} ${level || (open > 1 ? "students" : "student")}${ageBand ? `, age ${ageBand}` : ""}`;
+}
+
+export const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** "Mon Wed Fri 22:00-23:00"; days that differ in time get their own part. Empty when no slots. */
+export function scheduleLabel(slots: ClassSlot[] = []): string {
+  const byTime = new Map<string, number[]>();
+  for (const x of slots) {
+    const end = (toMinutes(x.start) + x.minutes) % 1440;
+    const key = `${x.start}-${String(Math.floor(end / 60)).padStart(2, "0")}:${String(end % 60).padStart(2, "0")}`;
+    byTime.set(key, [...(byTime.get(key) ?? []), x.day]);
+  }
+  return [...byTime].map(([time, days]) => `${[...days].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map((d) => DAYS[d]).join(" ")} ${time}`).join(", ");
 }
 
 /** Weekly teaching hours needed to serve the whole target roster. */
 export const hoursAtTarget = () => Math.ceil(MRR_TARGET / PRICE / CAPACITY) * HOURS_PER_GROUP;
 
 export function currentTeachingHours(live: LiveData, st: HubState): number {
-  return live.groups.reduce((sum, g) => sum + (st.groupMeta[g.id]?.slots ?? []).reduce((a, x) => a + x.minutes, 0), 0) / 60;
+  return live.groups.filter((g) => groupStatus(st, g.id) === "running").reduce((sum, g) => sum + (st.groupMeta[g.id]?.slots ?? []).reduce((a, x) => a + x.minutes, 0), 0) / 60;
 }
 
 export function receivables(live: LiveData, st: HubState) {
@@ -151,6 +174,7 @@ export interface ClassOccurrence {
 export function classesOn(date: string, live: LiveData, st: HubState): ClassOccurrence[] {
   const dow = dayOfWeek(date);
   return live.groups
+    .filter((g) => groupStatus(st, g.id) === "running")
     .flatMap((g) => (st.groupMeta[g.id]?.slots ?? []).filter((x) => x.day === dow).map((slot) => ({ group: g, slot, date, startMin: toMinutes(slot.start), endMin: toMinutes(slot.start) + slot.minutes })))
     .sort((a, b) => a.startMin - b.startMin);
 }

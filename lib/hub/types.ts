@@ -205,7 +205,13 @@ export interface ClassSlot {
 export interface GroupMeta {
   capacity?: number;
   slots?: ClassSlot[];
+  status?: GroupStatus; // unset = running, every group from before this existed
+  level?: string; // who the open seats are for, e.g. "Intermediate"
+  ageBand?: string; // e.g. "11-14"
 }
+
+/** filling: being assembled, no classes yet. running: classes happen. closed: taking nobody, off the board. */
+export type GroupStatus = "filling" | "running" | "closed";
 
 export interface LocalExpense extends Base {
   date: string;

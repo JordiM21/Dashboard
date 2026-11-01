@@ -33,6 +33,7 @@ import { byTime, MESSAGES, unprocessed, waitingOnJordi, type BrainMessage } from
 // must load after loadEnvConfig, and static imports are hoisted above it.
 let goalProgress: Metrics["goalProgress"], lifecycle: Metrics["lifecycle"], members: Metrics["members"], mrr: Metrics["mrr"];
 let price: Metrics["price"], projectProgress: Metrics["projectProgress"], receivables: Metrics["receivables"];
+let capacity: Metrics["capacity"], freeSeats: Metrics["freeSeats"], groupStatus: Metrics["groupStatus"], scheduleLabel: Metrics["scheduleLabel"], seatsNeeded: Metrics["seatsNeeded"];
 type Metrics = typeof import("../lib/hub/metrics");
 
 const DIR = path.resolve(process.env.BRAIN_DIR || path.join(process.cwd(), "..", "Brain"));
@@ -378,20 +379,21 @@ function exportBusiness(s: Snapshot) {
       ].filter(Boolean).join("\n\n")
   );
 
-  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   for (const g of lv.groups) {
     const gm = st.groupMeta[g.id];
     const ms = members(g, lv.students);
+    const cap = capacity(st, g.id);
     write(
       `business/groups/${groupFile.get(g.id)}.md`,
-      fm({ type: "group", id: g.id, level: g.currentLevel, topic: g.currentTopic, members: ms.length, capacity: gm?.capacity }) +
+      fm({ type: "group", id: g.id, status: groupStatus(st, g.id), level: g.currentLevel, topic: g.currentTopic, target_level: gm?.level, age_band: gm?.ageBand, members: ms.length, capacity: cap, open_seats: Math.max(0, cap - ms.length) }) +
         [
           `# ${g.name}`,
-          `**Curriculum:** level ${g.currentLevel} — ${g.currentTopic}`,
-          `**Schedule:** ${(gm?.slots ?? []).map((x) => `${dayNames[x.day]} ${x.start} (${x.minutes} min)`).join(", ") || "not set"}`,
-          `**Seats:** ${ms.length} / ${gm?.capacity ?? 4}`,
+          `**Status:** ${groupStatus(st, g.id)}`,
+          g.currentTopic && `**Curriculum:** level ${g.currentLevel} — ${g.currentTopic}`,
+          `**Schedule:** ${scheduleLabel(gm?.slots) || "not set"}`,
+          `**Seats:** ${ms.length} / ${cap} — ${seatsNeeded(g, lv.students, st)}`,
           `## Members\n${ms.map((m) => `- [${m.name}](../students/${studentFile.get(m.id)}.md)`).join("\n") || "_None._"}`,
-        ].join("\n\n")
+        ].filter(Boolean).join("\n\n")
     );
   }
 
@@ -463,6 +465,7 @@ function exportNow(s: Snapshot) {
   const owed = receivables(lv, st);
   const recurring = (lv.recurring as RecurringTransaction[]).filter((r) => r.active && r.nextPayment <= week);
   const posts = s.social.filter((p) => p.scheduledAt && day(p.scheduledAt) >= t && day(p.scheduledAt) <= week && p.status !== "published");
+  const openGroups = lv.groups.filter((g) => groupStatus(st, g.id) !== "closed" && members(g, lv.students).length < capacity(st, g.id));
   write(
     "NOW.md",
     fm({ type: "now", today: t, generated: new Date().toISOString() }) +
@@ -476,6 +479,7 @@ function exportNow(s: Snapshot) {
         section("Waiting on someone", open.filter((x) => x.status === "waiting")),
         `## Pinned goals\n${pinned.map((g) => { const p = goalProgress(g, st, lv); return `- ${g.title} (${s.areaName(g.areaId)}) — ${p.value} / ${p.target} ${g.unit}${p.pace ? ` · ${p.pace}` : ""}`; }).join("\n") || "_None._"}`,
         `## Students owing\n${owed.map((r) => `- ${r.student.name} — ${PAYMENT_STATUS_LABEL[r.status]}, ${money(r.amount)}, due ${d(r.student.nextPayment)}`).join("\n") || "_None._"}`,
+        `## Open seats (${freeSeats(lv, st)})\n${openGroups.map((g) => `- ${g.name} (${groupStatus(st, g.id)}, ${scheduleLabel(st.groupMeta[g.id]?.slots) || "no time set"}) — ${members(g, lv.students).length}/${capacity(st, g.id)}, ${seatsNeeded(g, lv.students, st)}`).join("\n") || "_None._"}`,
         `## Recurring payments due this week\n${recurring.map((r) => `- ${r.description} — ${r.type}, ${money(r.amount)} on ${d(r.nextPayment)}`).join("\n") || "_None._"}`,
         `## Social posts coming up\n${posts.map((p) => `- ${d(p.scheduledAt)} ${p.platforms.join("+")} — ${(p.caption ?? "").slice(0, 80)}`).join("\n") || "_None._"}`,
         `## Inbox\n${open.filter((x) => x.status === "inbox").length} unprocessed tasks.`,
@@ -611,7 +615,8 @@ ${areaList}
 | How is student X doing / did they pay? | business/students/<x>.md |
 | Who owes money? MRR? | business/students.md ("Owed now") |
 | Revenue or expenses in a month | business/payments/<YYYY-MM>.md |
-| Which group is on what topic / free seats | business/groups/, business/curriculum.md |
+| Open seats and what each group still needs | NOW.md ("Open seats"), business/groups/ |
+| Which group is on what topic | business/groups/, business/curriculum.md |
 | Relationship, personal, hobbies, studies, home | that area's _overview.md |
 
 ## Writable
@@ -686,7 +691,7 @@ Fill this in. Claude reads it before giving any advice.
 
 async function exportOnce() {
   const started = Date.now();
-  ({ goalProgress, lifecycle, members, mrr, price, projectProgress, receivables } = await import("../lib/hub/metrics"));
+  ({ capacity, freeSeats, goalProgress, groupStatus, lifecycle, members, mrr, price, projectProgress, receivables, scheduleLabel, seatsNeeded } = await import("../lib/hub/metrics"));
   const s = await load();
   for (const rel of OWNED) fs.rmSync(path.join(DIR, rel), { recursive: true, force: true });
   for (const sub of ["journal/daily", "journal/briefs", "journal/weekly", "journal/monthly", "inbox"]) fs.mkdirSync(path.join(DIR, sub), { recursive: true });
