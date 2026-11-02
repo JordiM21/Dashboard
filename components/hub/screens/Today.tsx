@@ -69,6 +69,7 @@ export default function Today() {
           <div className="span-4">{mrrGoal && boss ? <BossCard title={mrrGoal.title} p={boss} damage={weekDamage(live, s)} /> : areaObj && <AreaCard areaId={areaObj.id} />}</div>
           <Quests focus={focusOpen} />
           <Alerts />
+          <TodayClasses />
           <div className="span-12">
             <ThisWeek />
           </div>
@@ -187,14 +188,14 @@ export function BossCard({ title, p, damage, large }: { title: string; p: Return
         <Money value={p.value} id="mrr" className={large ? "display-xl" : "display-l"} />
         <span className="callout muted">/ ${money(p.target)} MRR</span>
       </div>
-      {game ? <BossHp pct={p.pct} label={`${Math.round((1 - p.pct) * 100)}% HP left`} /> : <Progress value={p.pct} label="MRR progress" />}
+      {game ? <BossHp pct={p.pct} label={`${Math.round(p.pct * 100)}% of the way`} /> :<Progress value={p.pct} label="MRR progress" />}
       <div className="row callout">
-        <span className="muted">{game ? "HP left" : "Gap"}</span>
         <b>${money(p.gap)}</b>
+        <span className="muted">MRR to go</span>
         <span className="spacer" />
         {damage > 0 && game && (
           <span className="chip" style={{ color: "var(--epic)", borderColor: "color-mix(in srgb, var(--epic) 40%, transparent)" }}>
-            −${damage} this week
+            +${damage} MRR this week
           </span>
         )}
       </div>
@@ -217,6 +218,9 @@ function Quests({ focus }: { focus: ReturnType<typeof useHub>["tasks"] }) {
   const xpLeft = focus.reduce((a, t) => a + taskXp(t, new Date(), 0), 0);
   const review = s.reviews.at(-1);
   const weekly = (review?.priorities ?? []).map((id) => s.tasks.find((t) => t.id === id)).filter((t) => t && match(t.areaId)) as typeof s.tasks;
+  // Below the daily list: only what's still ahead. Today's are listed above, finished ones are in the Dock.
+  const weeklyNext = weekly.filter((t) => !t.archivedAt && !["done", "dropped"].includes(t.status) && !isFocus(t, t0));
+  const weeklyToday = weekly.filter((t) => isFocus(t, t0)).length;
   const game = s.settings.game !== "off";
   const planned = !!s.game.dayPlans[t0];
   const evening = isEvening();
@@ -265,18 +269,19 @@ function Quests({ focus }: { focus: ReturnType<typeof useHub>["tasks"] }) {
           </details>
         )}
       </div>
-      {weekly.length > 0 && (
+      {weeklyNext.length > 0 && (
         <>
           <hr className="divider" style={{ margin: "14px 0 10px" }} />
           <div className="row" style={{ marginBottom: 4 }}>
             <Lightning size={16} weight="duotone" style={{ color: "var(--text-2)" }} />
             <span className="label">{game ? "Weekly quests" : "This week’s priorities"}</span>
             <span className="caption faint">
-              {weekly.filter((t) => t.status === "done").length}/{weekly.length}
+              {weekly.filter((t) => t.status === "done").length}/{weekly.length} done
+              {weeklyToday > 0 && ` · ${weeklyToday} in today’s list`}
             </span>
             {game && <span className="xp-ghost">+{XP.priority} each</span>}
           </div>
-          {weekly.map((t) => (
+          {weeklyNext.map((t) => (
             <TaskRow key={t.id} t={t} compact />
           ))}
         </>
@@ -455,16 +460,15 @@ function AreaCard({ areaId }: { areaId: string }) {
   );
 }
 
-/* ---------------------------------------------------------------- next 7 days */
+/* ---------------------------------------------------------------- today's classes */
 
-/** Next 7 days of tasks for the selected area (drag to reschedule), with today's classes on top when LET is in view. */
-function ThisWeek() {
+/** Today's classes on an hour-of-day track. Its own card so hours never read as the days of the week below. */
+function TodayClasses() {
   const s = useHub();
   const live = useLive();
   const router = useRouter();
   const { match } = useArea();
-  const t0 = today();
-  const classes = match("let") ? classesOn(t0, live, s) : [];
+  const classes = match("let") ? classesOn(today(), live, s) : [];
   const [nowMin, setNowMin] = useState(() => new Date().getHours() * 60 + new Date().getMinutes());
   useEffect(() => {
     const i = setInterval(() => setNowMin(new Date().getHours() * 60 + new Date().getMinutes()), 60000);
@@ -475,7 +479,46 @@ function ThisWeek() {
   const span = (endH - startH) * 60;
   const pos = (m: number) => `${((m - startH * 60) / span) * 100}%`;
   const let_ = s.areas.find((a) => a.id === "let")?.color;
+  const nowShown = nowMin >= startH * 60 && nowMin <= endH * 60;
+  if (classes.length === 0) return null;
 
+  return (
+    <section className="card span-12" aria-label="Today's classes">
+      <div className="card-head">
+        <h3 className="headline">Today’s classes</h3>
+        <span className="chip">{classes.length}</span>
+      </div>
+      <div className="timeline">
+        <div className="tl-track">{nowShown && <span className="tl-past" style={{ width: pos(nowMin) }} />}</div>
+        {Array.from({ length: endH - startH }, (_, i) => (
+          <span key={i} className="tl-hour" style={{ left: pos((startH + i) * 60) }}>
+            {startH + i}:00
+          </span>
+        ))}
+        {classes.map((c: ClassOccurrence) => (
+          <button key={c.group.id + c.startMin} className="tl-event" style={{ left: pos(c.startMin), width: `calc(${(c.slot.minutes / span) * 100}% - 2px)`, "--c": let_ } as CSSProperties} onClick={() => router.push(`/academy?tab=groups&group=${c.group.id}`)} title="Open group">
+            <b>{c.group.name}</b>
+            <span className="muted">{c.slot.start}</span>
+          </button>
+        ))}
+        {nowShown && (
+          <span className="tl-now" style={{ left: pos(nowMin) }} aria-label="Now">
+            <b>{hhmm(new Date(0, 0, 0, 0, nowMin))}</b>
+          </span>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/* ---------------------------------------------------------------- next 7 days */
+
+/** Next 7 days of tasks for the selected area (drag to reschedule). */
+function ThisWeek() {
+  const s = useHub();
+  const router = useRouter();
+  const { match } = useArea();
+  const t0 = today();
   const open = openTasks(s, match);
   const days = Array.from({ length: 7 }, (_, i) => addDays(t0, i));
   const on = (d: string) =>
@@ -497,7 +540,6 @@ function ThisWeek() {
         <h3 className="headline">Next 7 days</h3>
         <span className="callout muted">
           {planned} task{planned === 1 ? "" : "s"}
-          {classes.length > 0 && ` · ${classes.length} class${classes.length === 1 ? "" : "es"} today`}
         </span>
         <span className="spacer" />
         {unscheduled > 0 && (
@@ -506,21 +548,6 @@ function ThisWeek() {
           </button>
         )}
       </div>
-      {classes.length > 0 && (
-        <div className="timeline" style={{ marginBottom: 12 }}>
-          {Array.from({ length: endH - startH }, (_, i) => (
-            <span key={i} className="tl-hour" style={{ left: pos((startH + i) * 60) }}>
-              {startH + i}
-            </span>
-          ))}
-          {classes.map((c: ClassOccurrence) => (
-            <button key={c.group.id + c.startMin} className="tl-event" style={{ left: pos(c.startMin), width: `calc(${(c.slot.minutes / span) * 100}% - 2px)`, "--c": let_, height: 38 } as CSSProperties} onClick={() => router.push(`/academy?tab=groups&group=${c.group.id}`)} title="Open group">
-              <b>{c.group.name}</b> <span className="muted">{c.slot.start}</span>
-            </button>
-          ))}
-          {nowMin >= startH * 60 && nowMin <= endH * 60 && <span className="tl-now" style={{ left: pos(nowMin) }} aria-label="Now" />}
-        </div>
-      )}
       <div className="week week-compact">
         {days.map((d) => (
           <DayCol key={d} date={d} tasks={on(d)} />

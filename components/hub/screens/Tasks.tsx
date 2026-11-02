@@ -428,7 +428,7 @@ export function DayCol({ date, tasks }: { date: string; tasks: Task[] }) {
   return (
     <div ref={col} className="week-col" data-over={over} {...props} style={isToday ? { background: "var(--bg-surface)", boxShadow: "var(--e1)" } : undefined}>
       <div className="week-head" data-today={isToday}>
-        <div className="label">{dayName(date)}</div>
+        <div className="label">{isToday ? "Today" : dayName(date)}</div>
         <div className="big">{Number(date.slice(8))}</div>
         <div className="caption faint">{mins ? `${Math.round(mins / 6) / 10}h planned` : " "}</div>
       </div>

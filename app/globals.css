@@ -389,12 +389,14 @@ img { display: block; max-width: 100%; }
 .board-card:hover { transform: translateY(-1px); box-shadow: var(--e2); }
 
 /* timeline */
-.timeline { position: relative; height: 96px; border-radius: var(--r-tile); background: var(--bg-raised); border: 1px solid var(--line); overflow: hidden; }
-.tl-hour { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--line); font-size: 11px; color: var(--text-3); padding: 6px 0 0 6px; }
-.tl-event { position: absolute; top: 28px; height: 56px; border-radius: 10px; padding: 6px 10px; background: color-mix(in srgb, var(--c) 14%, var(--bg-surface)); border-left: 3px solid var(--c); overflow: hidden; text-align: left; font-size: 12px; transition: box-shadow var(--fast); }
+.timeline { position: relative; height: 78px; }
+.tl-track { position: absolute; top: 24px; left: 0; right: 0; bottom: 0; border-radius: var(--r-tile); background: var(--bg-raised); border: 1px solid var(--line); overflow: hidden; }
+.tl-past { position: absolute; top: 0; bottom: 0; left: 0; background: color-mix(in srgb, var(--text-3) 12%, transparent); }
+.tl-hour { position: absolute; top: 0; font-size: 11px; line-height: 16px; color: var(--text-3); }
+.tl-event { position: absolute; top: 30px; height: 42px; border-radius: 10px; padding: 4px 8px; display: flex; flex-direction: column; background: color-mix(in srgb, var(--c) 14%, var(--bg-surface)); border-left: 3px solid var(--c); overflow: hidden; white-space: nowrap; text-align: left; font-size: 12px; line-height: 16px; transition: box-shadow var(--fast); }
 .tl-event:hover { box-shadow: var(--e2); }
-.tl-now { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--danger); border-radius: 1px; }
-.tl-now::before { content: ""; position: absolute; top: -3px; left: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
+.tl-now { position: absolute; top: 24px; bottom: 0; width: 2px; background: var(--danger); border-radius: 1px; }
+.tl-now b { position: absolute; bottom: 100%; left: 1px; transform: translateX(-50%); margin-bottom: 4px; padding: 0 5px; border-radius: 6px; background: var(--danger); color: #fff; font-size: 11px; line-height: 16px; font-weight: 600; }
 
 /* folder card */
 .folder { position: relative; padding: 18px; padding-top: 26px; border-radius: 6px var(--r-card) var(--r-card) var(--r-card); background: var(--bg-surface); border: 1px solid var(--line); box-shadow: var(--e1); min-height: 132px; display: flex; flex-direction: column; gap: 6px; text-align: left; transition: transform var(--fast) var(--ease), box-shadow var(--fast); }
