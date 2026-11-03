@@ -1,7 +1,6 @@
 rules_version = '2';
 
-// Owner-only, same UID as firestore.rules. Social uploads go straight from the
-// browser (components/hub/screens/Social.tsx); app/api/resources/** uses
+// Owner-only, same UID as firestore.rules. app/api/resources/** uses
 // firebase-admin, which bypasses these rules.
 service firebase.storage {
   match /b/{bucket}/o {

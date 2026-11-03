@@ -8,7 +8,6 @@ import type {
   Project,
   Task,
   RecurringTransaction,
-  MetaAudienceSnapshotRecord,
 } from "@/lib/types";
 
 /**
@@ -27,7 +26,6 @@ const TRANSACTIONS = "transactions";
 const PROJECTS = "projects";
 const TASKS = "tasks";
 const RECURRING_TRANSACTIONS = "recurringTransactions";
-const META_AUDIENCE_SNAPSHOTS = "metaAudienceSnapshots";
 
 function tsToIso(value: unknown): string | undefined {
   if (value instanceof Timestamp) return value.toDate().toISOString();
@@ -355,44 +353,3 @@ export async function deleteRecurringTransaction(id: string): Promise<boolean> {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Meta audience snapshots (daily follower counts — see
-// app/api/cron/meta-audience-snapshot/route.ts and lib/api/metaGrowth.ts)
-// ---------------------------------------------------------------------------
-
-/** Doc id is the date itself, so capturing the same day twice overwrites instead of duplicating. */
-export async function upsertMetaAudienceSnapshot(
-  date: string,
-  data: { facebookFollowers: number | null; instagramFollowers: number | null }
-): Promise<MetaAudienceSnapshotRecord> {
-  const ref = getAdminDb().collection(META_AUDIENCE_SNAPSHOTS).doc(date);
-  const existing = await ref.get();
-  if (existing.exists) {
-    await ref.update({ ...data, updatedAt: FieldValue.serverTimestamp() });
-  } else {
-    await ref.set({ ...data, date, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
-  }
-  const doc = await ref.get();
-  return fromDoc<MetaAudienceSnapshotRecord>(doc as QueryDocumentSnapshot<DocumentData>);
-}
-
-/** Every stored snapshot from `sinceDate` (inclusive) onward, oldest first. */
-export async function listMetaAudienceSnapshots(sinceDate: string): Promise<MetaAudienceSnapshotRecord[]> {
-  const snap = await getAdminDb()
-    .collection(META_AUDIENCE_SNAPSHOTS)
-    .where("date", ">=", sinceDate)
-    .orderBy("date", "asc")
-    .get();
-  return snap.docs.map((doc) => fromDoc<MetaAudienceSnapshotRecord>(doc));
-}
-
-/** Most recent snapshot at or before `date` — used to find the closest known follower count when the exact date wasn't captured. */
-export async function findMetaAudienceSnapshotOnOrBefore(date: string): Promise<MetaAudienceSnapshotRecord | null> {
-  const snap = await getAdminDb()
-    .collection(META_AUDIENCE_SNAPSHOTS)
-    .where("date", "<=", date)
-    .orderBy("date", "desc")
-    .limit(1)
-    .get();
-  return snap.empty ? null : fromDoc<MetaAudienceSnapshotRecord>(snap.docs[0]!);
-}

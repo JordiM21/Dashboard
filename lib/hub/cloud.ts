@@ -20,7 +20,7 @@ import type { HubState } from "./types";
 import { toast } from "./fx";
 import { DEFAULT_SETTINGS, STATE_VERSION } from "./seed";
 
-export const ENTITY_KEYS = ["areas", "tasks", "projects", "goals", "notes", "collections", "items", "time", "lessons", "expenses"] as const;
+export const ENTITY_KEYS = ["areas", "tasks", "projects", "goals", "notes", "collections", "items", "time", "lessons", "expenses", "scripts"] as const;
 type EntityKey = (typeof ENTITY_KEYS)[number];
 
 const META_KEYS = ["templates", "studentMeta", "groupMeta", "adSpend", "reviews", "monthly"] as const;

@@ -461,7 +461,7 @@ export function useLongPress(onLong: (p: { clientX: number; clientY: number }) =
   };
 }
 
-/** HTML5 drop target for a dragged id (Tasks board/calendar, Social calendar). */
+/** HTML5 drop target for a dragged id (Tasks board/calendar). */
 export function useDrop(onDrop: (id: string) => void) {
   const [over, setOver] = useState(false);
   return {

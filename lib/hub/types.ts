@@ -222,6 +222,30 @@ export interface LocalExpense extends Base {
   recurring: boolean;
 }
 
+/** Where a saved script sits in the journey from first contact to first classes. See lib/hub/marketing.ts. */
+export type ScriptStage = "first" | "answers" | "objections" | "after-payment" | "first-days";
+
+export interface ScriptMessage {
+  id: ID;
+  from: "them" | "me";
+  text: string;
+}
+
+export interface PlanStep {
+  id: ID;
+  title: string;
+  text: string;
+}
+
+/** A saved conversation, or a plan when its stage is "first-days" (steps + a Library folder instead of messages). */
+export interface Script extends Base {
+  title: string;
+  stage: ScriptStage;
+  messages: ScriptMessage[];
+  steps: PlanStep[];
+  folderId?: ID | null;
+}
+
 export interface Template {
   id: ID;
   name: string;
@@ -281,6 +305,7 @@ export interface HubState {
   time: TimeEntry[];
   lessons: LessonLog[];
   expenses: LocalExpense[];
+  scripts: Script[];
   templates: Template[];
   studentMeta: Record<ID, StudentMeta>;
   groupMeta: Record<ID, GroupMeta>;

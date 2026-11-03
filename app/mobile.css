@@ -17,6 +17,7 @@ button, a, [role="checkbox"], summary, .task-row { touch-action: manipulation; }
   .task-row:active, .ld-row:active { background: var(--bg-sunken); }
   .folder:active, .card.hoverable:active, .board-card:active { transform: scale(0.98); }
   .kbd, .sb-key { display: none; }
+  .mk-more { opacity: 1; }
 }
 
 /* swipe actions behind a task row */
@@ -116,8 +117,6 @@ button, a, [role="checkbox"], summary, .task-row { touch-action: manipulation; }
   .board > *, .week > * { flex: 0 0 82%; scroll-snap-align: center; }
   .week > .label { display: none; }
   .week-col { min-height: 300px; background: var(--bg-surface); box-shadow: var(--e1); }
-  .month-cell { min-height: 64px; padding: 4px; }
-  .month-ev { font-size: 0; height: 6px; padding: 0; border-radius: 3px; background: var(--c); }
   .timeline { overflow-x: auto; }
   .filter-pill { height: 34px; }
 }
@@ -154,4 +153,14 @@ button, a, [role="checkbox"], summary, .task-row { touch-action: manipulation; }
   .msgs-head, .msgs-scroll, .msgs-composer { padding-left: 12px; padding-right: 12px; }
   .msg { max-width: 90%; }
   .msgs-field textarea { font-size: 16px; }
+  .mk { display: block; height: auto; }
+  .mk[data-open="true"] > .mk-nav, .mk[data-open="false"] > .mk-detail { display: none; }
+  .mk-list { overflow: visible; padding-right: 0; }
+  .mk-search input, .mk-edit, .mk-step-text { font-size: 16px; }
+  .mk-back { display: inline-flex; }
+  .hub:has(.mk[data-open="true"]) .fab { display: none; } /* it would sit on top of the composer */
+  .mk-head { padding: 10px 12px; }
+  .mk-detail { height: calc(100dvh - 190px); min-height: 420px; }
+  .mk-plan { padding: 12px; }
+  .mk-copy { min-height: 36px; }
 }

@@ -22,27 +22,6 @@
         "reason": "blockquote left-border is the standard markdown-rendering convention (GitHub/Obsidian/etc.), not a card/panel accent decoration"
       },
       {
-        "rule": "side-tab",
-        "value": "#4267b2",
-        "createdAt": "2026-08-28T09:31:52.846Z",
-        "reason": "pre-existing meta-calendar platform legend (Facebook brand color), not a decorative accent"
-      },
-      {
-        "rule": "side-tab",
-        "value": "#c13584",
-        "createdAt": "2026-08-28T09:31:52.911Z",
-        "reason": "pre-existing meta-calendar platform legend (Instagram brand color), not a decorative accent"
-      },
-      {
-        "rule": "side-tab",
-        "value": "var(--danger)",
-        "files": [
-          "app/globals.css"
-        ],
-        "createdAt": "2026-08-28T09:31:52.973Z",
-        "reason": "pre-existing meta-calendar failed-post status stripe, not a decorative accent"
-      },
-      {
         "rule": "bounce-easing",
         "value": "cubic-bezier(0.34, 1.56, 0.64, 1)",
         "createdAt": "2026-08-28T10:44:57.849Z",

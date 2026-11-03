@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import type { CSSProperties } from "react";
 import {
-  Sun, Tray, CheckSquare, Target, GraduationCap, Wallet, Books, MagnifyingGlass, GearSix, SidebarSimple, SignIn, PushPin, Kanban, PlugsConnected, CalendarDots, Brain,
+  Sun, Tray, CheckSquare, Target, GraduationCap, Wallet, Books, MagnifyingGlass, GearSix, SidebarSimple, SignIn, PushPin, Kanban, PlugsConnected, Megaphone, Brain,
   type Icon,
 } from "@phosphor-icons/react";
 import { useHub } from "@/lib/hub/store";
@@ -28,7 +28,7 @@ export const NAV: { href: string; label: string; icon: Icon }[] = [
   { href: "/academy", label: "Academy", icon: GraduationCap },
   { href: "/finance", label: "Finance", icon: Wallet },
   { href: "/library", label: "Library", icon: Books },
-  { href: "/social", label: "Social", icon: CalendarDots },
+  { href: "/marketing", label: "Marketing", icon: Megaphone },
   { href: "/connections", label: "Connections", icon: PlugsConnected },
   { href: "/brain", label: "Brain", icon: Brain },
 ];

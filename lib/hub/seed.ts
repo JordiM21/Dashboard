@@ -138,6 +138,7 @@ function emptyState(): HubState {
     time: [],
     lessons: [],
     expenses: [],
+    scripts: [],
     templates: TEMPLATES,
     studentMeta: {},
     groupMeta: {},

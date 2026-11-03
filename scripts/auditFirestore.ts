@@ -25,8 +25,6 @@ const IN_USE = new Set([
   "weeklyPlanTags",
   "resourceFolders",
   "resourceFiles",
-  "metaAudienceSnapshots",
-  "scheduledMetaPosts",
 ]);
 
 async function main() {

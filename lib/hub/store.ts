@@ -34,7 +34,7 @@ export function initStore(mode: "demo", seed: () => HubState): void {
     if (raw) loaded = JSON.parse(raw);
   } catch {}
   // Settings added after a device first saved get their defaults.
-  state = loaded && loaded.version === STATE_VERSION ? { ...loaded, settings: { ...DEFAULT_SETTINGS, ...loaded.settings }, ui: { ...loaded.ui, taskView: "projects" } } : seed();
+  state = loaded && loaded.version === STATE_VERSION ? { ...loaded, scripts: loaded.scripts ?? [], settings: { ...DEFAULT_SETTINGS, ...loaded.settings }, ui: { ...loaded.ui, taskView: "projects" } } : seed();
   if (!loaded) persist();
   emit();
 }
@@ -53,7 +53,7 @@ export function initCloud(seed: () => Promise<HubState>, onReady: () => void): (
       // A device that already used v2 locally before deploy keeps that work; otherwise migrate v1.
       try {
         const local = JSON.parse(localStorage.getItem("hub-v2:live") ?? "null") as HubState | null;
-        if (local?.version === STATE_VERSION) return Promise.resolve({ ...local, settings: { ...DEFAULT_SETTINGS, ...local.settings } });
+        if (local?.version === STATE_VERSION) return Promise.resolve({ ...local, scripts: local.scripts ?? [], settings: { ...DEFAULT_SETTINGS, ...local.settings } });
       } catch {}
       return seed();
     },

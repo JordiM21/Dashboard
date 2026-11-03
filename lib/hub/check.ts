@@ -11,7 +11,8 @@ import { demoSeed } from "./seed";
 import { compactXp, levelFromXp, streak, taskXp, totalXp, xpByArea, xpForLevel } from "./game";
 import { addDays, dayOf, isEvening, today } from "./util";
 import { PIP_LINES, pipLine } from "./pip";
-import type { HubState, Task } from "./types";
+import { copyText } from "./marketing";
+import type { HubState, Script, Task } from "./types";
 
 const ctx = {
   areas: [{ id: "let", name: "LET Junior" }, { id: "home", name: "Home" }],
@@ -93,6 +94,12 @@ assert.equal(dayOf("2026-10-22T01:30:00.000"), "2026-10-21");
 assert.equal(dayOf("2026-10-22T04:00:00.000"), "2026-10-22");
 assert.equal(isEvening(new Date(2026, 9, 22, 1, 30)), true);
 assert.equal(isEvening(new Date(2026, 9, 22, 9, 0)), false);
+
+// Marketing: copying a conversation takes only Jordi's side; a plan's steps come in order, blanks dropped.
+const script = { id: "s", createdAt: "", updatedAt: "", title: "t", stage: "answers", steps: [], messages: [{ id: "1", from: "them", text: "¿Cuánto?" }, { id: "2", from: "me", text: "A" }, { id: "3", from: "me", text: "B" }] } as Script;
+assert.equal(copyText(script), "A\n\nB");
+assert.equal(copyText({ ...script, stage: "first-days", messages: [], steps: [{ id: "1", title: "Day 1", text: " Hi " }, { id: "2", title: "", text: "" }, { id: "3", title: "Day 2", text: "" }] }), "Day 1\nHi\n\nDay 2");
+assert.ok(changes(demoSeed(), { ...demoSeed(), scripts: [script] }).some(([c, id]) => c === "hub_scripts" && id === "s"));
 
 // Pip cycles through every line before repeating (3h slots).
 const seen = new Set(Array.from({ length: PIP_LINES.length }, (_, i) => pipLine(i * 3 * 3600e3)));

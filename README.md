@@ -2,9 +2,8 @@
 
 A Next.js dashboard for running a small language-school business: a single
 company-wide **Overview** (today's tasks, KPIs, cash flow, channel
-performance, students — all in one place), a **Social Network** view
-(Facebook/Instagram audience, content, and ad campaign performance), a
-student roster, an income/expense ledger with recurring/subscription
+performance, students — all in one place), a **Marketing** playbook of saved
+sales messages and first-class plans (`/marketing`), a student roster, an income/expense ledger with recurring/subscription
 payments, a **task board** with optional parent projects, and a
 Firebase-backed file manager.
 
@@ -38,13 +37,11 @@ My Dashboard/
 │   ├── teaching/page.tsx      # redirect to /students (Teaching merged into Classroom)
 │   ├── finance/page.tsx       # income/expense ledger + recurring payments, backed by Firestore
 │   ├── tasks/page.tsx         # task grid: capture box, buckets by due date, optional projects
-│   ├── social/page.tsx        # Social Network: Meta ads, posts and audience growth
+│   ├── marketing/page.tsx     # Marketing: saved conversations and plans, one-click copy
 │   ├── manifest.ts            # PWA manifest (installable, standalone)
 │   └── api/
-│       ├── kpis/route.ts              # aggregates Stripe/Meta — consumed by Overview
-│       ├── meta/...                   # campaigns, posts, audience growth
+│       ├── kpis/route.ts              # aggregates Stripe — consumed by Overview
 │       ├── cron/recurring-payments/   # auto-triggers due recurring payments (Vercel Cron + manual)
-│       ├── cron/meta-audience-snapshot/ # daily follower snapshot (see MetaAudienceSnapshotRecord)
 │       ├── students/...               # GET + POST + PATCH/DELETE, via lib/firebase/db.ts (admin SDK)
 │       ├── finance/...                # ledger + recurring payment templates (requireAuth)
 │       ├── tasks/... , projects/...   # same pattern; deleting a project unfiles its tasks
@@ -72,7 +69,7 @@ My Dashboard/
 │   │   └── verifyAuth.ts                # server-side ID token verification for Route Handlers
 │   ├── finance.ts              # pure summarizeFinance() — totals + category breakdown
 │   ├── types.ts                # shared type definitions
-│   └── api/                    # stripe.ts, meta*.ts — channel integrations
+│   └── api/                    # stripe.ts — channel integrations
 ├── functions/                  # Cloud Functions — separate Node subproject
 │   └── src/
 │       ├── index.ts             # exports both functions below
@@ -423,7 +420,6 @@ Environment Variables**:
 | `FIREBASE_SERVICE_ACCOUNT_KEY` | the service account JSON, as one line | **secret — see below** |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | your Stripe publishable key | not currently read by any code — safe to set now for later |
 | `STRIPE_SECRET_KEY` | your Stripe secret key | **yes, set this in Vercel too** — see note below |
-| `META_AD_ACCOUNT_ID`, `META_ACCESS_TOKEN` | your Meta Ads credentials | optional — dummy data if unset |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN` | your Gmail OAuth credentials | optional — dummy data if unset |
 | `GMAIL_ALERT_QUERY` | Gmail search query for alert-worthy mail | optional — defaults to `label:alerts newer_than:7d` |
 | `CRON_SECRET` | any random string (e.g. `openssl rand -hex 32`) | protects `/api/cron/recurring-payments` — see "Recurring payments" below |
@@ -452,8 +448,7 @@ The `functions/` folder itself is irrelevant to the Next.js deployment —
 Vercel's build only bundles what's actually imported from
 `app/`/`lib`/`components`, and nothing there imports from `functions/`, so
 it's ignored automatically. `STRIPE_WEBHOOK_SECRET` and the `META_*`
-*webhook*-secret vars (as opposed to `META_ACCESS_TOKEN` above, which the
-Next.js app does use) genuinely are Functions-only, set in `functions/.env`,
+*webhook*-secret vars genuinely are Functions-only, set in `functions/.env`,
 not in Vercel.
 
 ### Go-live checklist
@@ -911,7 +906,6 @@ usable with zero keys configured.
 | Integration | Env vars | Setup steps |
 |---|---|---|
 | Stripe | `STRIPE_SECRET_KEY` | `lib/api/stripe.ts` — restricted key with read-only Balance/Charges access |
-| Meta Ads | `META_AD_ACCOUNT_ID`, `META_ACCESS_TOKEN` | `lib/api/meta.ts` — Marketing API, ads_read permission |
 | Gmail | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`, `GMAIL_ALERT_QUERY` (optional) | `lib/api/gmail.ts` — OAuth 2.0 desktop app credentials + a Gmail filter/label for alert mail |
 
 All three `lib/api/*.ts` files now call the real API once their env vars are
@@ -920,68 +914,6 @@ Next.js picks up the new `.env.local` values. Overview's Channel KPIs
 section reads a `sources` field from `/api/kpis` to know which cards are
 still on dummy data and shows a "Demo data" badge only on those, so there's
 nothing to change in the UI as each integration gets connected.
-
-Note: once Phase 4's `metaLeadReceiver` webhook is live, it will overlap
-with `lib/api/meta.ts`'s live ad-spend numbers here — that's a real signal
-(live leads) landing in Firestore, while this is a separate live KPI
-number on Overview pulled straight from the Marketing API. Reconciling those is out of scope for this migration
-but worth revisiting once Phase 4 ships.
-
-## Social Network view (`/social`)
-
-One read-only performance page over Facebook + Instagram (still the Meta
-Graph API under the hood — `lib/api/meta*.ts`, `app/api/meta/*`) — "is the
-money and the content working?" answered in a single scroll, no clicking
-through tabs. There used to be five tabs here (overview, posts, comments,
-leads, calendar) plus a publishing pipeline; posting and moderation happen
-in Meta's own tools now, so all of that is gone.
-
-| Section | What it shows | Backed by |
-|---|---|---|
-| Audience & growth | Period-over-period growth (This Month / Last Month / Last 3 Months) — followers, posts published, interactions, best post of the period per platform | `app/api/meta/growth` → `lib/api/metaGrowth.ts` |
-| Audience totals | Current Instagram follower count and Facebook fan count (not a delta) | `app/api/meta/posts` → `lib/api/metaContent.ts`'s `fetchMetaAudienceSnapshot()` |
-| Recent Instagram posts | Every Instagram post/reel in the selected period as a card — likes, comments, reach, impressions, engagement rate | `app/api/meta/posts` → `lib/api/metaContent.ts` |
-| Ads | Spend, leads and the campaigns behind them | `app/api/meta/campaigns`, `app/api/kpis` |
-
-Messenger/inbox management was deliberately left out of scope.
-
-**Why there's no cross-platform Engagement Rate**: Meta removed
-per-post reach/impressions from the Graph API for regular Facebook Page
-posts (confirmed live — every variant of that metric now returns "(#100)
-The value must be a valid insights metric", not a permissions issue).
-Instagram still exposes real per-post reach, so a reach-weighted engagement
-rate would only ever reflect Instagram — mixing in Facebook's structural
-zeros would silently understate it rather than average anything real.
-Overview's growth cards stick to what's genuinely comparable across both
-platforms (followers, posts, raw interactions); the Instagram-only
-engagement rate still shows up in the "Best Post" and Content sections,
-clearly scoped to Instagram.
-
-**Why followers show "(partial)" sometimes**: Facebook's `page_follows`
-insight has ~90 days of live history; Instagram's `follower_count` insight
-is hard-capped by the platform at a trailing 30 days — confirmed live, any
-request further back fails outright. `app/api/cron/meta-audience-snapshot`
-captures both platforms' follower counts into Firestore
-(`metaAudienceSnapshots`) once a day specifically so Instagram's older
-comparisons (Last Month, Last 3 Months) can fall back to real stored data
-instead of Meta's own capped window — see `lib/api/metaGrowth.ts`'s header
-comment. Until enough days have been captured, older Instagram comparisons
-are labeled "(partial)" rather than presented as more precise than they
-are; this fills in on its own as the snapshot history grows.
-
-**Extra setup beyond the ads token** (`lib/api/meta.ts`'s `META_ACCESS_TOKEN`/`META_AD_ACCOUNT_ID`):
-
-- The token's permissions need to include `pages_show_list`,
-  `pages_read_engagement`, `pages_manage_posts`, `pages_manage_engagement`,
-  `pages_manage_ads`, `instagram_basic` and `instagram_manage_insights`.
-  (The page only reads; the publish/moderate permissions the old tabs
-  needed aren't required any more.)
-- The Facebook Page needs its Instagram Business Account actually linked
-  (Meta Business Suite > Settings > Linked accounts) for the Instagram
-  side of the Content section to return anything — `lib/api/metaCore.ts`'s
-  `resolveMetaAssets()` auto-detects it from the Page once linked.
-- Optional: `META_PAGE_ID` / `META_IG_BUSINESS_ACCOUNT_ID` in `.env.local`,
-  only needed if the token can see more than one Page.
 
 ## Classroom (`/students`)
 

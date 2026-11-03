@@ -5,7 +5,7 @@
  * the screen updates in the same frame. Game XP is awarded here so a
  * completion can never forget its reward.
  */
-import type { Collection, Goal, HubState, Item, LocalExpense, Note, Project, Recurrence, Task, XpEvent } from "./types";
+import type { Collection, Goal, HubState, Item, LocalExpense, Note, Project, Recurrence, Script, Task, XpEvent } from "./types";
 import { XP, compactXp, levelFromXp, taskXp, totalXp } from "./game";
 import { fx, toast, announce } from "./fx";
 import { getState, setState } from "./store";
@@ -111,7 +111,7 @@ export function reopenTask(id: string): void {
   revokeXp(id);
 }
 
-export function archive(kind: "areas" | "tasks" | "notes" | "projects" | "goals" | "items" | "collections" | "expenses" | "time", id: string, label = "Archived"): void {
+export function archive(kind: "areas" | "tasks" | "notes" | "projects" | "goals" | "items" | "collections" | "expenses" | "time" | "scripts", id: string, label = "Archived"): void {
   const at = nowIso();
   const set = (v: string | null) =>
     setState((s) => ({ ...s, [kind]: (s[kind] as { id: string; archivedAt?: string | null }[]).map((x) => (x.id === id ? { ...x, archivedAt: v } : x)) }));
@@ -291,6 +291,16 @@ export function setAdSpend(month: string, amount: number): void {
 }
 
 // ---------------------------------------------------------------- Reviews, game
+
+export function addScript(p: Partial<Script> & Pick<Script, "title" | "stage">): Script {
+  const script: Script = { id: uid(), createdAt: nowIso(), updatedAt: nowIso(), archivedAt: null, messages: [], steps: [], ...p };
+  setState((s) => ({ ...s, scripts: [...s.scripts, script] }));
+  return script;
+}
+
+export function updateScript(id: string, patch: Partial<Script>): void {
+  setState((s) => ({ ...s, scripts: s.scripts.map((x) => (x.id === id ? touch(x, patch) : x)) }));
+}
 
 export function completeReview(priorities: string[], notes: string, week: string): void {
   setState((s) => ({ ...s, reviews: [...s.reviews, { id: uid(), week, doneAt: nowIso(), priorities, notes }] }));

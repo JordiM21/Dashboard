@@ -24,9 +24,9 @@ import { formatDateDMY } from "../lib/dateUtils";
 import { PAYMENT_STATUS_LABEL, studentPaymentStatus } from "../lib/studentStatus";
 import { addDays, DAY_START_HOUR, dayOf, localDateIso, today } from "../lib/hub/util";
 import type { LiveData } from "../lib/hub/live";
-import type { Area, Collection, Goal, HubState, Item, LocalExpense, Note, Project, Task } from "../lib/hub/types";
+import type { Area, Collection, Goal, HubState, Item, LocalExpense, Note, Project, Script, Task } from "../lib/hub/types";
 import type { CurriculumLevelDoc, FinanceEntry, GroupDoc, RecurringTransaction, ResourceFile, ResourceFolder, Student } from "../lib/types";
-import type { SocialPost } from "../lib/social/rules";
+import { copyText, isPlan, STAGES } from "../lib/hub/marketing";
 import { byTime, MESSAGES, unprocessed, waitingOnJordi, type BrainMessage } from "../lib/hub/brainMessages";
 
 // metrics.ts pulls in the browser Firebase client, which reads NEXT_PUBLIC_* at import time — so it
@@ -74,7 +74,7 @@ const TASKS = [
 
 const COLLECTIONS = [
   "hub_areas", "hub_tasks", "hub_projects", "hub_goals", "hub_notes", "hub_collections", "hub_items", "hub_expenses", "hub_state",
-  "students", "transactions", "recurringTransactions", "groups", "curriculum", "resourceFolders", "resourceFiles", "hub_social_posts", MESSAGES,
+  "students", "transactions", "recurringTransactions", "groups", "curriculum", "resourceFolders", "resourceFiles", "hub_scripts", MESSAGES,
 ] as const;
 type Raw = Record<(typeof COLLECTIONS)[number], Record<string, unknown>[]>;
 
@@ -147,7 +147,6 @@ interface Snapshot {
   projects: Map<string, Project>;
   areaName: (id: string) => string;
   areaDir: Map<string, string>;
-  social: SocialPost[];
   messages: BrainMessage[];
 }
 
@@ -163,7 +162,7 @@ async function load(): Promise<Snapshot> {
   const meta = (raw.hub_state.find((x) => x.id === "meta") ?? {}) as Partial<HubState>;
   const st = {
     areas: raw.hub_areas, tasks: raw.hub_tasks, projects: raw.hub_projects, goals: raw.hub_goals, notes: raw.hub_notes,
-    collections: raw.hub_collections, items: raw.hub_items, expenses: raw.hub_expenses, time: [], lessons: [],
+    collections: raw.hub_collections, items: raw.hub_items, expenses: raw.hub_expenses, scripts: raw.hub_scripts, time: [], lessons: [],
     templates: [], studentMeta: {}, groupMeta: {}, adSpend: {}, reviews: [], monthly: [],
     ...meta,
   } as unknown as HubState;
@@ -180,7 +179,6 @@ async function load(): Promise<Snapshot> {
     projects: new Map(st.projects.map((p) => [p.id, p])),
     areaName: (id) => st.areas.find((a) => a.id === id)?.name ?? id,
     areaDir: new Map(areas.map((a) => [a.id, slug(a.name)])),
-    social: raw.hub_social_posts as unknown as SocialPost[],
     messages: (raw[MESSAGES] as unknown as BrainMessage[]).sort(byTime),
   };
 }
@@ -446,11 +444,13 @@ function exportBusiness(s: Snapshot) {
       `# Resources (Firebase Storage)\n\nFiles are not downloaded; \`storagePath\` is the object path in the Storage bucket.\n\n${[...byFolder].sort(([a], [b]) => a.localeCompare(b)).map(([f, xs]) => `## ${f}\n${table(["Title", "Description", "Tags", "Type", "storagePath"], xs.map((x) => [x.title, x.description, x.tags, x.mimeType, x.storagePath]))}`).join("\n\n")}`
   );
 
-  const posts = [...s.social].sort((a, b) => ((a.scheduledAt ?? a.updatedAt ?? "") < (b.scheduledAt ?? b.updatedAt ?? "") ? 1 : -1));
+  const scripts = live(st.scripts);
+  const scriptBody = (x: (typeof scripts)[number]) =>
+    isPlan(x) ? `${copyText(x) || "_Empty._"}${x.folderId ? `\n\nLibrary folder: ${folderPath(x.folderId)}` : ""}` : x.messages.map((m) => `**${m.from === "me" ? "Jordi" : "Parent"}:** ${m.text}`).join("\n\n") || "_Empty._";
   write(
-    "business/social.md",
-    fm({ type: "social", posts: posts.length }) +
-      `# Social posts (Facebook + Instagram)\n\n${table(["When", "Status", "Platforms", "Kind", "Caption"], posts.map((p) => [d(p.scheduledAt), p.status, p.platforms, p.kind, (p.caption ?? "").slice(0, 200)]))}`
+    "business/marketing.md",
+    fm({ type: "marketing", scripts: scripts.length }) +
+      `# Marketing playbook\n\nThe exact words Jordi uses with parents, edited on the Marketing page. Quote these instead of writing new versions.\n\n${STAGES.map((g) => `## ${g.label}\n\n${scripts.filter((x) => x.stage === g.id).map((x) => `### ${x.title || "Untitled"}\n\n${scriptBody(x)}`).join("\n\n") || "_None._"}`).join("\n\n")}`
   );
 }
 
@@ -464,7 +464,6 @@ function exportNow(s: Snapshot) {
   const pinned = live(st.goals).filter((g) => g.pinned);
   const owed = receivables(lv, st);
   const recurring = (lv.recurring as RecurringTransaction[]).filter((r) => r.active && r.nextPayment <= week);
-  const posts = s.social.filter((p) => p.scheduledAt && day(p.scheduledAt) >= t && day(p.scheduledAt) <= week && p.status !== "published");
   const openGroups = lv.groups.filter((g) => groupStatus(st, g.id) !== "closed" && members(g, lv.students).length < capacity(st, g.id));
   write(
     "NOW.md",
@@ -481,7 +480,6 @@ function exportNow(s: Snapshot) {
         `## Students owing\n${owed.map((r) => `- ${r.student.name} — ${PAYMENT_STATUS_LABEL[r.status]}, ${money(r.amount)}, due ${d(r.student.nextPayment)}`).join("\n") || "_None._"}`,
         `## Open seats (${freeSeats(lv, st)})\n${openGroups.map((g) => `- ${g.name} (${groupStatus(st, g.id)}, ${scheduleLabel(st.groupMeta[g.id]?.slots) || "no time set"}) — ${members(g, lv.students).length}/${capacity(st, g.id)}, ${seatsNeeded(g, lv.students, st)}`).join("\n") || "_None._"}`,
         `## Recurring payments due this week\n${recurring.map((r) => `- ${r.description} — ${r.type}, ${money(r.amount)} on ${d(r.nextPayment)}`).join("\n") || "_None._"}`,
-        `## Social posts coming up\n${posts.map((p) => `- ${d(p.scheduledAt)} ${p.platforms.join("+")} — ${(p.caption ?? "").slice(0, 80)}`).join("\n") || "_None._"}`,
         `## Inbox\n${open.filter((x) => x.status === "inbox").length} unprocessed tasks.`,
       ].join("\n\n")
   );
@@ -514,11 +512,11 @@ function exportActivity(s: Snapshot) {
   track("note", st.notes, (n: Note) => n.title);
   track("collection", st.collections, (c: Collection) => c.name);
   track("item", st.items, (i: Item) => `${i.title}" in "${st.collections.find((c) => c.id === i.collectionId)?.name ?? "?"}`);
+  track("marketing script", st.scripts, (x: Script) => x.title);
   for (const g of st.goals) for (const l of g.log) add(l.date, `Goal "${g.title}" logged ${l.value} ${g.unit}`);
   for (const t of lv.transactions as FinanceEntry[]) add(t.date, `${t.amount >= 0 ? "Income" : "Expense"} ${money(t.amount)} — ${t.description}${t.studentId ? ` (${lv.students.find((x) => x.id === t.studentId)?.name ?? "student"})` : ""}`);
   for (const e of st.expenses) add(e.date, `Hub expense ${money(-e.amount)} — ${e.description} (${e.scope})`);
   for (const x of lv.students as Student[]) add(x.createdAt, `New student "${x.name}"${x.source ? ` via ${x.source}` : ""}`);
-  for (const p of s.social) if (p.status === "published") add(p.scheduledAt, `Published ${p.platforms.join("+")} post: ${(p.caption ?? "").slice(0, 60)}`);
 
   for (const [k, lines] of days) {
     write(
@@ -591,7 +589,7 @@ This folder mirrors Jordi's dashboard (LET Junior, an online English academy for
 - \`PROFILE.md\` says who Jordi is and what Jordi is optimising for. Read it before giving advice.
 
 ## Where things are
-- \`NOW.md\` — today: overdue, planned, doing, due this week, waiting, pinned goals, students owing, upcoming payments and posts. **Start here for "what should I do".**
+- \`NOW.md\` — today: overdue, planned, doing, due this week, waiting, pinned goals, students owing, upcoming payments. **Start here for "what should I do".**
 - \`MESSAGES.md\` — the written conversation with Jordi: replies to process, questions waiting, what you've learned, and how to ask. \`messages/history.md\` — all of it. A student's file repeats the exchanges about them.
 - \`areas/<area>/_overview.md\` — the area's goals, projects, notes and collections, with links. Areas:
 ${areaList}
@@ -599,7 +597,7 @@ ${areaList}
 - \`business/students.md\` — roster, MRR, who owes. \`business/students/<name>.md\` — one student: group, level, payments, notes, tasks
 - \`business/groups/<name>.md\` — schedule, seats, members, curriculum position. \`business/curriculum.md\` — the 20 levels
 - \`business/payments/<YYYY-MM>.md\` — that month's ledger and totals. \`business/recurring.md\` — subscriptions and bills
-- \`business/resources.md\` — teaching files in Storage. \`business/social.md\` — FB/IG posts
+- \`business/resources.md\` — teaching files in Storage. \`business/marketing.md\` — the words Jordi sends parents (sales script, objections, after payment) and the first-days plans
 - \`journal/activity/<YYYY-MM-DD>.md\` — what changed that day (generated from timestamps, last ${ACTIVITY_DAYS} days)
 - \`journal/daily/\`, \`journal/briefs/\`, \`journal/weekly/\`, \`journal/monthly/\` — written by Claude's scheduled tasks
 - \`inbox/\` — files and images Jordi drops in for context

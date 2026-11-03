@@ -5,7 +5,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { Layer } from "./ui";
-import { MagnifyingGlass, Plus, ArrowRight, CheckCircle, Note, User, Kanban, Target, SquaresFour, UsersThree, Moon, NotePencil, CalendarCheck, Lightning, GearSix } from "@phosphor-icons/react";
+import { MagnifyingGlass, Plus, ArrowRight, CheckCircle, Note, User, Kanban, Target, SquaresFour, UsersThree, Moon, NotePencil, CalendarCheck, Lightning, GearSix, ChatCircle } from "@phosphor-icons/react";
+import { searchText, stageLabel } from "@/lib/hub/marketing";
 import { getState, useHub } from "@/lib/hub/store";
 import { useLive } from "@/lib/hub/live";
 import { parseQuickAdd } from "@/lib/hub/parse";
@@ -64,6 +65,7 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
       ...live.students.filter((x) => hit(x.name) || hit(x.parentEmail ?? "")).slice(0, 5).map((x) => ({ id: x.id, group: "Students", label: x.name, hint: x.classGroup, icon: <User size={18} />, run: () => inspect({ kind: "student", id: x.id }) })),
       ...live.groups.filter((g) => hit(g.name)).map((g) => ({ id: g.id, group: "Groups", label: g.name, hint: `Level ${g.currentLevel}`, icon: <UsersThree size={18} />, run: go(`/academy?group=${g.id}`) })),
       ...s.notes.filter((x) => !x.archivedAt && (hit(x.title) || hit(x.body))).slice(0, 5).map((x) => ({ id: x.id, group: "Notes", label: x.title, icon: <Note size={18} />, run: () => inspect({ kind: "note", id: x.id }) })),
+      ...s.scripts.filter((x) => !x.archivedAt && hit(searchText(x))).slice(0, 5).map((x) => ({ id: x.id, group: "Marketing", label: x.title || "Untitled", hint: stageLabel(x.stage), icon: <ChatCircle size={18} />, run: go(`/marketing?open=${x.id}`) })),
       ...s.goals.filter((g) => !g.archivedAt && hit(g.title)).slice(0, 4).map((g) => ({ id: g.id, group: "Goals", label: g.title, icon: <Target size={18} />, run: () => inspect({ kind: "goal", id: g.id }) })),
       ...s.items.filter((i) => !i.archivedAt && hit(i.title)).slice(0, 5).map((i) => ({ id: i.id, group: "Items", label: i.title, hint: s.collections.find((c) => c.id === i.collectionId)?.name, icon: <SquaresFour size={18} />, run: () => inspect({ kind: "item", id: i.id }) })),
       ...live.files.filter((f) => hit(f.title) || f.tags.some(hit)).slice(0, 4).map((f) => ({ id: f.id, group: "Resources", label: f.title, icon: <SquaresFour size={18} />, run: () => window.open(`/api/resources/files/${f.id}/content`, "_blank") })),

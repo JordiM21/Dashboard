@@ -7,7 +7,7 @@
  * to move them, drag a card onto another card to reorder. Every card's icon
  * and colour is clickable; its ⋯ menu renames, moves and deletes.
  */
-import { useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react";
 import { MagnifyingGlass, Plus, PushPin, ArrowSquareOut, FileText, Image as ImageIcon, ArrowLeft, NotePencil, DotsThree, UploadSimple, FolderPlus, SquaresFour, FileVideo, FilePdf, X, Hash, PencilSimple, Trash } from "@phosphor-icons/react";
 import { useHub } from "@/lib/hub/store";
 import { useLive } from "@/lib/hub/live";
@@ -69,6 +69,11 @@ export default function Library() {
     return [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   }, [s.notes, s.items, live.files]);
   const [open, setOpen] = useState<Open>(null);
+  useEffect(() => {
+    // Marketing's plans link straight to their folder.
+    const folder = new URLSearchParams(location.search).get("folder");
+    if (folder) setOpen(`res:${folder}`);
+  }, []);
   const [type, setType] = useState<NoteType | "all">("all");
   const [creating, setCreating] = useState(false);
   const [editCol, setEditCol] = useState<string | null>(null);
