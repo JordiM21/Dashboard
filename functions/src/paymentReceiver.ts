@@ -196,6 +196,15 @@ async function resolveConvertedAmount(
   };
 }
 
+/** What one Stripe event may do to its payment's row. Checked by scripts/checkPaymentClaim.ts. */
+export function decidePaymentEvent(
+  prev: { rank?: number; studentApplied?: boolean } | undefined,
+  rank: number
+): { duplicate: boolean; claim: boolean } {
+  if (prev && (prev.rank ?? 0) >= rank) return { duplicate: true, claim: false };
+  return { duplicate: false, claim: prev?.studentApplied !== true };
+}
+
 export const paymentReceiver = onRequest(async (req, res) => {
   if (req.method !== "POST") {
     res.status(405).send("Method not allowed");
@@ -252,16 +261,17 @@ export const paymentReceiver = onRequest(async (req, res) => {
     // the same payments too. All three now collide on this id instead.
     const ref = getFirestore().collection("transactions").doc(interpretation.stripePaymentId);
 
-    let alreadyApplied = false;
+    let claimed = false;
     const outcome = await getFirestore().runTransaction(async (tx): Promise<"created" | "upgraded" | "duplicate"> => {
       const existing = await tx.get(ref);
       const prev = existing.data();
-      alreadyApplied = prev?.studentApplied === true;
 
       // A duplicate is only worth rewriting when it carries better data — the
       // checkout event knows the student and payer, the payment_intent event
       // doesn't. Whichever arrives second must not blank out the first.
-      if (prev && (prev.rank ?? 0) >= interpretation.rank) return "duplicate";
+      const decision = decidePaymentEvent(prev, interpretation.rank);
+      claimed = decision.claim; // assigned on every attempt: Firestore re-runs this callback on contention
+      if (decision.duplicate) return "duplicate";
 
       tx.set(
         ref,
@@ -283,6 +293,7 @@ export const paymentReceiver = onRequest(async (req, res) => {
           ...(prev && !interpretation.studentId ? {} : { studentId: interpretation.studentId }),
           ...(prev && !interpretation.payerEmail ? {} : { payerEmail: interpretation.payerEmail }),
           ...(prev ? {} : { createdAt: FieldValue.serverTimestamp() }),
+          ...(claimed ? { studentApplied: true } : {}),
           updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true }
@@ -296,18 +307,26 @@ export const paymentReceiver = onRequest(async (req, res) => {
       return;
     }
 
-    // Exactly once per payment, tracked on the document rather than inferred
-    // from "created": applyPaymentToStudent rolls nextPayment forward a month,
-    // so a second event for the same payment would bill the student a month
-    // into the future. Flagging it only on success also means a payment_intent
-    // event that couldn't identify the student still gets applied later, when
-    // the checkout event arrives carrying client_reference_id.
-    if (!alreadyApplied) {
-      const applied = await applyPaymentToStudent({
-        studentId: interpretation.studentId,
-        payerEmail: interpretation.payerEmail,
-      });
-      if (applied) await ref.update({ studentApplied: true });
+    // Exactly once per payment: applyPaymentToStudent rolls nextPayment forward
+    // a month, and Stripe sends payment_intent.succeeded and
+    // checkout.session.completed in the same second. Both can match the student
+    // (the first by receipt_email), so `studentApplied` is claimed inside the
+    // transaction above, not set after the move: setting it afterwards let both
+    // events through and moved students two months (Mila 02-11, Higilyano and
+    // Denisse 13-10). The claim is released if nobody matched, so a later event
+    // or a manual link can still apply the payment.
+    // ponytail: an event that arrives while a no-match claim is held skips the
+    // move, so that payment shows as owed until linked by hand. Safe direction.
+    if (claimed) {
+      let applied = false;
+      try {
+        applied = await applyPaymentToStudent({
+          studentId: interpretation.studentId,
+          payerEmail: interpretation.payerEmail,
+        });
+      } finally {
+        if (!applied) await ref.update({ studentApplied: false });
+      }
     }
 
     logger.info(`paymentReceiver: ${outcome} transaction ${ref.id} for Stripe event ${event.id}`);
