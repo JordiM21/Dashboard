@@ -196,7 +196,7 @@ async function resolveConvertedAmount(
   };
 }
 
-/** What one Stripe event may do to its payment's row. Checked by scripts/checkPaymentClaim.ts. */
+/** What one Stripe event may do to its payment's row. Checked by functions/checkPaymentClaim.ts. */
 export function decidePaymentEvent(
   prev: { rank?: number; studentApplied?: boolean } | undefined,
   rank: number

@@ -1,6 +1,6 @@
-/** Self-check that one Stripe payment moves a due date once: npx tsx scripts/checkPaymentClaim.ts */
+/** Self-check that one Stripe payment moves a due date once: npx tsx functions/checkPaymentClaim.ts */
 import assert from "node:assert";
-import { decidePaymentEvent as decide } from "../functions/src/paymentReceiver";
+import { decidePaymentEvent as decide } from "./src/paymentReceiver";
 
 const INTENT = 1;
 const CHECKOUT = 2;
